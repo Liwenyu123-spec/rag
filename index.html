@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>DeepSeek 对话</title>
+  <style>
+    body { font-family: sans-serif; max-width: 720px; margin: 40px auto; padding: 0 16px; }
+    #out { white-space: pre-wrap; border: 1px solid #ddd; min-height: 200px; padding: 12px; margin-top: 12px; }
+    input { width: 70%; padding: 8px; }
+    button { padding: 8px 16px; }
+  </style>
+</head>
+<body>
+  <h1>DeepSeek 云端对话</h1>
+  <div>
+    <input id="q" placeholder="输入问题" value="你是谁？" />
+    <button id="send">发送</button>
+  </div>
+  <div id="out"></div>
+  <script>
+    const out = document.getElementById("out");
+    document.getElementById("send").onclick = async () => {
+      const q = document.getElementById("q").value.trim();
+      if (!q) return;
+      out.textContent = "";
+      const es = new EventSource("/chat?q=" + encodeURIComponent(q));
+      es.onmessage = (e) => {
+        if (e.data === "[DONE]") {
+          es.close();
+          return;
+        }
+        try {
+          const data = JSON.parse(e.data);
+          out.textContent += data.content || "";
+        } catch (_) {}
+      };
+      es.onerror = () => es.close();
+    };
+  </script>
+</body>
+</html>
