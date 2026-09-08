@@ -1,0 +1,4 @@
+{
+  "python.defaultInterpreterPath": "H:/anaconda/envs/llm/python.exe",
+  "python.envFile": "${workspaceFolder}/.env"
+}
