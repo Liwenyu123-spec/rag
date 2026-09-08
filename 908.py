@@ -22,19 +22,40 @@
 
 
 from fastapi import FastAPI
+import os
 import requests
+import winreg
 
 app = FastAPI()
+
+
+def get_user_env(name: str) -> str | None:
+    value = os.getenv(name)
+    if value:
+        return value
+    try:
+        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, r"Environment") as key:
+            value, _ = winreg.QueryValueEx(key, name)
+            return value or None
+    except OSError:
+        return None
 
 
 @app.get("/deepseek-v4-flash")
 def deepseek_v4_flash(prompt: str):
     print("接收到的问题是：", prompt)
+    api_key = get_user_env("DEEPSEEK_API_KEY")
+    if not api_key:
+        return {"error": "未找到 DEEPSEEK_API_KEY 环境变量"}
+
     response = requests.post(
-        "http://localhost:11434/v1/chat/completions",
+        "https://api.deepseek.com/v1/chat/completions",
+        headers={
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json",
+        },
         json={
-            # Ollama 本地模型名；你机器上是 deepseek-r1:1.5b
-            "model": "deepseek-r1:1.5b",
+            "model": "deepseek-v4-flash",
             "messages": [{"role": "user", "content": prompt}],
         },
         timeout=120,
