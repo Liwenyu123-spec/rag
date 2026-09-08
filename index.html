@@ -3,40 +3,101 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>DeepSeek 对话</title>
+  <title>DeepSeek 多轮对话</title>
   <style>
     body { font-family: sans-serif; max-width: 720px; margin: 40px auto; padding: 0 16px; }
-    #out { white-space: pre-wrap; border: 1px solid #ddd; min-height: 200px; padding: 12px; margin-top: 12px; }
+    #log { border: 1px solid #ddd; min-height: 280px; padding: 12px; margin: 12px 0; overflow-y: auto; }
+    .msg { margin: 8px 0; white-space: pre-wrap; }
+    .user { color: #0b57d0; }
+    .assistant { color: #1a7f37; }
     input { width: 70%; padding: 8px; }
-    button { padding: 8px 16px; }
+    button { padding: 8px 14px; margin-left: 6px; }
   </style>
 </head>
 <body>
-  <h1>DeepSeek 云端对话</h1>
+  <h1>DeepSeek 多轮对话</h1>
+  <div id="log"></div>
   <div>
-    <input id="q" placeholder="输入问题" value="你是谁？" />
+    <input id="q" placeholder="输入问题，可连续追问" />
     <button id="send">发送</button>
+    <button id="clear">清空对话</button>
   </div>
-  <div id="out"></div>
+
   <script>
-    const out = document.getElementById("out");
-    document.getElementById("send").onclick = async () => {
-      const q = document.getElementById("q").value.trim();
-      if (!q) return;
-      out.textContent = "";
-      const es = new EventSource("/chat?q=" + encodeURIComponent(q));
-      es.onmessage = (e) => {
-        if (e.data === "[DONE]") {
-          es.close();
-          return;
-        }
-        try {
-          const data = JSON.parse(e.data);
-          out.textContent += data.content || "";
-        } catch (_) {}
-      };
-      es.onerror = () => es.close();
+    // 多轮记忆：和你原来 messages.append 是同一思路，放在前端
+    const messages = [
+      { role: "system", content: "你是一个有帮助的中文助手。" }
+    ];
+
+    const log = document.getElementById("log");
+    const input = document.getElementById("q");
+
+    function addBubble(role, text) {
+      const div = document.createElement("div");
+      div.className = "msg " + role;
+      div.textContent = (role === "user" ? "我：" : "AI：") + text;
+      log.appendChild(div);
+      log.scrollTop = log.scrollHeight;
+      return div;
+    }
+
+    document.getElementById("clear").onclick = () => {
+      messages.length = 1; // 只保留 system
+      log.innerHTML = "";
     };
+
+    document.getElementById("send").onclick = async () => {
+      const q = input.value.trim();
+      if (!q) return;
+      input.value = "";
+
+      // 1) 用户这轮加入历史（对应你原来的 messages.append）
+      messages.push({ role: "user", content: q });
+      addBubble("user", q);
+
+      const aiDiv = addBubble("assistant", "");
+      let full = "";
+
+      // 2) 把完整历史发给后端（EventSource 只能 GET，多轮用 POST + 流）
+      const res = await fetch("/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ messages }),
+      });
+
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const parts = buffer.split("\n\n");
+        buffer = parts.pop();
+
+        for (const part of parts) {
+          const line = part.trim();
+          if (!line.startsWith("data:")) continue;
+          const data = line.slice(5).trim();
+          if (data === "[DONE]") {
+            // 3) 助手完整回复再写入历史，下一轮就能“记得”
+            messages.push({ role: "assistant", content: full });
+            return;
+          }
+          try {
+            const obj = JSON.parse(data);
+            full += obj.content || "";
+            aiDiv.textContent = "AI：" + full;
+            log.scrollTop = log.scrollHeight;
+          } catch (_) {}
+        }
+      }
+    };
+
+    input.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") document.getElementById("send").click();
+    });
   </script>
 </body>
 </html>
