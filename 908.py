@@ -61,46 +61,56 @@
 
 
 from fastapi import FastAPI
-from fastapi.responses import StreamingResponse,HTMLResponse
-import ollama
+from fastapi.responses import StreamingResponse, HTMLResponse
+from openai import OpenAI
+import os
 import json
 
 app = FastAPI()
-client = ollama.Client(host="http://192.168.13.100:11434")
+
+# 云端 DeepSeek（OpenAI 兼容接口）
+client = OpenAI(
+    api_key=os.getenv("DEEPSEEK_API_KEY"),
+    base_url="https://api.deepseek.com",
+)
+
 
 @app.get("/", response_class=HTMLResponse)
 def index():
     print("index")
     with open("index.html", encoding="utf-8") as f:
         return f.read()
+
+
 @app.get("/page", response_class=HTMLResponse)
-def index():
-    print("index")
+def page():
+    print("page")
     with open("index2.html", encoding="utf-8") as f:
         return f.read()
 
 
 @app.get("/chat")
 def chat(q: str):
-    response = client.chat(
-        model="qwen3.5:9b",
-        messages=[
-            {"role": "user", "content": q}
-        ],
-        stream=True
+    stream = client.chat.completions.create(
+        model="deepseek-v4-flash",
+        messages=[{"role": "user", "content": q}],
+        stream=True,
     )
 
     def generate():
-        for chunk in response:
-            content = chunk["message"]["content"]
-            yield f"data: {json.dumps({'content': content}, ensure_ascii=False)}\n\n"
+        for chunk in stream:
+            content = chunk.choices[0].delta.content
+            if content:
+                yield f"data: {json.dumps({'content': content}, ensure_ascii=False)}\n\n"
         yield "data: [DONE]\n\n"
 
     return StreamingResponse(generate(), media_type="text/event-stream")
 
+
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run("main2:app", host="0.0.0.0", port=8000)
+
+    uvicorn.run(app, host="0.0.0.0", port=8000)
 
 
 
