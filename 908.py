@@ -4,11 +4,22 @@ from pydantic import BaseModel  # 用来定义请求体的数据结构，并自�
 from openai import OpenAI  # DeepSeek 兼容 OpenAI 的 SDK，用来调用大模型
 import os  # 读取环境变量（API Key）
 import json  # 把 Python 字典转成 JSON 字符串，给前端用
+import winreg  # PyCharm 有时读不到进程环境变量，就从 Windows 用户变量里取
+
+
+def get_deepseek_api_key():  # 优先进程环境变量，其次 Windows 用户环境变量
+    key = os.getenv("DEEPSEEK_API_KEY")  # Cursor/终端里常能读到
+    if key:  # 已有就直接用
+        return key
+    with winreg.OpenKey(winreg.HKEY_CURRENT_USER, r"Environment") as reg:  # 读系统里你设置过的用户变量
+        value, _ = winreg.QueryValueEx(reg, "DEEPSEEK_API_KEY")  # 取出密钥
+        return value  # 返回给 OpenAI 客户端
+
 
 app = FastAPI()  # 创建 FastAPI 应用实例，后面所有路由都挂在它上面
 
 client = OpenAI(  # 创建云端 DeepSeek 客户端
-    api_key=os.getenv("DEEPSEEK_API_KEY"),  # 从环境变量里取密钥
+    api_key=get_deepseek_api_key(),  # 兼容 Cursor / PyCharm
     base_url="https://api.deepseek.com",  # DeepSeek 云端地址（不是本地 Ollama）
 )
 
