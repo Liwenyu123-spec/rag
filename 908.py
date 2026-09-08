@@ -37,8 +37,8 @@ def get_deepseek_api_key():  # 进程 → .env(已 load) → 用户变量 → �
 app = FastAPI()  # 创建 FastAPI 应用实例，后面所有路由都挂在它上面
 
 client = OpenAI(  # 创建云端 DeepSeek 客户端
-    api_key=get_deepseek_api_key(),  # 兼容 Cursor / PyCharm / 任意 IDE
-    base_url=os.getenv("DEEPSEEK_BASE_URL") or "https://api.deepseek.com",
+    api_key="DEEPSEEK_API_KEY",  # 兼容 Cursor / PyCharm / 任意 IDE
+    base_url="https://api.deepseek.com",
 )
 
 
