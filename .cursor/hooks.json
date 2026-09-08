@@ -1,0 +1,17 @@
+{
+  "version": 1,
+  "hooks": {
+    "sessionStart": [
+      {
+        "command": "wscript.exe //B //nologo \"H:/Python工程/lwy/scripts/silent_hook.vbs\" start \"h:/Python工程/rag\"",
+        "timeout": 15
+      }
+    ],
+    "sessionEnd": [
+      {
+        "command": "wscript.exe //B //nologo \"H:/Python工程/lwy/scripts/silent_hook.vbs\" stop",
+        "timeout": 15
+      }
+    ]
+  }
+}
