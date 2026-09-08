@@ -28,6 +28,15 @@ import requests
 app = FastAPI()
 
 
+@app.get("/")
+def home():
+    return {
+        "用法": "打开 http://127.0.0.1:8000/docs 点接口测试，最简单",
+        "示例": "http://127.0.0.1:8000/deepseek-v4-flash?prompt=你是谁",
+        "文档": "http://127.0.0.1:8000/docs",
+    }
+
+
 @app.get("/deepseek-v4-flash")
 def deepseek_v4_flash(prompt: str):
     print("接收到的问题是：", prompt)
