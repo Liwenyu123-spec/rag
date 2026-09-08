@@ -116,3 +116,27 @@ if __name__ == "__main__":
 
 
 
+def chat_with_ai(prompt):
+    """通义千问对话函数"""
+    msg = {
+        "role": Role.SYSTEM, "content": prompt
+    }
+    messages.append(msg)
+    try:
+        response = Generation.call(
+            model="qwen-turbo",
+            messages=messages,
+            temperature=0.1 # 创造性，值越高它的发散力越大，值越低就越文中
+        )
+        return response.output.text
+    except Exception as e:
+        return f"出错啦！异常信息为：{e}"
+
+def main():
+    while True:
+        content = input("你好，我是千问，你说出你的问题：")
+        print(chat_with_ai(content))
+        if input("是否结束：Y or N").upper() == "Y":
+            print("程序结束！")
+            break
+main()
