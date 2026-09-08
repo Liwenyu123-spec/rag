@@ -27,6 +27,7 @@ app = FastAPI()
 
 @app.get("/deepseek-v4-flash")
 def deepseek_v4_flash(prompt: str):
+    print("接收到的问题是：", prompt)
     response = requests.post("http://localhost:11434/v1/chat/completions", json={
         "model": "deepseek-v4-flash",
         "messages": [{"role": "user", "content": prompt}]
