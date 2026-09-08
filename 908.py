@@ -50,6 +50,14 @@ def chat(req: ChatRequest):
 
 
 if __name__ == "__main__":
+    import threading
+    import time
+    import webbrowser
     import uvicorn
 
+    def open_browser():
+        time.sleep(1.2)  # 等服务先起来
+        webbrowser.open("http://127.0.0.1:8000/")
+
+    threading.Thread(target=open_browser, daemon=True).start()
     uvicorn.run(app, host="0.0.0.0", port=8000)
