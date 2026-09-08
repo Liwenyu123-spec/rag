@@ -50,14 +50,25 @@ def chat(req: ChatRequest):
 
 
 if __name__ == "__main__":
+    import subprocess
     import threading
     import time
-    import webbrowser
+    import urllib.parse
     import uvicorn
 
-    def open_browser():
+    def open_in_cursor():
         time.sleep(1.2)  # 等服务先起来
-        webbrowser.open("http://127.0.0.1:8000/")
+        url = "http://127.0.0.1:8000/"
+        # 用 Cursor 内置 Simple Browser 打开（不是系统浏览器）
+        uri = "cursor://vscode.simple-browser/show?" + urllib.parse.urlencode({"url": url})
+        try:
+            subprocess.Popen(["cmd", "/c", "start", "", uri], shell=False)
+        except Exception:
+            # 兜底：命令面板方式
+            subprocess.Popen(
+                ["cursor", "--reuse-window", "--command", f"simpleBrowser.show {url}"],
+                shell=False,
+            )
 
-    threading.Thread(target=open_browser, daemon=True).start()
+    threading.Thread(target=open_in_cursor, daemon=True).start()
     uvicorn.run(app, host="0.0.0.0", port=8000)
