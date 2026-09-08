@@ -50,25 +50,34 @@ def chat(req: ChatRequest):  # req 会自动把 JSON 解析成 ChatRequest 对�
 
 
 if __name__ == "__main__":  # 只有直接运行本文件时才执行下面代码（被 import 时不执行）
-    import subprocess  # 用来启动外部命令（打开 Cursor 内置浏览器）
+    import subprocess  # 用来启动外部命令
     import threading  # 用来开后台线程，避免阻塞服务启动
     import time  # 用来 sleep 等待服务就绪
     import urllib.parse  # 用来把网址编码进 URI 参数
+    import webbrowser  # 系统浏览器兜底（最稳）
     import uvicorn  # ASGI 服务器，真正把 FastAPI 跑起来
 
-    def open_in_cursor():  # 定义：在 Cursor 内部打开网页的函数
-        time.sleep(1.2)  # 先等约 1.2 秒，让 uvicorn 有时间启动
-        url = "http://127.0.0.1:8000/"  # 本机服务地址
-        # 拼出 Cursor Simple Browser 的专用链接（不是系统 Chrome）
-        uri = "cursor://vscode.simple-browser/show?" + urllib.parse.urlencode({"url": url})
-        try:  # 优先尝试用 start 打开上面的 cursor:// 链接
-            subprocess.Popen(["cmd", "/c", "start", "", uri], shell=False)  # Windows 下启动该 URI
-        except Exception:  # 如果上面失败，走兜底方案
-            # 兜底：尝试用 cursor 命令打开 Simple Browser
-            subprocess.Popen(
-                ["cursor", "--reuse-window", "--command", f"simpleBrowser.show {url}"],  # 复用当前窗口执行命令
-                shell=False,  # 不走 shell，减少注入风险
-            )
+    def open_page():  # 启动后自动打开页面
+        time.sleep(1.5)  # 等服务先起来
+        url = "http://127.0.0.1:8000/"  # 本机地址
+        print(f"正在打开页面: {url}")  # 终端里提示一下
 
-    threading.Thread(target=open_in_cursor, daemon=True).start()  # 后台线程去打开页面（daemon=随主程序退出）
-    uvicorn.run(app, host="0.0.0.0", port=8000)  # 启动服务：监听所有网卡，端口 8000
+        # 方法1：尝试用 Cursor 内置 Simple Browser
+        uri = "cursor://vscode.simple-browser/show?" + urllib.parse.urlencode({"url": url})
+        try:
+            subprocess.Popen(["cmd", "/c", "start", "", uri], shell=False)
+        except Exception as e:
+            print("Cursor 内置浏览器启动失败:", e)
+
+        # 方法2：再尝试 cursor 命令行
+        try:
+            subprocess.Popen(["cursor", "-r", uri], shell=False)
+        except Exception:
+            pass
+
+        # 方法3：兜底打开系统默认浏览器（保证你一定能看到页面）
+        time.sleep(0.5)
+        webbrowser.open(url)
+
+    threading.Thread(target=open_page, daemon=True).start()  # 后台去打开页面
+    uvicorn.run(app, host="0.0.0.0", port=8000)  # 启动服务：端口 8000
