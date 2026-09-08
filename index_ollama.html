@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Ollama 本地多轮对话</title>
+  <style>
+    body { font-family: sans-serif; max-width: 720px; margin: 40px auto; padding: 0 16px; }
+    #log { border: 1px solid #ddd; min-height: 280px; padding: 12px; margin: 12px 0; overflow-y: auto; }
+    .msg { margin: 8px 0; white-space: pre-wrap; }
+    .user { color: #0b57d0; }
+    .assistant { color: #1a7f37; }
+    .tip { color: #666; font-size: 14px; }
+    input { width: 70%; padding: 8px; }
+    button { padding: 8px 14px; margin-left: 6px; }
+  </style>
+</head>
+<body>
+  <h1>Ollama 本地多轮对话</h1>
+  <p class="tip">模型：deepseek-r1:1.5b（本机）· 请先保证 Ollama 已启动</p>
+  <div id="log"></div>
+  <div>
+    <input id="q" placeholder="输入问题，可连续追问" />
+    <button id="send">发送</button>
+    <button id="clear">清空对话</button>
+  </div>
+
+  <script>
+    // 前端维护多轮历史（和云端版同一思路）
+    const messages = [
+      { role: "system", content: "你是一个有帮助的中文助手。" }
+    ];
+
+    const log = document.getElementById("log");
+    const input = document.getElementById("q");
+
+    function addBubble(role, text) {
+      const div = document.createElement("div");
+      div.className = "msg " + role;
+      div.textContent = (role === "user" ? "我：" : "AI：") + text;
+      log.appendChild(div);
+      log.scrollTop = log.scrollHeight;
+      return div;
+    }
+
+    document.getElementById("clear").onclick = () => {
+      messages.length = 1;
+      log.innerHTML = "";
+    };
+
+    document.getElementById("send").onclick = async () => {
+      const q = input.value.trim();
+      if (!q) return;
+      input.value = "";
+
+      messages.push({ role: "user", content: q });
+      addBubble("user", q);
+
+      const aiDiv = addBubble("assistant", "");
+      let full = "";
+
+      const res = await fetch("/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ messages }),
+      });
+
+      if (!res.ok) {
+        aiDiv.textContent = "AI：请求失败，请确认 Ollama 是否在运行（ollama serve）";
+        return;
+      }
+
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const parts = buffer.split("\n\n");
+        buffer = parts.pop();
+
+        for (const part of parts) {
+          const line = part.trim();
+          if (!line.startsWith("data:")) continue;
+          const data = line.slice(5).trim();
+          if (data === "[DONE]") {
+            messages.push({ role: "assistant", content: full });
+            return;
+          }
+          try {
+            const obj = JSON.parse(data);
+            full += obj.content || "";
+            aiDiv.textContent = "AI：" + full;
+            log.scrollTop = log.scrollHeight;
+          } catch (_) {}
+        }
+      }
+    };
+
+    input.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") document.getElementById("send").click();
+    });
+  </script>
+</body>
+</html>
