@@ -1,6 +1,11 @@
 import os
+import sys
 import winreg
 from openai import OpenAI
+
+# Windows 终端默认 GBK，避免打印 emoji 时报错
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
 
 def get_user_env(name: str) -> str | None:
