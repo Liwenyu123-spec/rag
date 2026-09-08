@@ -21,7 +21,11 @@
 
 
 import ollama
+from fastapi import FastAPI
+import requests
+app = FastAPI()
 
+@app.get("/deepseek-v4-flash")
 
 
 
