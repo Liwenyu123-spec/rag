@@ -2,25 +2,43 @@ from fastapi import FastAPI  # 导入 FastAPI 框架，用来写 Web 接口
 from fastapi.responses import StreamingResponse, HTMLResponse  # StreamingResponse=流式返回；HTMLResponse=返回网页
 from pydantic import BaseModel  # 用来定义请求体的数据结构，并自动校验
 from openai import OpenAI  # DeepSeek 兼容 OpenAI 的 SDK，用来调用大模型
+from dotenv import load_dotenv  # 读取项目目录 .env（各 IDE 通用兜底）
 import os  # 读取环境变量（API Key）
 import json  # 把 Python 字典转成 JSON 字符串，给前端用
-import winreg  # PyCharm 有时读不到进程环境变量，就从 Windows 用户变量里取
+import winreg  # 从 Windows 注册表读用户/系统环境变量
 
 
-def get_deepseek_api_key():  # 优先进程环境变量，其次 Windows 用户环境变量
-    key = os.getenv("DEEPSEEK_API_KEY")  # Cursor/终端里常能读到
-    if key:  # 已有就直接用
+load_dotenv()  # 自动加载同目录 .env；不依赖 IDE 是否注入环境变量
+
+
+def _reg_get(root, path, name):  # 从注册表读一个环境变量
+    try:
+        with winreg.OpenKey(root, path) as reg:
+            value, _ = winreg.QueryValueEx(reg, name)
+            return value or None
+    except OSError:
+        return None
+
+
+def get_deepseek_api_key():  # 进程 → .env(已 load) → 用户变量 → 系统变量
+    key = os.getenv("DEEPSEEK_API_KEY")
+    if key:
         return key
-    with winreg.OpenKey(winreg.HKEY_CURRENT_USER, r"Environment") as reg:  # 读系统里你设置过的用户变量
-        value, _ = winreg.QueryValueEx(reg, "DEEPSEEK_API_KEY")  # 取出密钥
-        return value  # 返回给 OpenAI 客户端
+    key = _reg_get(winreg.HKEY_CURRENT_USER, r"Environment", "DEEPSEEK_API_KEY")
+    if key:
+        return key
+    return _reg_get(
+        winreg.HKEY_LOCAL_MACHINE,
+        r"SYSTEM\CurrentControlSet\Control\Session Manager\Environment",
+        "DEEPSEEK_API_KEY",
+    )
 
 
 app = FastAPI()  # 创建 FastAPI 应用实例，后面所有路由都挂在它上面
 
 client = OpenAI(  # 创建云端 DeepSeek 客户端
-    api_key=get_deepseek_api_key(),  # 兼容 Cursor / PyCharm
-    base_url="https://api.deepseek.com",  # DeepSeek 云端地址（不是本地 Ollama）
+    api_key=get_deepseek_api_key(),  # 兼容 Cursor / PyCharm / 任意 IDE
+    base_url=os.getenv("DEEPSEEK_BASE_URL") or "https://api.deepseek.com",
 )
 
 
