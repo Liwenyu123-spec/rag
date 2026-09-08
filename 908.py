@@ -2,7 +2,7 @@
 import os
 from openai import OpenAI
 
-print(os.getenv("DEEPSEEK_API_KEY"))
+
 
 client = OpenAI(
     api_key=os.getenv("DEEPSEEK_API_KEY"),
