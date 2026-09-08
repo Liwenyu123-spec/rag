@@ -1,0 +1,5 @@
+### 测 FastAPI + DeepSeek 云端
+GET http://127.0.0.1:8000/deepseek-v4-flash?prompt=你是谁
+
+### 打开接口文档
+GET http://127.0.0.1:8000/docs
