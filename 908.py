@@ -3,12 +3,14 @@ from fastapi.responses import StreamingResponse, HTMLResponse  # StreamingRespon
 from pydantic import BaseModel  # 用来定义请求体的数据结构，并自动校验
 from openai import OpenAI  # DeepSeek 兼容 OpenAI 的 SDK，用来调用大模型
 from dotenv import load_dotenv  # 读取项目目录 .env（各 IDE 通用兜底）
+from pathlib import Path  # 定位脚本所在目录，避免 PyCharm 工作目录不对
 import os  # 读取环境变量（API Key）
 import json  # 把 Python 字典转成 JSON 字符串，给前端用
 import winreg  # 从 Windows 注册表读用户/系统环境变量
 
 
-load_dotenv()  # 自动加载同目录 .env；不依赖 IDE 是否注入环境变量
+# 始终加载「本文件同目录」的 .env（不依赖 IDE 当前工作目录）
+load_dotenv(Path(__file__).resolve().parent / ".env")
 
 
 def _reg_get(root, path, name):  # 从注册表读一个环境变量
@@ -37,8 +39,8 @@ def get_deepseek_api_key():  # 进程 → .env(已 load) → 用户变量 → �
 app = FastAPI()  # 创建 FastAPI 应用实例，后面所有路由都挂在它上面
 
 client = OpenAI(  # 创建云端 DeepSeek 客户端
-    api_key="DEEPSEEK_API_KEY",  # 兼容 Cursor / PyCharm / 任意 IDE
-    base_url="https://api.deepseek.com",
+    api_key=get_deepseek_api_key(),  # 必须调用函数取值，不能写成字符串 "DEEPSEEK_API_KEY"
+    base_url=os.getenv("DEEPSEEK_BASE_URL") or "https://api.deepseek.com",
 )
 
 
