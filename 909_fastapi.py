@@ -2,6 +2,8 @@
 
 import json
 import os
+import threading
+import webbrowser
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -76,4 +78,6 @@ def stream_chat(question: str):
 if __name__ == "__main__":
     import uvicorn
 
+    # 服务启动后自动使用默认浏览器打开聊天页面。
+    threading.Timer(1.5, lambda: webbrowser.open("http://127.0.0.1:8000")).start()
     uvicorn.run(app, host="127.0.0.1", port=8000)
