@@ -1,8 +1,13 @@
 import { isBrowserOllamaMode } from '../lib/api'
 
 const SITE = 'https://liwenyu123-spec.github.io/rag/'
-const START_CMD =
-  'curl -sL https://raw.githubusercontent.com/Liwenyu123-spec/rag/master/pna_proxy.py -o %TEMP%\\pna_proxy.py && start "" /B pythonw %TEMP%\\pna_proxy.py'
+
+/** PowerShell 专用（同学按 Win 搜 powershell 时用这个） */
+const PS_CMD = `curl.exe -sL "https://raw.githubusercontent.com/Liwenyu123-spec/rag/master/pna_proxy.py" -o "$env:TEMP\\pna_proxy.py"; Start-Process pythonw -ArgumentList "$env:TEMP\\pna_proxy.py" -WindowStyle Hidden; Start-Sleep 1; try { (Invoke-RestMethod http://127.0.0.1:18789/__ping).ok } catch { "启动失败：请确认已安装 Python，并已打开 Ollama" }`
+
+/** CMD 专用 */
+const CMD_CMD =
+  'curl.exe -sL "https://raw.githubusercontent.com/Liwenyu123-spec/rag/master/pna_proxy.py" -o "%TEMP%\\pna_proxy.py" && start "" /B pythonw "%TEMP%\\pna_proxy.py" && timeout /t 1 >nul && curl.exe -s http://127.0.0.1:18789/__ping'
 
 export function OllamaSetupBanner({
   ok,
@@ -30,24 +35,37 @@ export function OllamaSetupBanner({
           先启动一次本地桥接（可关黑窗口）
         </div>
         <p className="mb-3 text-aux">
-          不用下载整个项目。启动后可关掉命令行；关掉网页大约 1
-          分钟后桥接会自动退出。{hint ? ` 详情：${hint}` : ''}
+          用 <b>PowerShell</b> 时请复制下面「PowerShell」那一段（不要用旧的 CMD
+          命令，否则会没反应）。
+          {hint ? ` 详情：${hint}` : ''}
         </p>
-        <div className="mb-3 rounded-[12px] border border-[var(--border-soft)] bg-white/40 p-3 dark:bg-black/20">
-          <ol className="list-decimal space-y-2 pl-5 text-aux">
+
+        <div className="mb-3 space-y-3 rounded-[12px] border border-[var(--border-soft)] bg-white/40 p-3 dark:bg-black/20">
+          <div>
+            <div className="mb-1 font-medium text-title">PowerShell（推荐）</div>
+            <pre className="overflow-x-auto rounded-[10px] bg-black/80 p-2 text-[11px] leading-5 text-white whitespace-pre-wrap">
+              {PS_CMD}
+            </pre>
+            <p className="mt-1 text-[12px] text-aux">
+              成功时会显示 <code className="text-[11px]">True</code>；若提示找不到
+              pythonw，把命令里的 pythonw 改成 python 再试。
+            </p>
+          </div>
+          <div>
+            <div className="mb-1 font-medium text-title">命令提示符 CMD</div>
+            <pre className="overflow-x-auto rounded-[10px] bg-black/80 p-2 text-[11px] leading-5 text-white whitespace-pre-wrap">
+              {CMD_CMD}
+            </pre>
+          </div>
+          <ol className="list-decimal space-y-1 pl-5 text-aux">
             <li>确认本机 Ollama 已打开</li>
+            <li>运行上面命令，看到 True / ok 后再开网页</li>
             <li>
-              Win + R 输入 <code className="text-[12px]">powershell</code>，粘贴运行：
-              <pre className="mt-1 overflow-x-auto rounded-[10px] bg-black/80 p-2 text-[11px] text-white whitespace-pre-wrap">
-                {START_CMD}
-              </pre>
-            </li>
-            <li>看到启动成功后，黑窗口可以关掉</li>
-            <li>
-              打开 / 刷新{' '}
+              打开{' '}
               <a className="text-[#4d6bfe] underline" href={SITE}>
                 {SITE}
               </a>
+              ，黑窗口可关
             </li>
           </ol>
         </div>
