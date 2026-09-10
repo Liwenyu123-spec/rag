@@ -6,12 +6,12 @@
 @theme {
   --color-ds-blue: #4d6bfe;
   --color-ds-blue-hover: #3b57e8;
-  --color-ds-bg: #ffffff;
-  --color-ds-subtle: #f7f8fa;
-  --color-ds-assistant: #f4f5f7;
-  --color-ds-text: #1f2329;
-  --color-ds-muted: #8a919f;
-  --color-ds-border: #e5e6eb;
+  --color-ds-bg: #0f172a;
+  --color-ds-subtle: rgba(255, 255, 255, 0.06);
+  --color-ds-assistant: rgba(255, 255, 255, 0.06);
+  --color-ds-text: #e8eefc;
+  --color-ds-muted: #94a3b8;
+  --color-ds-border: rgba(255, 255, 255, 0.1);
   --font-sans: "Inter", "PingFang SC", "Microsoft YaHei", ui-sans-serif, system-ui, sans-serif;
   --radius-surface: 16px;
   --radius-button: 12px;
@@ -30,65 +30,115 @@ body {
   font-size: 15px;
   line-height: 1.7;
   color: var(--color-ds-text);
-  background: var(--color-ds-bg);
+  background: #0f172a;
   -webkit-font-smoothing: antialiased;
 }
 
-.dark body,
-html.dark body {
-  color: #e8eaed;
-  background: #0f1115;
+/* ---------- 玻璃拟态：深色渐变背景 + 模糊光斑 ---------- */
+.app-shell {
+  position: relative;
+  isolation: isolate;
+  color: #e8eefc;
+  background: linear-gradient(160deg, #0f172a 0%, #1e293b 100%);
 }
 
-.dark {
-  --color-ds-bg: #0f1115;
-  --color-ds-subtle: #16181d;
-  --color-ds-assistant: #1c1f26;
-  --color-ds-text: #e8eaed;
-  --color-ds-muted: #9aa3b2;
-  --color-ds-border: #2a2f3a;
+.app-shell::before,
+.app-shell::after {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  border-radius: 50%;
+  pointer-events: none;
+  filter: blur(80px);
 }
 
-/* 主对话区：极淡径向渐变 */
+.app-shell::before {
+  top: -10%;
+  left: -5%;
+  width: 42vw;
+  height: 42vw;
+  max-width: 520px;
+  max-height: 520px;
+  background: rgba(77, 107, 254, 0.35);
+}
+
+.app-shell::after {
+  right: -8%;
+  bottom: -12%;
+  width: 46vw;
+  height: 46vw;
+  max-width: 560px;
+  max-height: 560px;
+  background: rgba(56, 189, 248, 0.22);
+}
+
+/* 主对话区：保持通透，轻微径向加深 */
 .chat-canvas {
-  background: radial-gradient(circle at center, #f7f8fa 0%, #eef0f4 100%);
+  background:
+    radial-gradient(circle at center, rgba(255, 255, 255, 0.03) 0%, transparent 62%),
+    transparent;
 }
 
-.dark .chat-canvas {
-  background: radial-gradient(circle at center, #16181d 0%, #0f1115 100%);
+/* ---------- 玻璃面板 ---------- */
+.glass-panel {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.28);
 }
 
-/* 助手气泡：微弱渐变 + 1px 内发光边框 */
+.glass-header {
+  background: rgba(15, 23, 42, 0.45);
+  border-color: rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+}
+
+.glass-composer-wrap {
+  background: rgba(15, 23, 42, 0.35);
+  border-color: rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+}
+
+/* 助手气泡 */
 .bubble-assistant {
   border-radius: 16px;
-  border: 1px solid rgba(0, 0, 0, 0.04);
-  background: linear-gradient(180deg, #f8f9fb 0%, #f4f5f7 100%);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.08) 0%, rgba(255, 255, 255, 0.04) 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.08),
+    0 12px 40px rgba(0, 0, 0, 0.22);
+  color: #e8eefc;
 }
 
-.dark .bubble-assistant {
-  border: 1px solid rgba(255, 255, 255, 0.06);
-  background: linear-gradient(180deg, #22262e 0%, #1c1f26 100%);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
-}
-
-/* 用户气泡：柔和投影 */
+/* 用户气泡：主色保持 #4d6bfe */
 .bubble-user {
   border-radius: 16px;
-  background: #4d6bfe;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: linear-gradient(180deg, #5b78ff 0%, #4d6bfe 100%);
   color: #fff;
-  box-shadow: 0 4px 12px rgba(77, 107, 254, 0.25);
+  box-shadow: 0 16px 40px rgba(77, 107, 254, 0.28);
 }
 
-/* 输入框聚焦外发光 */
+/* 输入框玻璃壳 */
 .composer-shell {
   border-radius: 16px;
-  transition: box-shadow 0.2s ease, border-color 0.2s ease;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.06);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.28);
+  transition: box-shadow 0.2s ease, border-color 0.2s ease, background-color 0.2s ease;
 }
 
 .composer-shell:focus-within {
-  border-color: rgba(77, 107, 254, 0.5);
-  box-shadow: 0 0 0 4px rgba(77, 107, 254, 0.18);
+  border-color: rgba(77, 107, 254, 0.55);
+  background: rgba(255, 255, 255, 0.08);
+  box-shadow:
+    0 0 0 4px rgba(77, 107, 254, 0.18),
+    0 18px 50px rgba(0, 0, 0, 0.32);
 }
 
 /* ---------- 动效：新消息进入 ---------- */
@@ -107,7 +157,7 @@ html.dark body {
   animation: fade-up 0.35s cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
-/* ---------- 动效：打字光标呼吸闪烁（不用 steps） ---------- */
+/* ---------- 动效：打字光标呼吸闪烁 ---------- */
 @keyframes caret-breathe {
   0%,
   100% {
@@ -126,7 +176,7 @@ html.dark body {
   margin-left: 2px;
   vertical-align: -2px;
   border-radius: 1px;
-  background: var(--color-ds-blue);
+  background: #4d6bfe;
   animation: caret-breathe 1.2s ease-in-out infinite;
 }
 
@@ -150,31 +200,30 @@ html.dark body {
 }
 
 .btn-primary {
-  box-shadow: 0 2px 8px rgba(77, 107, 254, 0.22);
+  box-shadow: 0 12px 32px rgba(77, 107, 254, 0.28);
 }
 
 .btn-primary:hover:not(:disabled) {
-  box-shadow: 0 6px 16px rgba(77, 107, 254, 0.32);
+  box-shadow: 0 16px 40px rgba(77, 107, 254, 0.38);
 }
 
 .btn-danger {
-  box-shadow: 0 2px 8px rgba(239, 68, 68, 0.2);
+  box-shadow: 0 12px 32px rgba(239, 68, 68, 0.22);
 }
 
 .btn-danger:hover:not(:disabled) {
-  box-shadow: 0 6px 16px rgba(239, 68, 68, 0.3);
+  box-shadow: 0 16px 40px rgba(239, 68, 68, 0.32);
 }
 
 .btn-ghost {
-  box-shadow: 0 0 0 transparent;
+  background: rgba(255, 255, 255, 0.04);
+  border-color: rgba(255, 255, 255, 0.1);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.18);
 }
 
 .btn-ghost:hover:not(:disabled) {
-  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.08);
-}
-
-.dark .btn-ghost:hover:not(:disabled) {
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
+  background: rgba(255, 255, 255, 0.08);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.28);
 }
 
 /* ---------- 动效：侧边栏折叠 ---------- */
@@ -194,21 +243,42 @@ html.dark body {
   transition: opacity 0.25s ease-in-out;
 }
 
-/* ---------- 动效：推荐问题卡片 hover ---------- */
+/* ---------- 动效：推荐问题卡片 ---------- */
 .suggestion-card {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: #e8eefc;
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  box-shadow: 0 14px 40px rgba(0, 0, 0, 0.22);
   transition:
     transform 0.2s cubic-bezier(0.16, 1, 0.3, 1),
     box-shadow 0.2s ease,
-    border-color 0.2s ease;
+    border-color 0.2s ease,
+    background-color 0.2s ease;
 }
 
 .suggestion-card:hover {
   transform: translateY(-2px);
-  box-shadow: 0 10px 24px rgba(58, 83, 136, 0.12);
+  border-color: rgba(77, 107, 254, 0.45);
+  background: rgba(255, 255, 255, 0.09);
+  box-shadow: 0 22px 56px rgba(0, 0, 0, 0.32);
 }
 
-.dark .suggestion-card:hover {
-  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.35);
+/* 历史会话选中态 */
+.session-item {
+  border: 1px solid transparent;
+  transition: background-color 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.session-item-active {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.1);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.22);
+}
+
+.session-item:hover {
+  background: rgba(255, 255, 255, 0.06);
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -229,23 +299,26 @@ html.dark body {
   }
 }
 
+.prose-chat {
+  color: #e8eefc;
+}
+
 .prose-chat pre {
   margin: 0.75rem 0;
   overflow-x: auto;
   border-radius: 16px;
-  background: #0d1117;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(2, 6, 23, 0.72);
   color: #e6edf3;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.28);
 }
 
 .prose-chat code:not(pre code) {
   padding: 0.1rem 0.35rem;
   border-radius: 4px;
-  background: rgba(77, 107, 254, 0.08);
-  font-size: 0.9em;
-}
-
-.dark .prose-chat code:not(pre code) {
   background: rgba(77, 107, 254, 0.18);
+  color: #c7d2fe;
+  font-size: 0.9em;
 }
 
 .prose-chat p {
@@ -260,4 +333,8 @@ html.dark body {
 
 .prose-chat li {
   margin: 0.15em 0;
+}
+
+.prose-chat a {
+  color: #93a8ff;
 }

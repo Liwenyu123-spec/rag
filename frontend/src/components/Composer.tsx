@@ -24,8 +24,8 @@ export function Composer({
   }, [value])
 
   return (
-    <div className="border-t border-ds-border bg-ds-bg/90 px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-3 backdrop-blur">
-      <div className="composer-shell mx-auto flex max-w-[768px] items-end gap-2 border border-ds-border bg-ds-subtle px-3 py-2 shadow-sm">
+    <div className="glass-composer-wrap border-t px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-3">
+      <div className="composer-shell mx-auto flex max-w-[768px] items-end gap-2 px-3 py-2">
         <textarea
           ref={ref}
           rows={1}
@@ -39,7 +39,7 @@ export function Composer({
               onSend()
             }
           }}
-          className="max-h-40 min-h-[44px] flex-1 resize-none bg-transparent py-2.5 text-[15px] leading-[1.7] text-ds-text outline-none placeholder:text-ds-muted disabled:opacity-60"
+          className="max-h-40 min-h-[44px] flex-1 resize-none bg-transparent py-2.5 text-[15px] leading-[1.7] text-[#e8eefc] outline-none placeholder:text-[#94a3b8] disabled:opacity-60"
         />
         {loading ? (
           <button
@@ -55,13 +55,13 @@ export function Composer({
             type="button"
             disabled={!value.trim()}
             onClick={onSend}
-            className="btn-motion btn-primary mb-0.5 inline-flex h-10 w-10 items-center justify-center rounded-[12px] bg-ds-blue text-white hover:bg-ds-blue-hover disabled:cursor-not-allowed disabled:bg-[#c9cdd4] disabled:shadow-none"
+            className="btn-motion btn-primary mb-0.5 inline-flex h-10 w-10 items-center justify-center rounded-[12px] bg-ds-blue text-white hover:bg-ds-blue-hover disabled:cursor-not-allowed disabled:bg-[#475569] disabled:shadow-none"
           >
             <SendHorizontal size={18} />
           </button>
         )}
       </div>
-      <p className="mx-auto mt-2 max-w-[768px] text-center text-[11px] text-ds-muted">
+      <p className="mx-auto mt-2 max-w-[768px] text-center text-[11px] text-[#94a3b8]">
         Enter 发送 · Shift+Enter 换行 · AI 内容请自行核实
       </p>
     </div>

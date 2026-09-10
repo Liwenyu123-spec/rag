@@ -39,7 +39,7 @@ export function Sidebar({
   const renderPanel = (forceOpen = false) => (
     <aside
       className={clsx(
-        'sidebar-panel flex h-full flex-col border-r border-ds-border bg-ds-subtle',
+        'sidebar-panel glass-panel flex h-full flex-col border-r',
         !forceOpen && collapsed
           ? 'w-0 overflow-hidden border-0 p-0 opacity-0'
           : 'w-[240px] opacity-100',
@@ -56,7 +56,7 @@ export function Sidebar({
         </button>
         <button
           type="button"
-          className="btn-motion btn-ghost hidden rounded-[12px] p-2 text-ds-muted hover:bg-black/5 hover:text-ds-text md:inline-flex dark:hover:bg-white/5"
+          className="btn-motion btn-ghost hidden rounded-[12px] p-2 text-[#94a3b8] hover:text-[#e8eefc] md:inline-flex"
           onClick={onToggleCollapse}
           title="折叠侧边栏"
         >
@@ -64,14 +64,14 @@ export function Sidebar({
         </button>
         <button
           type="button"
-          className="btn-motion btn-ghost inline-flex rounded-[12px] p-2 text-ds-muted md:hidden"
+          className="btn-motion btn-ghost inline-flex rounded-[12px] p-2 text-[#94a3b8] md:hidden"
           onClick={onCloseMobile}
         >
           <X size={18} />
         </button>
       </div>
 
-      <div className="px-3 pb-2 text-[11px] font-semibold tracking-wider text-ds-muted">
+      <div className="px-3 pb-2 text-[11px] font-semibold tracking-wider text-[#94a3b8]">
         历史会话
       </div>
 
@@ -80,10 +80,8 @@ export function Sidebar({
           <div
             key={s.id}
             className={clsx(
-              'group flex items-center gap-1 rounded-[16px] px-2 py-2 transition-[background-color] duration-150',
-              s.id === activeId
-                ? 'bg-white shadow-sm dark:bg-white/10'
-                : 'hover:bg-white/70 dark:hover:bg-white/5',
+              'session-item group flex items-center gap-1 rounded-[16px] px-2 py-2',
+              s.id === activeId ? 'session-item-active' : '',
             )}
           >
             <button
@@ -92,14 +90,14 @@ export function Sidebar({
                 onSelect(s.id)
                 onCloseMobile()
               }}
-              className="min-w-0 flex-1 truncate px-1 text-left text-[13px] text-ds-text"
+              className="min-w-0 flex-1 truncate px-1 text-left text-[13px] text-[#e8eefc]"
             >
               {s.title || '新对话'}
             </button>
             <button
               type="button"
               onClick={() => onDelete(s.id)}
-              className="btn-motion rounded-[12px] p-1 text-ds-muted opacity-0 transition group-hover:opacity-100 hover:bg-red-50 hover:text-red-500 dark:hover:bg-red-500/10"
+              className="btn-motion rounded-[12px] p-1 text-[#94a3b8] opacity-0 transition group-hover:opacity-100 hover:bg-red-500/10 hover:text-red-400"
             >
               <Trash2 size={14} />
             </button>
@@ -107,11 +105,11 @@ export function Sidebar({
         ))}
       </div>
 
-      <div className="border-t border-ds-border p-3">
+      <div className="border-t border-white/10 p-3">
         <button
           type="button"
           onClick={onToggleDark}
-          className="btn-motion btn-ghost flex w-full items-center justify-center gap-2 rounded-[12px] border border-ds-border bg-ds-bg px-3 py-2 text-sm text-ds-text hover:border-ds-blue/40"
+          className="btn-motion btn-ghost flex w-full items-center justify-center gap-2 rounded-[12px] border px-3 py-2 text-sm text-[#e8eefc]"
         >
           {dark ? <Sun size={16} /> : <Moon size={16} />}
           {dark ? '浅色主题' : '暗色主题'}
@@ -122,14 +120,13 @@ export function Sidebar({
 
   return (
     <>
-      {/* Desktop */}
       <div className="relative hidden h-full shrink-0 md:block">
         {renderPanel(false)}
         {collapsed && (
           <button
             type="button"
             onClick={onToggleCollapse}
-            className="btn-motion btn-ghost absolute left-3 top-3 z-10 rounded-[12px] border border-ds-border bg-ds-bg p-2 text-ds-muted shadow-sm hover:text-ds-text"
+            className="btn-motion btn-ghost absolute left-3 top-3 z-10 rounded-[12px] border p-2 text-[#94a3b8] hover:text-[#e8eefc]"
             title="展开侧边栏"
           >
             <PanelLeftOpen size={18} />
@@ -137,7 +134,6 @@ export function Sidebar({
         )}
       </div>
 
-      {/* Mobile drawer */}
       <div
         className={clsx(
           'sidebar-overlay fixed inset-0 z-40 md:hidden',
@@ -146,7 +142,7 @@ export function Sidebar({
       >
         <button
           type="button"
-          className="absolute inset-0 bg-black/40"
+          className="absolute inset-0 bg-black/50"
           aria-label="关闭侧边栏"
           onClick={onCloseMobile}
         />
@@ -168,7 +164,7 @@ export function MobileMenuButton({ onClick }: { onClick: () => void }) {
     <button
       type="button"
       onClick={onClick}
-      className="btn-motion btn-ghost inline-flex rounded-[12px] border border-ds-border bg-ds-bg p-2 text-ds-muted md:hidden"
+      className="btn-motion btn-ghost inline-flex rounded-[12px] border p-2 text-[#94a3b8] md:hidden"
     >
       <Menu size={18} />
     </button>

@@ -16,10 +16,10 @@ export function EmptyState({
 }) {
   return (
     <div className="flex h-full flex-col items-center justify-center px-4 pb-10">
-      <div className="mb-5 flex h-14 w-14 items-center justify-center rounded-[16px] bg-ds-blue text-2xl text-white shadow-lg shadow-ds-blue/25">
+      <div className="mb-5 flex h-14 w-14 items-center justify-center rounded-[16px] border border-white/10 bg-ds-blue text-2xl text-white shadow-[0_20px_50px_rgba(77,107,254,0.35)]">
         ✦
       </div>
-      <h2 className="mb-8 text-2xl font-semibold tracking-tight text-ds-text">
+      <h2 className="mb-8 text-2xl font-semibold tracking-tight text-[#e8eefc]">
         有什么可以帮你的吗
       </h2>
       <div className="grid w-full max-w-xl grid-cols-1 gap-3 sm:grid-cols-2">
@@ -30,14 +30,14 @@ export function EmptyState({
             onClick={() =>
               item.text.includes('口号') ? onSelfConsistency() : onPick(item.text)
             }
-            className="suggestion-card rounded-[16px] border border-ds-border bg-ds-bg px-4 py-3.5 text-left text-[14px] text-ds-text shadow-sm hover:border-ds-blue/40"
+            className="suggestion-card rounded-[16px] px-4 py-3.5 text-left text-[14px]"
           >
             <span className="mr-2">{item.icon}</span>
             {item.text}
           </button>
         ))}
       </div>
-      <p className="mt-6 text-xs text-ds-muted">
+      <p className="mt-6 text-xs text-[#94a3b8]">
         支持模式：{Object.values(MODE_LABELS).join(' · ')}
       </p>
     </div>
@@ -55,10 +55,10 @@ export function ModeSelect({
     <select
       value={value}
       onChange={(e) => onChange(e.target.value as PromptMode)}
-      className="rounded-[12px] border border-ds-border bg-ds-subtle px-3 py-1.5 text-xs text-ds-text outline-none transition-[border-color] duration-150 hover:border-ds-blue/40"
+      className="rounded-[12px] border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-[#e8eefc] outline-none backdrop-blur-md transition-[border-color] duration-150 hover:border-[#4d6bfe]/50"
     >
       {(Object.keys(MODE_LABELS) as PromptMode[]).map((k) => (
-        <option key={k} value={k}>
+        <option key={k} value={k} className="bg-[#0f172a] text-[#e8eefc]">
           {MODE_LABELS[k]}
         </option>
       ))}

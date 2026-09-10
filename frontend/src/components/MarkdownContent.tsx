@@ -22,7 +22,7 @@ function CodeBlock({
   }
 
   return (
-    <div className="group relative my-3 overflow-hidden rounded-[16px] border border-ds-border bg-[#0d1117]">
+    <div className="group relative my-3 overflow-hidden rounded-[16px] border border-white/10 bg-[rgba(2,6,23,0.72)] shadow-[0_16px_40px_rgba(0,0,0,0.28)]">
       <div className="flex items-center justify-between border-b border-white/10 px-3 py-1.5 text-xs text-white/60">
         <span>{lang}</span>
         <button
@@ -67,7 +67,7 @@ export function MarkdownContent({ content }: { content: string }) {
               href={href}
               target="_blank"
               rel="noreferrer"
-              className="text-ds-blue underline-offset-2 hover:underline"
+              className="text-[#93a8ff] underline-offset-2 hover:underline"
             >
               {children}
             </a>

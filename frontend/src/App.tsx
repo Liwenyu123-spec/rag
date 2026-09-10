@@ -23,10 +23,15 @@ export default function App() {
     })
   }, [chat.active?.messages, chat.loading])
 
+  // 玻璃拟态固定深色，避免浅色主题冲掉风格
+  useEffect(() => {
+    document.documentElement.classList.add('dark')
+  }, [])
+
   const messages: ChatMessage[] = chat.active?.messages ?? []
 
   return (
-    <div className="flex h-full bg-ds-bg text-ds-text">
+    <div className="app-shell flex h-full text-ds-text">
       <Sidebar
         open={mobileOpen}
         collapsed={collapsed}
@@ -42,12 +47,12 @@ export default function App() {
       />
 
       <main className="flex min-h-0 min-w-0 flex-1 flex-col">
-        <header className="flex h-14 shrink-0 items-center justify-between border-b border-ds-border px-4">
+        <header className="glass-header flex h-14 shrink-0 items-center justify-between border-b px-4">
           <div className="flex items-center gap-2">
             <MobileMenuButton onClick={() => setMobileOpen(true)} />
             <div>
-              <div className="text-sm font-semibold">DeepSeek 助手</div>
-              <div className="text-[11px] text-ds-muted">提示词策略 · 安全防护</div>
+              <div className="text-sm font-semibold text-[#e8eefc]">DeepSeek 助手</div>
+              <div className="text-[11px] text-[#94a3b8]">提示词策略 · 安全防护</div>
             </div>
           </div>
           <ModeSelect value={chat.active?.mode ?? 'zero_shot'} onChange={chat.setMode} />
