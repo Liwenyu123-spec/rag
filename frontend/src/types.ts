@@ -6,6 +6,10 @@ export interface ChatMessage {
   content: string
   thinking?: string
   typing?: boolean
+  error?: boolean
+  liked?: boolean
+  /** 助手消息对应的用户问题，用于重试/重新生成 */
+  sourceQuestion?: string
   createdAt: number
 }
 

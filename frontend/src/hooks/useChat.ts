@@ -57,7 +57,7 @@ export function useChat() {
     try {
       await fetch('/reset', { method: 'POST' })
     } catch {
-      /* 后端未启动时仍允许本地新建 */
+      /* ignore */
     }
     const s = createSession(active?.mode ?? 'zero_shot')
     setSessions((prev) => [s, ...prev])
@@ -96,37 +96,12 @@ export function useChat() {
     }))
   }, [updateActive])
 
-  const send = useCallback(
-    async (text: string, stream = true) => {
-      const question = text.trim()
-      if (!question || loading) return
-
-      const userMsg: ChatMessage = {
-        id: uid(),
-        role: 'user',
-        content: question,
-        createdAt: Date.now(),
-      }
-      const botId = uid()
-      const botMsg: ChatMessage = {
-        id: botId,
-        role: 'assistant',
-        content: '',
-        thinking: '',
-        typing: true,
-        createdAt: Date.now(),
-      }
-
-      updateActive((s) => ({
-        ...s,
-        title: s.messages.length === 0 ? question.slice(0, 24) : s.title,
-        messages: [...s.messages, userMsg, botMsg],
-      }))
-
-      setLoading(true)
+  const requestAssistant = useCallback(
+    async (question: string, botId: string, stream = true) => {
       const mode = active?.mode ?? 'zero_shot'
       const controller = new AbortController()
       abortRef.current = controller
+      setLoading(true)
 
       const patchBot = (partial: Partial<ChatMessage>) => {
         setSessions((prev) =>
@@ -148,9 +123,16 @@ export function useChat() {
             `/chat?question=${encodeURIComponent(question)}&mode=${encodeURIComponent(mode)}`,
             { signal: controller.signal },
           )
+          if (!res.ok) throw new Error(`HTTP ${res.status}`)
           const data = await res.text()
           const { thinking, content } = splitThinking(data)
-          patchBot({ content, thinking, typing: false })
+          patchBot({
+            content,
+            thinking,
+            typing: false,
+            error: false,
+            sourceQuestion: question,
+          })
           return
         }
 
@@ -158,6 +140,7 @@ export function useChat() {
           `/stream_chat?question=${encodeURIComponent(question)}&mode=${encodeURIComponent(mode)}`,
           { signal: controller.signal },
         )
+        if (!resp.ok) throw new Error(`HTTP ${resp.status}`)
         const reader = resp.body?.getReader()
         if (!reader) throw new Error('无法读取流式响应')
 
@@ -177,20 +160,26 @@ export function useChat() {
             if (!line.startsWith('data: ')) continue
             const data = line.slice(6)
             if (data === '[DONE]') {
-              patchBot({ typing: false })
+              patchBot({ typing: false, error: false, sourceQuestion: question })
               continue
             }
             try {
               const json = JSON.parse(data) as { content?: string }
               raw += json.content || ''
               const { thinking, content } = splitThinking(raw)
-              patchBot({ content, thinking, typing: true })
+              patchBot({
+                content,
+                thinking,
+                typing: true,
+                error: false,
+                sourceQuestion: question,
+              })
             } catch {
-              /* ignore parse errors */
+              /* ignore */
             }
           }
         }
-        patchBot({ typing: false })
+        patchBot({ typing: false, error: false, sourceQuestion: question })
       } catch (err) {
         if ((err as Error).name === 'AbortError') {
           patchBot({ typing: false })
@@ -198,6 +187,8 @@ export function useChat() {
           patchBot({
             content: `请求失败：${(err as Error).message}`,
             typing: false,
+            error: true,
+            sourceQuestion: question,
           })
         }
       } finally {
@@ -205,7 +196,92 @@ export function useChat() {
         abortRef.current = null
       }
     },
-    [active?.mode, activeId, loading, updateActive],
+    [active?.mode, activeId],
+  )
+
+  const send = useCallback(
+    async (text: string, stream = true) => {
+      const question = text.trim()
+      if (!question || loading) return
+
+      const userMsg: ChatMessage = {
+        id: uid(),
+        role: 'user',
+        content: question,
+        createdAt: Date.now(),
+      }
+      const botId = uid()
+      const botMsg: ChatMessage = {
+        id: botId,
+        role: 'assistant',
+        content: '',
+        thinking: '',
+        typing: true,
+        sourceQuestion: question,
+        createdAt: Date.now(),
+      }
+
+      updateActive((s) => ({
+        ...s,
+        title: s.messages.length === 0 ? question.slice(0, 24) : s.title,
+        messages: [...s.messages, userMsg, botMsg],
+      }))
+
+      await requestAssistant(question, botId, stream)
+    },
+    [loading, requestAssistant, updateActive],
+  )
+
+  const regenerate = useCallback(
+    async (assistantId: string) => {
+      if (loading) return
+      const session = sessions.find((s) => s.id === activeId)
+      if (!session) return
+
+      const idx = session.messages.findIndex((m) => m.id === assistantId)
+      if (idx < 0) return
+      const target = session.messages[idx]
+      const question =
+        target.sourceQuestion ||
+        [...session.messages]
+          .slice(0, idx)
+          .reverse()
+          .find((m) => m.role === 'user')?.content
+      if (!question) return
+
+      const botId = uid()
+      updateActive((s) => ({
+        ...s,
+        messages: [
+          ...s.messages.slice(0, idx),
+          {
+            id: botId,
+            role: 'assistant',
+            content: '',
+            thinking: '',
+            typing: true,
+            sourceQuestion: question.replace(/^\[自我一致性\]\s*/, ''),
+            createdAt: Date.now(),
+          },
+        ],
+      }))
+
+      const cleanQ = question.replace(/^\[自我一致性\]\s*/, '')
+      await requestAssistant(cleanQ, botId, true)
+    },
+    [activeId, loading, requestAssistant, sessions, updateActive],
+  )
+
+  const toggleLike = useCallback(
+    (messageId: string) => {
+      updateActive((s) => ({
+        ...s,
+        messages: s.messages.map((m) =>
+          m.id === messageId ? { ...m, liked: !m.liked } : m,
+        ),
+      }))
+    },
+    [updateActive],
   )
 
   const runSelfConsistency = useCallback(
@@ -231,6 +307,7 @@ export function useChat() {
             role: 'assistant',
             content: '自我一致性需多次调用模型，请稍候…',
             typing: true,
+            sourceQuestion: question,
             createdAt: Date.now(),
           },
         ],
@@ -241,19 +318,29 @@ export function useChat() {
         const res = await fetch(
           `/self_consistency?question=${encodeURIComponent(question)}&num=2`,
         )
+        if (!res.ok) throw new Error(`HTTP ${res.status}`)
         const data = await res.json()
         const content = data.error
           ? String(data.error)
           : `候选方案：\n${(data.candidates || [])
               .map((c: string, i: number) => `${i + 1}. ${c}`)
               .join('\n')}\n\n最终评选：\n${data.final || ''}`
+        const failed = Boolean(data.error)
         setSessions((prev) =>
           prev.map((s) =>
             s.id === activeId
               ? {
                   ...s,
                   messages: s.messages.map((m) =>
-                    m.id === botId ? { ...m, content, typing: false } : m,
+                    m.id === botId
+                      ? {
+                          ...m,
+                          content,
+                          typing: false,
+                          error: failed,
+                          sourceQuestion: question,
+                        }
+                      : m,
                   ),
                 }
               : s,
@@ -267,7 +354,13 @@ export function useChat() {
                   ...s,
                   messages: s.messages.map((m) =>
                     m.id === botId
-                      ? { ...m, content: `请求失败：${(err as Error).message}`, typing: false }
+                      ? {
+                          ...m,
+                          content: `请求失败：${(err as Error).message}`,
+                          typing: false,
+                          error: true,
+                          sourceQuestion: question,
+                        }
                       : m,
                   ),
                 }
@@ -279,6 +372,40 @@ export function useChat() {
       }
     },
     [activeId, loading, updateActive],
+  )
+
+  const retryFailed = useCallback(
+    async (assistantId: string) => {
+      const session = sessions.find((s) => s.id === activeId)
+      const msg = session?.messages.find((m) => m.id === assistantId)
+      if (!msg?.sourceQuestion) return
+      if (msg.sourceQuestion.startsWith('[自我一致性]') || false) {
+        /* handled below */
+      }
+      // 自我一致性失败走专用接口
+      const plain = msg.sourceQuestion.replace(/^\[自我一致性\]\s*/, '')
+      if (msg.content.includes('自我一致性') || session?.messages.some(
+        (m) => m.id !== assistantId && m.content.startsWith('[自我一致性]') && m.createdAt <= msg.createdAt,
+      )) {
+        const prevUser = [...(session?.messages || [])]
+          .reverse()
+          .find((m) => m.role === 'user' && m.content.startsWith('[自我一致性]'))
+        if (prevUser) {
+          // 简化：失败重试统一走 regenerate（普通对话）或 self_consistency
+          if (prevUser.content.startsWith('[自我一致性]')) {
+            // 删除失败消息后重新跑
+            updateActive((s) => ({
+              ...s,
+              messages: s.messages.filter((m) => m.id !== assistantId && m.id !== prevUser.id),
+            }))
+            await runSelfConsistency(plain)
+            return
+          }
+        }
+      }
+      await regenerate(assistantId)
+    },
+    [activeId, regenerate, runSelfConsistency, sessions, updateActive],
   )
 
   return {
@@ -293,5 +420,8 @@ export function useChat() {
     send,
     stop,
     runSelfConsistency,
+    regenerate,
+    toggleLike,
+    retryFailed,
   }
 }
