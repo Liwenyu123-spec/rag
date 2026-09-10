@@ -38,7 +38,7 @@ function loadSystemPrompt() {
 function createSession(mode: PromptMode = 'zero_shot'): Session {
   return {
     id: uid(),
-    title: '新对话',
+    title: 'æ°å¯¹è¯',
     updatedAt: Date.now(),
     messages: [],
     mode,
@@ -47,7 +47,7 @@ function createSession(mode: PromptMode = 'zero_shot'): Session {
 
 function formatCompare(results: Record<string, string>, modes: PromptMode[]) {
   return modes
-    .map((m) => `### ${MODE_LABELS[m] || m}\n\n${results[m] || '（无结果）'}`)
+    .map((m) => `### ${MODE_LABELS[m] || m}\n\n${results[m] || 'ï¼æ ç»æï¼'}`)
     .join('\n\n---\n\n')
 }
 
@@ -58,10 +58,10 @@ function formatToolSteps(
   const parts: string[] = []
   for (const s of steps) {
     if (s.type === 'tool') {
-      parts.push(`**调用工具** \`${s.name}\`\n- 参数：${s.arg}\n- 结果：${s.result}`)
+      parts.push(`**è°ç¨å·¥å·** \`${s.name}\`\n- åæ°ï¼${s.arg}\n- ç»æï¼${s.result}`)
     }
   }
-  parts.push(`### 最终回答\n\n${answer}`)
+  parts.push(`### æç»åç­\n\n${answer}`)
   return parts.join('\n\n')
 }
 
@@ -247,11 +247,12 @@ export function useChat() {
         )
         if (!resp.ok) throw new Error(`HTTP ${resp.status}`)
         const reader = resp.body?.getReader()
-        if (!reader) throw new Error('无法读取流式响应')
+        if (!reader) throw new Error('æ æ³è¯»åæµå¼ååº')
 
         const decoder = new TextDecoder()
         let buffer = ''
         let raw = ''
+        let thinkingAcc = ''
 
         while (true) {
           const { done, value } = await reader.read()
@@ -274,12 +275,27 @@ export function useChat() {
               continue
             }
             try {
-              const json = JSON.parse(data) as { content?: string }
-              raw += json.content || ''
-              const { thinking, content } = splitThinking(raw)
+              const json = JSON.parse(data) as {
+                content?: string
+                thinking?: string
+                status?: string
+              }
+              if (json.status === 'started') {
+                patchBotMessage(botId, {
+                  content: '',
+                  thinking: thinkingAcc,
+                  typing: true,
+                  kind: 'chat',
+                  sourceQuestion: question,
+                })
+                continue
+              }
+              if (json.thinking) thinkingAcc += json.thinking
+              if (json.content) raw += json.content
+              const { thinking: tagged, content } = splitThinking(raw)
               patchBotMessage(botId, {
                 content,
-                thinking,
+                thinking: thinkingAcc || tagged,
                 typing: true,
                 error: false,
                 kind: 'chat',
@@ -290,18 +306,33 @@ export function useChat() {
             }
           }
         }
-        patchBotMessage(botId, {
-          typing: false,
-          error: false,
-          kind: 'chat',
-          sourceQuestion: question,
-        })
+        {
+          const { thinking: tagged, content } = splitThinking(raw)
+          const finalThinking = thinkingAcc || tagged
+          const finalContent = content || (!raw && thinkingAcc ? '' : content)
+          patchBotMessage(botId, {
+            content: finalContent,
+            thinking: finalThinking,
+            typing: false,
+            error: false,
+            kind: 'chat',
+            sourceQuestion: question,
+          })
+          // 只有思考没有正文：正文区也显示思考，避免空白气泡
+          if (!finalContent && finalThinking) {
+            patchBotMessage(botId, {
+              content: finalThinking,
+              thinking: finalThinking,
+              typing: false,
+            })
+          }
+        }
       } catch (err) {
         if ((err as Error).name === 'AbortError') {
           patchBotMessage(botId, { typing: false })
         } else {
           patchBotMessage(botId, {
-            content: `请求失败：${(err as Error).message}`,
+            content: `è¯·æ±å¤±è´¥ï¼${(err as Error).message}`,
             typing: false,
             error: true,
             kind: 'chat',
@@ -334,14 +365,14 @@ export function useChat() {
 
   const runSelfConsistency = useCallback(
     async (text: string) => {
-      const question = text.trim() || '为旅行背包品牌生成一句口号'
+      const question = text.trim() || 'ä¸ºæè¡èååççæä¸å¥å£å·'
       if (loading) return
 
-      const botId = pushPair(`[自我一致性] ${question}`, {
+      const botId = pushPair(`[èªæä¸è´æ§] ${question}`, {
         kind: 'self_consistency',
         sourceQuestion: question,
         meta: { question },
-        content: '自我一致性需多次调用模型，请稍候…',
+        content: 'èªæä¸è´æ§éå¤æ¬¡è°ç¨æ¨¡åï¼è¯·ç¨åâ¦',
       }, question)
 
       setLoading(true)
@@ -354,9 +385,9 @@ export function useChat() {
         const failed = Boolean(data.error)
         const content = data.error
           ? String(data.error)
-          : `候选方案：\n${(data.candidates || [])
+          : `åéæ¹æ¡ï¼\n${(data.candidates || [])
               .map((c: string, i: number) => `${i + 1}. ${c}`)
-              .join('\n')}\n\n最终评选：\n${data.final || ''}`
+              .join('\n')}\n\næç»è¯éï¼\n${data.final || ''}`
         patchBotMessage(botId, {
           content,
           typing: false,
@@ -367,7 +398,7 @@ export function useChat() {
         })
       } catch (err) {
         patchBotMessage(botId, {
-          content: `请求失败：${(err as Error).message}`,
+          content: `è¯·æ±å¤±è´¥ï¼${(err as Error).message}`,
           typing: false,
           error: true,
           kind: 'self_consistency',
@@ -385,20 +416,20 @@ export function useChat() {
     async (product?: ProductPayload) => {
       if (loading) return
       const payload = product || {
-        name: '全自动豆浆机',
-        features: '1分钟速热, 20Bar高压萃取, 手机App控制',
-        audience: '追求生活品质的独居白领',
+        name: 'å¨èªå¨è±æµæº',
+        features: '1åééç­, 20Baré«åèå, ææºAppæ§å¶',
+        audience: 'è¿½æ±çæ´»åè´¨çç¬å±ç½é¢',
       }
 
       const botId = pushPair(
-        `[电商文案] ${payload.name}｜卖点：${payload.features}｜人群：${payload.audience}`,
+        `[çµåææ¡] ${payload.name}ï½åç¹ï¼${payload.features}ï½äººç¾¤ï¼${payload.audience}`,
         {
           kind: 'product_copy',
           sourceQuestion: payload.name,
           meta: { product: payload },
-          content: '正在按 Few-Shot + CoT 生成产品文案…',
+          content: 'æ­£å¨æ Few-Shot + CoT çæäº§åææ¡â¦',
         },
-        `电商文案·${payload.name}`,
+        `çµåææ¡Â·${payload.name}`,
       )
 
       setLoading(true)
@@ -410,7 +441,7 @@ export function useChat() {
         })
         const data = await res.json()
         patchBotMessage(botId, {
-          content: data.error ? String(data.error) : data.result || '未生成内容',
+          content: data.error ? String(data.error) : data.result || 'æªçæåå®¹',
           typing: false,
           error: Boolean(data.error),
           kind: 'product_copy',
@@ -419,7 +450,7 @@ export function useChat() {
         })
       } catch (err) {
         patchBotMessage(botId, {
-          content: `请求失败：${(err as Error).message}`,
+          content: `è¯·æ±å¤±è´¥ï¼${(err as Error).message}`,
           typing: false,
           error: true,
           kind: 'product_copy',
@@ -435,17 +466,17 @@ export function useChat() {
   const runSocialPlan = useCallback(
     async (topic?: string) => {
       if (loading) return
-      const subject = (topic || '独居女生的低成本精致生活').trim()
+      const subject = (topic || 'ç¬å±å¥³ççä½ææ¬ç²¾è´çæ´»').trim()
 
       const botId = pushPair(
-        `[社交策划] ${subject}`,
+        `[ç¤¾äº¤ç­å] ${subject}`,
         {
           kind: 'social_plan',
           sourceQuestion: subject,
           meta: { topic: subject },
-          content: '阶段 1/4：正在发散策划分支…',
+          content: 'é¶æ®µ 1/4ï¼æ­£å¨åæ£ç­ååæ¯â¦',
         },
-        `社交策划·${subject.slice(0, 16)}`,
+        `ç¤¾äº¤ç­åÂ·${subject.slice(0, 16)}`,
       )
 
       setLoading(true)
@@ -466,7 +497,7 @@ export function useChat() {
         )
         if (!resp.ok) throw new Error(`HTTP ${resp.status}`)
         const reader = resp.body?.getReader()
-        if (!reader) throw new Error('无法读取流式响应')
+        if (!reader) throw new Error('æ æ³è¯»åæµå¼ååº')
 
         const decoder = new TextDecoder()
         let buffer = ''
@@ -484,7 +515,7 @@ export function useChat() {
             if (!line.startsWith('data: ')) continue
             const data = line.slice(6)
             if (data === '[DONE]') {
-              patch(sections.join('\n\n---\n\n') || '策划完成', false, false)
+              patch(sections.join('\n\n---\n\n') || 'ç­åå®æ', false, false)
               continue
             }
             try {
@@ -495,13 +526,13 @@ export function useChat() {
                 done?: boolean
               }
               if (json.stage === 'error') {
-                patch(json.content || '策划失败', false, true)
+                patch(json.content || 'ç­åå¤±è´¥', false, true)
                 continue
               }
               if (json.content && json.title) {
                 if (json.content.length < 40 && !json.done) {
                   patch(
-                    `${sections.length ? sections.join('\n\n---\n\n') + '\n\n---\n\n' : ''}阶段 ${json.stage}/4：${json.content}`,
+                    `${sections.length ? sections.join('\n\n---\n\n') + '\n\n---\n\n' : ''}é¶æ®µ ${json.stage}/4ï¼${json.content}`,
                     true,
                   )
                 } else {
@@ -516,7 +547,7 @@ export function useChat() {
         }
         if (sections.length) patch(sections.join('\n\n---\n\n'), false)
       } catch (err) {
-        patch(`请求失败：${(err as Error).message}`, false, true)
+        patch(`è¯·æ±å¤±è´¥ï¼${(err as Error).message}`, false, true)
       } finally {
         setLoading(false)
       }
@@ -531,14 +562,14 @@ export function useChat() {
       if (!q || modes.length < 2) return
 
       const botId = pushPair(
-        `[模式对比] ${q}`,
+        `[æ¨¡å¼å¯¹æ¯] ${q}`,
         {
           kind: 'compare',
           sourceQuestion: q,
           meta: { question: q, modes },
-          content: `正在对比 ${modes.map((m) => MODE_LABELS[m]).join(' / ')}，请稍候…`,
+          content: `æ­£å¨å¯¹æ¯ ${modes.map((m) => MODE_LABELS[m]).join(' / ')}ï¼è¯·ç¨åâ¦`,
         },
-        `对比·${q.slice(0, 16)}`,
+        `å¯¹æ¯Â·${q.slice(0, 16)}`,
       )
 
       setLoading(true)
@@ -569,7 +600,7 @@ export function useChat() {
         }
       } catch (err) {
         patchBotMessage(botId, {
-          content: `请求失败：${(err as Error).message}`,
+          content: `è¯·æ±å¤±è´¥ï¼${(err as Error).message}`,
           typing: false,
           error: true,
           kind: 'compare',
@@ -589,14 +620,14 @@ export function useChat() {
       if (!q) return
 
       const botId = pushPair(
-        `[工具调用] ${q}`,
+        `[å·¥å·è°ç¨] ${q}`,
         {
           kind: 'tool_chat',
           sourceQuestion: q,
           meta: { question: q },
-          content: '正在按 ReAct 决定是否调用工具…',
+          content: 'æ­£å¨æ ReAct å³å®æ¯å¦è°ç¨å·¥å·â¦',
         },
-        `工具·${q.slice(0, 16)}`,
+        `å·¥å·Â·${q.slice(0, 16)}`,
       )
 
       setLoading(true)
@@ -627,7 +658,7 @@ export function useChat() {
         }
       } catch (err) {
         patchBotMessage(botId, {
-          content: `请求失败：${(err as Error).message}`,
+          content: `è¯·æ±å¤±è´¥ï¼${(err as Error).message}`,
           typing: false,
           error: true,
           kind: 'tool_chat',

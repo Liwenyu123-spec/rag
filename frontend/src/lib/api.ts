@@ -125,12 +125,20 @@ async function ollamaChat(messages: Msg[], signal?: AbortSignal) {
       model: getModel(),
       messages,
       stream: false,
+      think: true,
     }),
     signal,
   })
   if (!res.ok) throw new Error(`Ollama HTTP ${res.status}`)
-  const data = (await res.json()) as { message?: { content?: string } }
-  return (data.message?.content || '').trim()
+  const data = (await res.json()) as {
+    message?: { content?: string; thinking?: string }
+  }
+  const thinking = (data.message?.thinking || '').trim()
+  const content = (data.message?.content || '').trim()
+  if (thinking && content) {
+    return `<${'think'}>\n${thinking}\n</${'think'}>\n\n${content}`
+  }
+  return content || thinking
 }
 
 function sseFromOllamaChat(messages: Msg[], signal?: AbortSignal) {
@@ -141,6 +149,8 @@ function sseFromOllamaChat(messages: Msg[], signal?: AbortSignal) {
         controller.enqueue(enc.encode(`data: ${JSON.stringify(obj)}\n\n`))
       }
       try {
+        // 先给前端一个心跳，避免长时间只有 thinking 时看起来像卡死
+        send({ status: 'started' })
         const res = await fetch(`${OLLAMA_BASE}/api/chat`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -148,6 +158,7 @@ function sseFromOllamaChat(messages: Msg[], signal?: AbortSignal) {
             model: getModel(),
             messages,
             stream: true,
+            think: true,
           }),
           signal,
         })
@@ -156,6 +167,7 @@ function sseFromOllamaChat(messages: Msg[], signal?: AbortSignal) {
         const decoder = new TextDecoder()
         let buf = ''
         let answer = ''
+        let thinking = ''
         while (true) {
           const { done, value } = await reader.read()
           if (done) break
@@ -166,10 +178,15 @@ function sseFromOllamaChat(messages: Msg[], signal?: AbortSignal) {
             if (!line.trim()) continue
             try {
               const json = JSON.parse(line) as {
-                message?: { content?: string }
+                message?: { content?: string; thinking?: string }
                 done?: boolean
               }
+              const thinkDelta = json.message?.thinking || ''
               const delta = json.message?.content || ''
+              if (thinkDelta) {
+                thinking += thinkDelta
+                send({ thinking: thinkDelta })
+              }
               if (delta) {
                 answer += delta
                 send({ content: delta })
@@ -179,7 +196,14 @@ function sseFromOllamaChat(messages: Msg[], signal?: AbortSignal) {
             }
           }
         }
-        memory.push({ role: 'assistant', content: answer })
+        memory.push({
+          role: 'assistant',
+          content: answer || thinking,
+        })
+        // 若只有思考没有正文，把思考作为可见回复，避免空白气泡
+        if (!answer && thinking) {
+          send({ content: thinking })
+        }
         controller.enqueue(enc.encode('data: [DONE]\n\n'))
       } catch (err) {
         send({ content: `请求失败：${(err as Error).message}` })
