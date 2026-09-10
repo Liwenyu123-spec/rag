@@ -467,11 +467,16 @@
           const question = inputText.value.trim() || '为旅行背包品牌生成一句口号';
           if (loading.value) return;
           messages.value.push({ role: 'user', content: `[自我一致性] ${question}` });
-          messages.value.push({ role: 'bot', content: '', typing: true });
+          // 先提示：会调用多次模型，不是卡住
+          messages.value.push({
+            role: 'bot',
+            content: '自我一致性需多次调用模型（约 2 个候选 + 1 次评选），请稍候…',
+            typing: true,
+          });
           loading.value = true;
           scrollToBottom();
           try {
-            const res = await fetch(`/self_consistency?question=${encodeURIComponent(question)}`);
+            const res = await fetch(`/self_consistency?question=${encodeURIComponent(question)}&num=2`);
             const data = await res.json();
             const botMsg = messages.value.find(m => m.role === 'bot' && m.typing);
             if (botMsg) {
