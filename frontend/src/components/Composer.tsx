@@ -1,6 +1,11 @@
 import { SendHorizontal, Square } from 'lucide-react'
 import { useEffect, useRef } from 'react'
 
+/** 15px * 1.7 * 6 行 ≈ 153px */
+const MAX_LINES = 6
+const LINE_HEIGHT = 15 * 1.7
+const MAX_HEIGHT = Math.round(LINE_HEIGHT * MAX_LINES)
+
 export function Composer({
   value,
   onChange,
@@ -20,7 +25,9 @@ export function Composer({
     const el = ref.current
     if (!el) return
     el.style.height = 'auto'
-    el.style.height = `${Math.min(el.scrollHeight, 160)}px`
+    const next = Math.min(el.scrollHeight, MAX_HEIGHT)
+    el.style.height = `${next}px`
+    el.style.overflowY = el.scrollHeight > MAX_HEIGHT ? 'auto' : 'hidden'
   }, [value])
 
   return (
@@ -39,7 +46,8 @@ export function Composer({
               onSend()
             }
           }}
-          className="max-h-40 min-h-[44px] flex-1 resize-none bg-transparent py-2.5 text-[15px] font-normal leading-[1.7] text-[#e8eefc] outline-none placeholder:text-[#8a8f99] disabled:opacity-60"
+          style={{ maxHeight: MAX_HEIGHT }}
+          className="min-h-[44px] flex-1 resize-none bg-transparent py-2.5 text-[15px] font-normal leading-[1.7] text-[#e8eefc] outline-none placeholder:text-[#8a8f99] disabled:opacity-60"
         />
         {loading ? (
           <button

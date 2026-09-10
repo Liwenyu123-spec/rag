@@ -126,13 +126,7 @@ export function useChat() {
           if (!res.ok) throw new Error(`HTTP ${res.status}`)
           const data = await res.text()
           const { thinking, content } = splitThinking(data)
-          patchBot({
-            content,
-            thinking,
-            typing: false,
-            error: false,
-            sourceQuestion: question,
-          })
+          patchBot({ content, thinking, typing: false, error: false, sourceQuestion: question })
           return
         }
 
@@ -167,13 +161,7 @@ export function useChat() {
               const json = JSON.parse(data) as { content?: string }
               raw += json.content || ''
               const { thinking, content } = splitThinking(raw)
-              patchBot({
-                content,
-                thinking,
-                typing: true,
-                error: false,
-                sourceQuestion: question,
-              })
+              patchBot({ content, thinking, typing: true, error: false, sourceQuestion: question })
             } catch {
               /* ignore */
             }
@@ -241,13 +229,20 @@ export function useChat() {
       const idx = session.messages.findIndex((m) => m.id === assistantId)
       if (idx < 0) return
       const target = session.messages[idx]
-      const question =
-        target.sourceQuestion ||
-        [...session.messages]
-          .slice(0, idx)
-          .reverse()
-          .find((m) => m.role === 'user')?.content
+      const prevUser = [...session.messages.slice(0, idx)].reverse().find((m) => m.role === 'user')
+      const question = (target.sourceQuestion || prevUser?.content || '').trim()
       if (!question) return
+
+      // 自我一致性消息走专用重试
+      if (prevUser?.content.startsWith('[自我一致性]')) {
+        const plain = question.replace(/^\[自我一致性\]\s*/, '')
+        updateActive((s) => ({
+          ...s,
+          messages: s.messages.filter((m) => m.id !== assistantId && m.id !== prevUser.id),
+        }))
+        // 延迟到 runSelfConsistency，由外部调用链处理
+        return { type: 'self_consistency' as const, question: plain }
+      }
 
       const botId = uid()
       updateActive((s) => ({
@@ -265,9 +260,8 @@ export function useChat() {
           },
         ],
       }))
-
-      const cleanQ = question.replace(/^\[自我一致性\]\s*/, '')
-      await requestAssistant(cleanQ, botId, true)
+      await requestAssistant(question.replace(/^\[自我一致性\]\s*/, ''), botId, true)
+      return { type: 'chat' as const }
     },
     [activeId, loading, requestAssistant, sessions, updateActive],
   )
@@ -320,12 +314,12 @@ export function useChat() {
         )
         if (!res.ok) throw new Error(`HTTP ${res.status}`)
         const data = await res.json()
+        const failed = Boolean(data.error)
         const content = data.error
           ? String(data.error)
           : `候选方案：\n${(data.candidates || [])
               .map((c: string, i: number) => `${i + 1}. ${c}`)
               .join('\n')}\n\n最终评选：\n${data.final || ''}`
-        const failed = Boolean(data.error)
         setSessions((prev) =>
           prev.map((s) =>
             s.id === activeId
@@ -374,38 +368,14 @@ export function useChat() {
     [activeId, loading, updateActive],
   )
 
-  const retryFailed = useCallback(
+  const retryOrRegenerate = useCallback(
     async (assistantId: string) => {
-      const session = sessions.find((s) => s.id === activeId)
-      const msg = session?.messages.find((m) => m.id === assistantId)
-      if (!msg?.sourceQuestion) return
-      if (msg.sourceQuestion.startsWith('[自我一致性]') || false) {
-        /* handled below */
+      const result = await regenerate(assistantId)
+      if (result?.type === 'self_consistency') {
+        await runSelfConsistency(result.question)
       }
-      // 自我一致性失败走专用接口
-      const plain = msg.sourceQuestion.replace(/^\[自我一致性\]\s*/, '')
-      if (msg.content.includes('自我一致性') || session?.messages.some(
-        (m) => m.id !== assistantId && m.content.startsWith('[自我一致性]') && m.createdAt <= msg.createdAt,
-      )) {
-        const prevUser = [...(session?.messages || [])]
-          .reverse()
-          .find((m) => m.role === 'user' && m.content.startsWith('[自我一致性]'))
-        if (prevUser) {
-          // 简化：失败重试统一走 regenerate（普通对话）或 self_consistency
-          if (prevUser.content.startsWith('[自我一致性]')) {
-            // 删除失败消息后重新跑
-            updateActive((s) => ({
-              ...s,
-              messages: s.messages.filter((m) => m.id !== assistantId && m.id !== prevUser.id),
-            }))
-            await runSelfConsistency(plain)
-            return
-          }
-        }
-      }
-      await regenerate(assistantId)
     },
-    [activeId, regenerate, runSelfConsistency, sessions, updateActive],
+    [regenerate, runSelfConsistency],
   )
 
   return {
@@ -420,8 +390,7 @@ export function useChat() {
     send,
     stop,
     runSelfConsistency,
-    regenerate,
+    regenerate: retryOrRegenerate,
     toggleLike,
-    retryFailed,
   }
 }
