@@ -130,3 +130,37 @@ export function ModeSelect({
     </select>
   )
 }
+
+/** 选择本机 Ollama 已安装的模型 */
+export function OllamaModelSelect({
+  value,
+  models,
+  onChange,
+}: {
+  value: string
+  models: string[]
+  onChange: (m: string) => void
+}) {
+  if (!models.length) {
+    return (
+      <span className="max-w-[140px] truncate text-[11px] text-aux" title="本机暂无模型">
+        无本地模型
+      </span>
+    )
+  }
+  return (
+    <select
+      value={models.includes(value) ? value : models[0]}
+      onChange={(e) => onChange(e.target.value)}
+      title="使用本机 Ollama 模型"
+      className="max-w-[180px] rounded-[12px] border border-[var(--border-soft)] bg-white/60 px-3 py-1.5 text-xs font-normal text-[var(--text-main)] outline-none backdrop-blur-md transition-[border-color] duration-150 hover:border-[#4d6bfe]/50 dark:bg-white/5"
+    >
+      {models.map((m) => (
+        <option key={m} value={m} className="bg-white text-[#1f2329] dark:bg-[#0f172a] dark:text-[#e8eefc]">
+          {m}
+        </option>
+      ))}
+    </select>
+  )
+}
+

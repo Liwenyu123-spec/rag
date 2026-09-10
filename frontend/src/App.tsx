@@ -14,7 +14,7 @@ import {
   TemplatePickerModal,
   ToolChatModal,
 } from './components/DemoFormModal'
-import { EmptyState, ModeSelect } from './components/EmptyState'
+import { EmptyState, ModeSelect, OllamaModelSelect } from './components/EmptyState'
 import { MessageBubble } from './components/MessageBubble'
 import { MobileMenuButton, Sidebar } from './components/Sidebar'
 import { WallpaperModal } from './components/WallpaperModal'
@@ -26,7 +26,13 @@ const BOTTOM_THRESHOLD = 80
 export default function App() {
   const { dark, toggle } = useTheme()
   const chat = useChat()
-  const backend = useBackendStatus()
+  const {
+    status: backend,
+    models: ollamaModels,
+    model: ollamaModel,
+    selectModel,
+    isBrowserOllama,
+  } = useBackendStatus()
   const { wallpaper, setFromFile, clear: clearWallpaper, setDim } = useWallpaper()
   const [input, setInput] = useState('')
   const [mobileOpen, setMobileOpen] = useState(false)
@@ -159,7 +165,16 @@ export default function App() {
               </div>
             </div>
           </div>
-          <ModeSelect value={chat.active?.mode ?? 'zero_shot'} onChange={chat.setMode} />
+          <div className="flex items-center gap-2">
+            {isBrowserOllama && (
+              <OllamaModelSelect
+                value={ollamaModel}
+                models={ollamaModels}
+                onChange={selectModel}
+              />
+            )}
+            <ModeSelect value={chat.active?.mode ?? 'zero_shot'} onChange={chat.setMode} />
+          </div>
         </header>
 
         <div

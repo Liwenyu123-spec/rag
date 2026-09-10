@@ -47,8 +47,38 @@ export function isBrowserOllamaMode() {
   )
 }
 
+export function getOllamaModel() {
+  return localStorage.getItem(MODEL_KEY) || ''
+}
+
+export function setOllamaModel(name: string) {
+  const n = name.trim()
+  if (!n) return
+  localStorage.setItem(MODEL_KEY, n)
+}
+
+/** 列出本机 Ollama 已安装模型 */
+export async function listOllamaModels(signal?: AbortSignal): Promise<string[]> {
+  const res = await fetch(`${OLLAMA_BASE}/api/tags`, { signal })
+  if (!res.ok) throw new Error(`Ollama HTTP ${res.status}`)
+  const payload = (await res.json()) as { models?: { name: string }[] }
+  return (payload.models || []).map((m) => m.name).filter(Boolean)
+}
+
+/** 当前选用模型：优先本地已保存且仍存在的；否则用本机列表第一个 */
+export async function resolveOllamaModel(signal?: AbortSignal): Promise<string> {
+  const names = await listOllamaModels(signal)
+  const saved = getOllamaModel()
+  if (saved && names.includes(saved)) return saved
+  if (names.length) {
+    setOllamaModel(names[0])
+    return names[0]
+  }
+  return saved || 'deepseek-r1:1.5b'
+}
+
 function getModel() {
-  return localStorage.getItem(MODEL_KEY) || 'deepseek-r1:1.5b'
+  return getOllamaModel() || 'deepseek-r1:1.5b'
 }
 
 function getSystem() {
@@ -291,11 +321,12 @@ export async function browserOllamaFetch(
 
   try {
     if (path === '/health' || path.endsWith('/health')) {
-      const res = await fetch(`${OLLAMA_BASE}/api/tags`, { signal })
-      if (!res.ok) throw new Error(`HTTP ${res.status}`)
-      const payload = (await res.json()) as { models?: { name: string }[] }
-      const names = (payload.models || []).map((m) => m.name)
-      const model = getModel()
+      const names = await listOllamaModels(signal)
+      let model = getOllamaModel()
+      if (!model || !names.includes(model)) {
+        model = names[0] || model || 'deepseek-r1:1.5b'
+        if (names[0]) setOllamaModel(names[0])
+      }
       const model_ready = names.includes(model)
       return jsonResponse({
         ok: true,
@@ -306,7 +337,9 @@ export async function browserOllamaFetch(
         models: names,
         hint: model_ready
           ? null
-          : `未找到模型 ${model}，请执行 ollama pull ${model}`,
+          : names.length
+            ? `请在右上角选择本机已有模型`
+            : `本机还没有模型，请执行: ollama pull deepseek-r1:1.5b 或你喜欢的其他模型`,
       })
     }
 
