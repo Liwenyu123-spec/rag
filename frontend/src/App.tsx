@@ -3,6 +3,10 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { useChat } from './hooks/useChat'
 import { useTheme } from './hooks/useTheme'
 import { Composer } from './components/Composer'
+import {
+  ProductCopyModal,
+  SocialPlanModal,
+} from './components/DemoFormModal'
 import { EmptyState, ModeSelect } from './components/EmptyState'
 import { MessageBubble } from './components/MessageBubble'
 import { MobileMenuButton, Sidebar } from './components/Sidebar'
@@ -18,6 +22,8 @@ export default function App() {
   const [collapsed, setCollapsed] = useState(false)
   const [stickToBottom, setStickToBottom] = useState(true)
   const [showJump, setShowJump] = useState(false)
+  const [productOpen, setProductOpen] = useState(false)
+  const [socialOpen, setSocialOpen] = useState(false)
   const listRef = useRef<HTMLDivElement>(null)
 
   const scrollToBottom = useCallback((smooth = false) => {
@@ -101,14 +107,8 @@ export default function App() {
                 setStickToBottom(true)
                 void chat.runSelfConsistency('为旅行背包品牌生成一句口号')
               }}
-              onProductCopy={() => {
-                setStickToBottom(true)
-                void chat.runProductCopy()
-              }}
-              onSocialPlan={() => {
-                setStickToBottom(true)
-                void chat.runSocialPlan()
-              }}
+              onProductCopy={() => setProductOpen(true)}
+              onSocialPlan={() => setSocialOpen(true)}
             />
           ) : (
             <div className="mx-auto flex w-full max-w-[768px] flex-col gap-6 px-4 py-6">
@@ -153,6 +153,25 @@ export default function App() {
           }}
         />
       </main>
+
+      <ProductCopyModal
+        open={productOpen}
+        onClose={() => setProductOpen(false)}
+        onSubmit={(product) => {
+          setProductOpen(false)
+          setStickToBottom(true)
+          void chat.runProductCopy(product)
+        }}
+      />
+      <SocialPlanModal
+        open={socialOpen}
+        onClose={() => setSocialOpen(false)}
+        onSubmit={(topic) => {
+          setSocialOpen(false)
+          setStickToBottom(true)
+          void chat.runSocialPlan(topic)
+        }}
+      />
     </div>
   )
 }

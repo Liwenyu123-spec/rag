@@ -49,7 +49,7 @@ export function EmptyState({
           className="suggestion-card rounded-[16px] px-4 py-3.5 text-left text-[14px] text-body"
         >
           <div className="mb-1 text-[13px] font-semibold text-[#4d6bfe]">demo05 · 电商文案</div>
-          <div className="text-aux text-[13px]">Few-Shot + CoT 生成产品标题/正文/标签</div>
+          <div className="text-aux text-[13px]">自定义产品信息，Few-Shot + CoT 生成文案</div>
         </button>
         <button
           type="button"
@@ -57,7 +57,7 @@ export function EmptyState({
           className="suggestion-card rounded-[16px] px-4 py-3.5 text-left text-[14px] text-body"
         >
           <div className="mb-1 text-[13px] font-semibold text-[#4d6bfe]">demo06 · 社交策划</div>
-          <div className="text-aux text-[13px]">ToT 四阶段：发散→评估→日历→优化</div>
+          <div className="text-aux text-[13px]">自定义主题，ToT 四阶段策划</div>
         </button>
       </div>
 
