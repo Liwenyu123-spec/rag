@@ -16,13 +16,15 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, Query
-from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse, StreamingResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, PlainTextResponse, StreamingResponse
+from fastapi.staticfiles import StaticFiles
 from llama_index.core.llms import ChatMessage
 from llama_index.core.memory import ChatMemoryBuffer
 from llama_index.llms.deepseek import DeepSeek
 
 
 BASE_DIR = Path(__file__).resolve().parent
+FRONTEND_DIST = BASE_DIR / "frontend" / "dist"
 load_dotenv(BASE_DIR / ".env", override=True)
 
 api_key = os.getenv("DEEPSEEK_API_KEY")
@@ -51,6 +53,10 @@ BASE_SYSTEM_PROMPT = """你是我的小苹果，一位有帮助的助手。
 
 memory = ChatMemoryBuffer.from_defaults(token_limit=10000)
 memory.put(ChatMessage(role="system", content=BASE_SYSTEM_PROMPT))
+
+# React 构建产物静态资源
+if (FRONTEND_DIST / "assets").exists():
+    app.mount("/assets", StaticFiles(directory=FRONTEND_DIST / "assets"), name="assets")
 
 
 # ---------- demo01：四种提示词策略 ----------
@@ -142,13 +148,25 @@ def build_user_content(question: str, mode: str) -> str:
     return f"{strategy}\n\n用户任务：\n{question}"
 
 
-@app.get("/", response_class=HTMLResponse)
+@app.get("/")
 def index():
-    """优先用 910 页面；没有则回退到 chat.html。"""
+    """优先返回 React 构建产物，否则回退到旧 HTML。"""
+    spa = FRONTEND_DIST / "index.html"
+    if spa.exists():
+        return FileResponse(spa)
     page = BASE_DIR / "chat_910.html"
     if not page.exists():
         page = BASE_DIR / "chat.html"
-    return page.read_text(encoding="utf-8")
+    return HTMLResponse(page.read_text(encoding="utf-8"))
+
+
+@app.post("/reset")
+def reset_memory():
+    """新建对话时清空服务端记忆。"""
+    global memory
+    memory = ChatMemoryBuffer.from_defaults(token_limit=10000)
+    memory.put(ChatMessage(role="system", content=BASE_SYSTEM_PROMPT))
+    return {"ok": True}
 
 
 @app.get("/modes")
