@@ -215,11 +215,11 @@ function runTool(name: string, arg: string) {
   if (['calculator', 'calc', 'math'].includes(n)) {
     try {
       // 仅允许数字与基本运算符
-      if (!/^[\d\s+\-*/().%]+$/.test(arg.replace(/\*\*/g, ''))) {
+      const expr = arg.trim()
+      if (!/^[\d+\-*/().\s%]+$/.test(expr)) {
         return '仅支持简单四则运算'
       }
-      // eslint-disable-next-line no-new-func
-      const v = Function(`"use strict"; return (${arg})`)()
+      const v = new Function(`"use strict"; return (${expr})`)()
       return String(v)
     } catch (e) {
       return `计算失败: ${(e as Error).message}`

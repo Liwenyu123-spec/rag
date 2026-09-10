@@ -2,8 +2,12 @@ import tailwindcss from '@tailwindcss/vite'
 import react from '@vitejs/plugin-react'
 import { defineConfig } from 'vite'
 
+// GitHub Pages 项目页路径为 /rag/；本地与 FastAPI 托管用 /
+const pages = process.env.GITHUB_PAGES === 'true'
+
 export default defineConfig({
   plugins: [react(), tailwindcss()],
+  base: pages ? '/rag/' : '/',
   server: {
     port: 5173,
     proxy: {
