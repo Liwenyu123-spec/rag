@@ -4,7 +4,6 @@ const SUGGESTIONS = [
   { icon: '💡', text: '用简单的语言解释一下什么是大语言模型' },
   { icon: '📚', text: '帮我制定一份今天的学习计划' },
   { icon: '⌨️', text: '帮我优化一段 Python 代码' },
-  { icon: '✨', text: '为旅行背包品牌生成一句口号' },
 ]
 
 export function EmptyState({
@@ -12,11 +11,17 @@ export function EmptyState({
   onSelfConsistency,
   onProductCopy,
   onSocialPlan,
+  onCompare,
+  onToolChat,
+  onTemplates,
 }: {
   onPick: (text: string) => void
   onSelfConsistency: () => void
   onProductCopy?: () => void
   onSocialPlan?: () => void
+  onCompare?: () => void
+  onToolChat?: () => void
+  onTemplates?: () => void
 }) {
   return (
     <div className="flex h-full flex-col items-center justify-center px-4 pb-10">
@@ -31,40 +36,76 @@ export function EmptyState({
           <button
             key={item.text}
             type="button"
-            onClick={() =>
-              item.text.includes('口号') ? onSelfConsistency() : onPick(item.text)
-            }
+            onClick={() => onPick(item.text)}
             className="suggestion-card rounded-[16px] px-4 py-3.5 text-left text-[14px] text-body"
           >
             <span className="mr-2">{item.icon}</span>
             {item.text}
           </button>
         ))}
+        <button
+          type="button"
+          onClick={onSelfConsistency}
+          className="suggestion-card rounded-[16px] px-4 py-3.5 text-left text-[14px] text-body"
+        >
+          <span className="mr-2">✨</span>
+          自我一致性 · 自定义口号任务
+        </button>
       </div>
 
       <div className="mt-5 grid w-full max-w-xl grid-cols-1 gap-3 sm:grid-cols-2">
-        <button
-          type="button"
+        <DemoCard
+          title="demo05 · 电商文案"
+          desc="自定义产品信息，Few-Shot + CoT"
           onClick={onProductCopy}
-          className="suggestion-card rounded-[16px] px-4 py-3.5 text-left text-[14px] text-body"
-        >
-          <div className="mb-1 text-[13px] font-semibold text-[#4d6bfe]">demo05 · 电商文案</div>
-          <div className="text-aux text-[13px]">自定义产品信息，Few-Shot + CoT 生成文案</div>
-        </button>
-        <button
-          type="button"
+        />
+        <DemoCard
+          title="demo06 · 社交策划"
+          desc="自定义主题，ToT 四阶段"
           onClick={onSocialPlan}
-          className="suggestion-card rounded-[16px] px-4 py-3.5 text-left text-[14px] text-body"
-        >
-          <div className="mb-1 text-[13px] font-semibold text-[#4d6bfe]">demo06 · 社交策划</div>
-          <div className="text-aux text-[13px]">自定义主题，ToT 四阶段策划</div>
-        </button>
+        />
+        <DemoCard
+          title="多模式对比"
+          desc="零样本 / 思维链 / 思维树并排"
+          onClick={onCompare}
+        />
+        <DemoCard
+          title="工具调用"
+          desc="纯文本 ReAct：计算 / 天气 / 笔记"
+          onClick={onToolChat}
+        />
+        <DemoCard
+          title="提示词模板"
+          desc="面试 · 周报 · 代码评审 · 润色"
+          onClick={onTemplates}
+        />
       </div>
 
       <p className="mt-6 text-xs text-aux">
         支持模式：{Object.values(MODE_LABELS).join(' · ')}
       </p>
     </div>
+  )
+}
+
+function DemoCard({
+  title,
+  desc,
+  onClick,
+}: {
+  title: string
+  desc: string
+  onClick?: () => void
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="suggestion-card rounded-[16px] px-4 py-3.5 text-left text-[14px] text-body"
+    >
+      <div className="mb-1 text-[13px] font-semibold text-[#4d6bfe]">{title}</div>
+      <div className="text-aux text-[13px]">{desc}</div>
+    </button>
   )
 }
 
