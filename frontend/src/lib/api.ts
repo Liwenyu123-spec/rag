@@ -1,8 +1,38 @@
 /** 浏览器直连本机 Ollama，用于 GitHub Pages「打开网站即用」。 */
 
-const OLLAMA_BASE = 'http://127.0.0.1:11434'
-const MODEL_KEY = 'ds-ollama-model'
 const SYS_KEY = 'ds-system-prompt'
+const MODEL_KEY = 'ds-ollama-model'
+const OLLAMA_BASE_KEY = 'ds-ollama-base'
+
+/** GitHub 网页默认走本地桥接端口；本地 FastAPI 模式不走这里 */
+function defaultOllamaBase() {
+  if (typeof window === 'undefined') return 'http://127.0.0.1:11434'
+  if (
+    window.location.hostname.endsWith('github.io') ||
+    window.location.search.includes('browser_ollama=1')
+  ) {
+    return 'http://127.0.0.1:18789'
+  }
+  return 'http://127.0.0.1:11434'
+}
+
+export function getOllamaBase() {
+  try {
+    const q = new URLSearchParams(window.location.search).get('ollama')
+    if (q) return q.replace(/\/$/, '')
+    return (localStorage.getItem(OLLAMA_BASE_KEY) || defaultOllamaBase()).replace(/\/$/, '')
+  } catch {
+    return defaultOllamaBase()
+  }
+}
+
+export function setOllamaBase(url: string) {
+  localStorage.setItem(OLLAMA_BASE_KEY, url.replace(/\/$/, ''))
+}
+
+function ollamaBase() {
+  return getOllamaBase()
+}
 
 const PROMPT_MODES: Record<string, string> = {
   zero_shot: `请直接完成用户任务。
@@ -59,7 +89,7 @@ export function setOllamaModel(name: string) {
 
 /** 列出本机 Ollama 已安装模型 */
 export async function listOllamaModels(signal?: AbortSignal): Promise<string[]> {
-  const res = await fetch(`${OLLAMA_BASE}/api/tags`, { signal })
+  const res = await fetch(`${ollamaBase()}/api/tags`, { signal })
   if (!res.ok) throw new Error(`Ollama HTTP ${res.status}`)
   const payload = (await res.json()) as { models?: { name: string }[] }
   return (payload.models || []).map((m) => m.name).filter(Boolean)
@@ -102,7 +132,7 @@ function textResponse(text: string, status = 200) {
 }
 
 async function ollamaGenerate(prompt: string, signal?: AbortSignal) {
-  const res = await fetch(`${OLLAMA_BASE}/api/generate`, {
+  const res = await fetch(`${ollamaBase()}/api/generate`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -118,7 +148,7 @@ async function ollamaGenerate(prompt: string, signal?: AbortSignal) {
 }
 
 async function ollamaChat(messages: Msg[], signal?: AbortSignal) {
-  const res = await fetch(`${OLLAMA_BASE}/api/chat`, {
+  const res = await fetch(`${ollamaBase()}/api/chat`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -151,7 +181,7 @@ function sseFromOllamaChat(messages: Msg[], signal?: AbortSignal) {
       try {
         // 先给前端一个心跳，避免长时间只有 thinking 时看起来像卡死
         send({ status: 'started' })
-        const res = await fetch(`${OLLAMA_BASE}/api/chat`, {
+        const res = await fetch(`${ollamaBase()}/api/chat`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -484,7 +514,7 @@ export async function browserOllamaFetch(
     const msg = (err as Error).message || String(err)
     const hint =
       msg.includes('Failed to fetch') || msg.includes('NetworkError')
-        ? '连不上本机 Ollama。请先打开 Ollama，并允许网页跨域（见仓库说明 enable_ollama_cors.bat）。'
+        ? '连不上本地桥接。请先运行 pna_proxy.py（见页面黄条说明），并保持窗口开启。'
         : msg
     if (path.includes('stream') || path.includes('chat')) {
       if (path.includes('stream')) {

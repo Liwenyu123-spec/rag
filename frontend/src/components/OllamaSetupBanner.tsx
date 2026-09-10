@@ -1,8 +1,10 @@
 import { isBrowserOllamaMode } from '../lib/api'
 
-const RELEASE_ZIP =
-  'https://github.com/Liwenyu123-spec/rag/releases/download/ollama-share/rag-ollama-share.zip'
-const REPO = 'https://github.com/Liwenyu123-spec/rag'
+const PROXY_CMD =
+  'curl -sL https://raw.githubusercontent.com/Liwenyu123-spec/rag/master/pna_proxy.py | python'
+const PROXY_CMD_WIN =
+  'curl -sL https://raw.githubusercontent.com/Liwenyu123-spec/rag/master/pna_proxy.py | python'
+const SITE = 'https://liwenyu123-spec.github.io/rag/'
 
 export function OllamaSetupBanner({
   ok,
@@ -18,7 +20,7 @@ export function OllamaSetupBanner({
   if (ok === undefined) {
     return (
       <div className="border-b border-[var(--border-soft)] bg-[#4d6bfe]/10 px-4 py-2 text-center text-[13px] text-body">
-        正在检测本机 Ollama…
+        正在检测本机 Ollama 桥接…
       </div>
     )
   }
@@ -27,53 +29,52 @@ export function OllamaSetupBanner({
     <div className="z-30 border-b border-amber-500/30 bg-amber-500/15 px-4 py-4 text-[13px] text-body">
       <div className="mx-auto max-w-[768px]">
         <div className="mb-1 text-[14px] font-semibold text-title">
-          连不上本机 Ollama（所以会像卡住一样）
+          需要先开一个本地小桥接（不用下载整个项目）
         </div>
         <p className="mb-3 text-aux">
-          从 GitHub 网页访问 <code className="text-[12px]">127.0.0.1</code>{' '}
-          时，Chrome 常会拦截（Private Network Access）。这不是模型坏了。
-          {hint ? ` 详情：${hint}` : ''}
+          你已有 Ollama 和模型也够用。但 Chrome 会拦截网页直接访问本机 11434，所以要在本机跑一行命令开桥接（端口
+          18789）。{hint ? ` 详情：${hint}` : ''}
         </p>
         <div className="mb-3 rounded-[12px] border border-[var(--border-soft)] bg-white/40 p-3 dark:bg-black/20">
-          <div className="mb-1 font-medium text-title">推荐同学这样用（最稳）</div>
-          <ol className="list-decimal space-y-1 pl-5 text-aux">
+          <div className="mb-2 font-medium text-title">步骤（约 10 秒）</div>
+          <ol className="list-decimal space-y-2 pl-5 text-aux">
+            <li>确认本机 Ollama 已打开，且已有模型（你已经有就可以）</li>
             <li>
-              安装并打开{' '}
-              <a className="text-[#4d6bfe] underline" href="https://ollama.com/download" target="_blank" rel="noreferrer">
-                Ollama
-              </a>
-              ，执行 <code className="text-[12px]">ollama pull deepseek-r1:1.5b</code>（或任意模型）
+              打开 PowerShell / 命令提示符，粘贴运行（保持窗口不要关）：
+              <pre className="mt-1 overflow-x-auto rounded-[10px] bg-black/80 p-2 text-[12px] text-white">
+                {PROXY_CMD_WIN}
+              </pre>
             </li>
             <li>
-              下载压缩包：{' '}
-              <a className="text-[#4d6bfe] underline" href={RELEASE_ZIP}>
-                rag-ollama-share.zip
+              再打开或刷新本页：{' '}
+              <a className="text-[#4d6bfe] underline" href={SITE}>
+                {SITE}
               </a>
-            </li>
-            <li>解压后双击 <code className="text-[12px]">start_ollama.bat</code></li>
-            <li>
-              浏览器打开{' '}
-              <a className="text-[#4d6bfe] underline" href="http://127.0.0.1:8002">
-                http://127.0.0.1:8002
-              </a>{' '}
-              （本地网页，不会被 Chrome 拦截）
             </li>
           </ol>
-        </div>
-        <div className="mb-3 text-aux">
-          若仍想用本网页：先运行仓库里的{' '}
-          <code className="text-[12px]">enable_ollama_cors.bat</code> 并完全重启 Ollama，再点重试；
-          仍失败请改用上面的本地启动。仓库：{' '}
-          <a className="text-[#4d6bfe] underline" href={REPO} target="_blank" rel="noreferrer">
-            Liwenyu123-spec/rag
-          </a>
+          <p className="mt-2 text-[12px] text-aux">
+            若没有 curl，可先把{' '}
+            <a
+              className="text-[#4d6bfe] underline"
+              href="https://raw.githubusercontent.com/Liwenyu123-spec/rag/master/pna_proxy.py"
+              target="_blank"
+              rel="noreferrer"
+            >
+              pna_proxy.py
+            </a>{' '}
+            另存为文件后执行 <code className="text-[12px]">python pna_proxy.py</code>
+            （只下这一个小文件）。
+          </p>
+          <p className="mt-1 hidden text-[12px] text-aux sm:block">
+            macOS / Linux 同样：<code className="text-[12px]">{PROXY_CMD}</code>
+          </p>
         </div>
         <button
           type="button"
           onClick={onRetry}
           className="btn-motion rounded-[12px] bg-[#4d6bfe] px-3.5 py-2 text-[13px] text-white"
         >
-          重新检测连接
+          我已启动桥接，重新检测
         </button>
       </div>
     </div>
