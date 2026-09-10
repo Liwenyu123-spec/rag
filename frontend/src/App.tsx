@@ -1,6 +1,7 @@
 import { ArrowDown } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useBackendStatus } from './hooks/useBackendStatus'
+import { useBridgeHeartbeat } from './hooks/useBridgeHeartbeat'
 import { useChat } from './hooks/useChat'
 import { useTheme } from './hooks/useTheme'
 import { useWallpaper } from './hooks/useWallpaper'
@@ -36,6 +37,7 @@ export default function App() {
     refresh: refreshBackend,
     isBrowserOllama,
   } = useBackendStatus()
+  useBridgeHeartbeat(Boolean(isBrowserOllama && backend?.ok))
   const { wallpaper, setFromFile, clear: clearWallpaper, setDim } = useWallpaper()
   const [input, setInput] = useState('')
   const [mobileOpen, setMobileOpen] = useState(false)

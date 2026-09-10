@@ -3,16 +3,18 @@
 ## 同学已有 Ollama + 模型（不用下载整个项目）
 
 1. 本机 Ollama 保持打开  
-2. 终端执行一行（保持窗口运行）：
+2. 终端运行一次（**之后可关掉黑窗口**）：
 
-```bash
-curl -sL https://raw.githubusercontent.com/Liwenyu123-spec/rag/master/pna_proxy.py | python
+```bat
+curl -sL https://raw.githubusercontent.com/Liwenyu123-spec/rag/master/pna_proxy.py -o %TEMP%\pna_proxy.py && start "" /B pythonw %TEMP%\pna_proxy.py
 ```
 
-3. 浏览器打开：**https://liwenyu123-spec.github.io/rag/**  
-4. 右上角选择自己的模型即可  
+也可双击仓库里的 `start_bridge.bat`。
 
-> 原因：Chrome 会拦截网页直连 `11434`；这个小桥接只做转发并加上允许头，不改你的模型。
+3. 打开：**https://liwenyu123-spec.github.io/rag/**  
+4. **关掉网页大约 1 分钟后，桥接会自动停止**  
+
+右上角可选自己的模型；「思考·关」更快。
 
 ## 完整下载本地启动（备选）
 
