@@ -10,9 +10,13 @@ const SUGGESTIONS = [
 export function EmptyState({
   onPick,
   onSelfConsistency,
+  onProductCopy,
+  onSocialPlan,
 }: {
   onPick: (text: string) => void
   onSelfConsistency: () => void
+  onProductCopy?: () => void
+  onSocialPlan?: () => void
 }) {
   return (
     <div className="flex h-full flex-col items-center justify-center px-4 pb-10">
@@ -37,6 +41,26 @@ export function EmptyState({
           </button>
         ))}
       </div>
+
+      <div className="mt-5 grid w-full max-w-xl grid-cols-1 gap-3 sm:grid-cols-2">
+        <button
+          type="button"
+          onClick={onProductCopy}
+          className="suggestion-card rounded-[16px] px-4 py-3.5 text-left text-[14px] text-body"
+        >
+          <div className="mb-1 text-[13px] font-semibold text-[#4d6bfe]">demo05 · 电商文案</div>
+          <div className="text-aux text-[13px]">Few-Shot + CoT 生成产品标题/正文/标签</div>
+        </button>
+        <button
+          type="button"
+          onClick={onSocialPlan}
+          className="suggestion-card rounded-[16px] px-4 py-3.5 text-left text-[14px] text-body"
+        >
+          <div className="mb-1 text-[13px] font-semibold text-[#4d6bfe]">demo06 · 社交策划</div>
+          <div className="text-aux text-[13px]">ToT 四阶段：发散→评估→日历→优化</div>
+        </button>
+      </div>
+
       <p className="mt-6 text-xs text-aux">
         支持模式：{Object.values(MODE_LABELS).join(' · ')}
       </p>

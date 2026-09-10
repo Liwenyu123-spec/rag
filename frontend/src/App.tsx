@@ -101,6 +101,14 @@ export default function App() {
                 setStickToBottom(true)
                 void chat.runSelfConsistency('为旅行背包品牌生成一句口号')
               }}
+              onProductCopy={() => {
+                setStickToBottom(true)
+                void chat.runProductCopy()
+              }}
+              onSocialPlan={() => {
+                setStickToBottom(true)
+                void chat.runSocialPlan()
+              }}
             />
           ) : (
             <div className="mx-auto flex w-full max-w-[768px] flex-col gap-6 px-4 py-6">

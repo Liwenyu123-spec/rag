@@ -378,6 +378,212 @@ export function useChat() {
     [regenerate, runSelfConsistency],
   )
 
+  const runProductCopy = useCallback(
+    async (product?: { name: string; features: string; audience: string }) => {
+      if (loading) return
+      const payload = product || {
+        name: '全自动豆浆机',
+        features: '1分钟速热, 20Bar高压萃取, 手机App控制',
+        audience: '追求生活品质的独居白领',
+      }
+
+      const userMsg: ChatMessage = {
+        id: uid(),
+        role: 'user',
+        content: `[电商文案] ${payload.name}｜卖点：${payload.features}｜人群：${payload.audience}`,
+        createdAt: Date.now(),
+      }
+      const botId = uid()
+      updateActive((s) => ({
+        ...s,
+        title: s.messages.length === 0 ? `电商文案·${payload.name}` : s.title,
+        messages: [
+          ...s.messages,
+          userMsg,
+          {
+            id: botId,
+            role: 'assistant',
+            content: '正在按 Few-Shot + CoT 生成产品文案…',
+            typing: true,
+            sourceQuestion: payload.name,
+            createdAt: Date.now(),
+          },
+        ],
+      }))
+      setLoading(true)
+
+      try {
+        const res = await fetch('/product_copy', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        })
+        const data = await res.json()
+        const content = data.error
+          ? String(data.error)
+          : data.result || '未生成内容'
+        setSessions((prev) =>
+          prev.map((s) =>
+            s.id === activeId
+              ? {
+                  ...s,
+                  messages: s.messages.map((m) =>
+                    m.id === botId
+                      ? {
+                          ...m,
+                          content,
+                          typing: false,
+                          error: Boolean(data.error),
+                          sourceQuestion: payload.name,
+                        }
+                      : m,
+                  ),
+                }
+              : s,
+          ),
+        )
+      } catch (err) {
+        setSessions((prev) =>
+          prev.map((s) =>
+            s.id === activeId
+              ? {
+                  ...s,
+                  messages: s.messages.map((m) =>
+                    m.id === botId
+                      ? {
+                          ...m,
+                          content: `请求失败：${(err as Error).message}`,
+                          typing: false,
+                          error: true,
+                          sourceQuestion: payload.name,
+                        }
+                      : m,
+                  ),
+                }
+              : s,
+          ),
+        )
+      } finally {
+        setLoading(false)
+      }
+    },
+    [activeId, loading, updateActive],
+  )
+
+  const runSocialPlan = useCallback(
+    async (topic?: string) => {
+      if (loading) return
+      const subject = (topic || '独居女生的低成本精致生活').trim()
+
+      const userMsg: ChatMessage = {
+        id: uid(),
+        role: 'user',
+        content: `[社交策划] ${subject}`,
+        createdAt: Date.now(),
+      }
+      const botId = uid()
+      updateActive((s) => ({
+        ...s,
+        title: s.messages.length === 0 ? `社交策划·${subject.slice(0, 16)}` : s.title,
+        messages: [
+          ...s.messages,
+          userMsg,
+          {
+            id: botId,
+            role: 'assistant',
+            content: '阶段 1/4：正在发散策划分支…',
+            typing: true,
+            sourceQuestion: subject,
+            createdAt: Date.now(),
+          },
+        ],
+      }))
+      setLoading(true)
+
+      const patch = (content: string, typing = true, error = false) => {
+        setSessions((prev) =>
+          prev.map((s) =>
+            s.id === activeId
+              ? {
+                  ...s,
+                  messages: s.messages.map((m) =>
+                    m.id === botId
+                      ? { ...m, content, typing, error, sourceQuestion: subject }
+                      : m,
+                  ),
+                }
+              : s,
+          ),
+        )
+      }
+
+      try {
+        const resp = await fetch(
+          `/social_plan_stream?topic=${encodeURIComponent(subject)}`,
+        )
+        if (!resp.ok) throw new Error(`HTTP ${resp.status}`)
+        const reader = resp.body?.getReader()
+        if (!reader) throw new Error('无法读取流式响应')
+
+        const decoder = new TextDecoder()
+        let buffer = ''
+        const sections: string[] = []
+
+        while (true) {
+          const { done, value } = await reader.read()
+          if (done) break
+          buffer += decoder.decode(value, { stream: true })
+          const parts = buffer.split('\n\n')
+          buffer = parts.pop() ?? ''
+
+          for (const part of parts) {
+            const line = part.trim()
+            if (!line.startsWith('data: ')) continue
+            const data = line.slice(6)
+            if (data === '[DONE]') {
+              patch(sections.join('\n\n---\n\n') || '策划完成', false, false)
+              continue
+            }
+            try {
+              const json = JSON.parse(data) as {
+                stage?: number | string
+                title?: string
+                content?: string
+                done?: boolean
+              }
+              if (json.stage === 'error') {
+                patch(json.content || '策划失败', false, true)
+                continue
+              }
+              if (json.content && json.title) {
+                // 进度提示 vs 正式结果：短提示只更新状态，长内容写入章节
+                if (json.content.length < 40 && !json.done) {
+                  patch(
+                    `${sections.length ? sections.join('\n\n---\n\n') + '\n\n---\n\n' : ''}阶段 ${json.stage}/4：${json.content}`,
+                    true,
+                  )
+                } else {
+                  sections.push(`### ${json.title}\n\n${json.content}`)
+                  patch(sections.join('\n\n---\n\n'), !json.done)
+                }
+              }
+            } catch {
+              /* ignore */
+            }
+          }
+        }
+        if (sections.length) {
+          patch(sections.join('\n\n---\n\n'), false)
+        }
+      } catch (err) {
+        patch(`请求失败：${(err as Error).message}`, false, true)
+      } finally {
+        setLoading(false)
+      }
+    },
+    [activeId, loading, updateActive],
+  )
+
   return {
     sessions,
     active,
@@ -390,6 +596,8 @@ export function useChat() {
     send,
     stop,
     runSelfConsistency,
+    runProductCopy,
+    runSocialPlan,
     regenerate: retryOrRegenerate,
     toggleLike,
   }
