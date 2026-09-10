@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
-import { useChat } from '../hooks/useChat'
-import { useTheme } from '../hooks/useTheme'
-import { Composer } from './Composer'
-import { EmptyState, ModeSelect } from './EmptyState'
-import { MessageBubble } from './MessageBubble'
-import { MobileMenuButton, Sidebar } from './Sidebar'
+import { useChat } from './hooks/useChat'
+import { useTheme } from './hooks/useTheme'
+import { Composer } from './components/Composer'
+import { EmptyState, ModeSelect } from './components/EmptyState'
+import { MessageBubble } from './components/MessageBubble'
+import { MobileMenuButton, Sidebar } from './components/Sidebar'
+import type { ChatMessage } from './types'
 
 export default function App() {
   const { dark, toggle } = useTheme()
@@ -22,7 +23,7 @@ export default function App() {
     })
   }, [chat.active?.messages, chat.loading])
 
-  const messages = chat.active?.messages ?? []
+  const messages: ChatMessage[] = chat.active?.messages ?? []
 
   return (
     <div className="flex h-full bg-ds-bg text-ds-text">
@@ -55,7 +56,7 @@ export default function App() {
         <div ref={listRef} className="min-h-0 flex-1 overflow-y-auto">
           {messages.length === 0 ? (
             <EmptyState
-              onPick={(text) => {
+              onPick={(text: string) => {
                 void chat.send(text, true)
               }}
               onSelfConsistency={() => chat.runSelfConsistency('为旅行背包品牌生成一句口号')}
