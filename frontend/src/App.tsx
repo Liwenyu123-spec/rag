@@ -16,6 +16,7 @@ import {
 } from './components/DemoFormModal'
 import { EmptyState, ModeSelect, OllamaModelSelect } from './components/EmptyState'
 import { MessageBubble } from './components/MessageBubble'
+import { OllamaSetupBanner } from './components/OllamaSetupBanner'
 import { MobileMenuButton, Sidebar } from './components/Sidebar'
 import { WallpaperModal } from './components/WallpaperModal'
 import { downloadText, sessionToMarkdown } from './lib/export'
@@ -31,6 +32,7 @@ export default function App() {
     models: ollamaModels,
     model: ollamaModel,
     selectModel,
+    refresh: refreshBackend,
     isBrowserOllama,
   } = useBackendStatus()
   const { wallpaper, setFromFile, clear: clearWallpaper, setDim } = useWallpaper()
@@ -143,6 +145,11 @@ export default function App() {
       />
 
       <main className="relative flex min-h-0 min-w-0 flex-1 flex-col">
+        <OllamaSetupBanner
+          ok={isBrowserOllama ? backend?.ok : true}
+          hint={backend?.hint}
+          onRetry={() => void refreshBackend()}
+        />
         <header className="glass-header flex h-14 shrink-0 items-center justify-between border-b px-4">
           <div className="flex items-center gap-2">
             <MobileMenuButton onClick={() => setMobileOpen(true)} />
