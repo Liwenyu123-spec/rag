@@ -8,7 +8,8 @@ pnpm-debug.log*
 lerna-debug.log*
 
 node_modules
-dist
+# dist 需要提交，方便别人不装 Node 也能直接跑
+# dist
 dist-ssr
 *.local
 
