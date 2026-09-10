@@ -81,14 +81,28 @@ export default function App() {
 
   return (
     <div
-      className={`app-shell flex h-full text-body${wallpaper.dataUrl ? ' has-wallpaper' : ''}`}
+      className={`app-shell flex h-full text-body${wallpaper.src ? ' has-wallpaper' : ''}`}
     >
-      {wallpaper.dataUrl && (
+      {wallpaper.src && (
         <div
           className="wallpaper-layer"
-          style={{ backgroundImage: `url(${wallpaper.dataUrl})` }}
+          style={
+            wallpaper.kind === 'image'
+              ? { backgroundImage: `url(${wallpaper.src})` }
+              : undefined
+          }
           aria-hidden="true"
         >
+          {wallpaper.kind === 'video' && (
+            <video
+              className="wallpaper-video"
+              src={wallpaper.src}
+              autoPlay
+              muted
+              loop
+              playsInline
+            />
+          )}
           <div className="wallpaper-dim" style={{ opacity: wallpaper.dim }} />
         </div>
       )}
@@ -258,7 +272,8 @@ export default function App() {
       />
       <WallpaperModal
         open={wallpaperOpen}
-        hasWallpaper={Boolean(wallpaper.dataUrl)}
+        hasWallpaper={Boolean(wallpaper.src)}
+        kind={wallpaper.kind}
         dim={wallpaper.dim}
         onClose={() => setWallpaperOpen(false)}
         onPickFile={setFromFile}
