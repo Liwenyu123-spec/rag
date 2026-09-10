@@ -189,21 +189,16 @@ def get_system_prompt():
 def set_system_prompt(body: SystemPromptBody):
     """更新 system prompt，并重建服务端记忆。"""
     cleaned = body.content.strip()
-    if cleaned:
-        check = moderation_input(cleaned[:1000] if len(cleaned) > 1000 else cleaned)
-        # system 允许更长：只对危险模式做检查
-        if check.startswith("Invalid") and "too long" not in check:
-            # 对超长内容单独用危险模式扫描
-            for pattern in [
-                r"<script>",
-                r"javascript:",
-                r"eval\(",
-                r"exec\(",
-            ]:
-                if re.search(pattern, cleaned, re.IGNORECASE):
-                    return JSONResponse({"error": "Invalid system prompt"}, status_code=400)
-            if "Invalid input detected" in check or "repeated" in check:
-                return JSONResponse({"error": check}, status_code=400)
+    if len(cleaned) > 4000:
+        return JSONResponse({"error": "System prompt too long"}, status_code=400)
+    for pattern in [
+        r"<script>",
+        r"javascript:",
+        r"eval\(",
+        r"exec\(",
+    ]:
+        if re.search(pattern, cleaned, re.IGNORECASE):
+            return JSONResponse({"error": "Invalid system prompt"}, status_code=400)
     prompt = rebuild_memory(cleaned)
     return {"ok": True, "content": prompt}
 
@@ -510,6 +505,184 @@ def social_plan_stream(topic: str = Query(..., min_length=1)):
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache"},
     )
+
+
+# ---------- 多模式对比（同一问题，多种提示词策略并排） ----------
+class CompareBody(BaseModel):
+    question: str = Field(..., min_length=1)
+    modes: list[str] = Field(default_factory=lambda: ["zero_shot", "cot", "tot"])
+
+
+@app.post("/compare")
+def compare_modes(body: CompareBody):
+    """不写入多轮 memory，独立跑多种策略便于课堂对比。"""
+    cleaned = moderation_input(body.question)
+    if cleaned.startswith("Invalid"):
+        return JSONResponse({"error": cleaned}, status_code=400)
+
+    modes = [m for m in body.modes if m in PROMPT_MODES] or ["zero_shot", "cot", "tot"]
+    results: dict[str, str] = {}
+    try:
+        for mode in modes:
+            messages: list[ChatMessage] = []
+            if current_system_prompt:
+                messages.append(ChatMessage(role="system", content=current_system_prompt))
+            messages.append(ChatMessage(role="user", content=build_user_content(cleaned, mode)))
+            response = llm.chat(messages)
+            results[mode] = response.message.content or ""
+        return {"question": cleaned, "modes": modes, "results": results}
+    except Exception as e:
+        return JSONResponse({"error": f"API error: {e}"}, status_code=500)
+
+
+# ---------- 纯文本工具调用演示（ReAct 风格，不依赖多模态） ----------
+DEMO_NOTES = [
+    {"id": "n1", "title": "提示词策略", "body": "零样本直接做；少样本给示例；思维链分步想；思维树多分支再选。"},
+    {"id": "n2", "title": "自我一致性", "body": "同一任务多角度生成候选，再评选最优口号或方案。"},
+    {"id": "n3", "title": "输入净化", "body": "拦截提示词注入、脚本与危险 SQL 模式，降低越权风险。"},
+]
+
+_SAFE_OPS = {
+    ast.Add: operator.add,
+    ast.Sub: operator.sub,
+    ast.Mult: operator.mul,
+    ast.Div: operator.truediv,
+    ast.Pow: operator.pow,
+    ast.USub: operator.neg,
+    ast.Mod: operator.mod,
+}
+
+
+def _safe_eval_math(expr: str) -> str:
+    expr = expr.strip().replace("^", "**")
+    try:
+        node = ast.parse(expr, mode="eval")
+    except SyntaxError as e:
+        return f"表达式语法错误: {e}"
+
+    def _eval(n):
+        if isinstance(n, ast.Expression):
+            return _eval(n.body)
+        if isinstance(n, ast.Constant) and isinstance(n.value, (int, float)):
+            return n.value
+        if isinstance(n, ast.BinOp) and type(n.op) in _SAFE_OPS:
+            return _SAFE_OPS[type(n.op)](_eval(n.left), _eval(n.right))
+        if isinstance(n, ast.UnaryOp) and type(n.op) in _SAFE_OPS:
+            return _SAFE_OPS[type(n.op)](_eval(n.operand))
+        if isinstance(n, ast.Call) and isinstance(n.func, ast.Name) and n.func.id in {"sqrt", "abs", "round"}:
+            fn = {"sqrt": math.sqrt, "abs": abs, "round": round}[n.func.id]
+            return fn(*[_eval(a) for a in n.args])
+        raise ValueError("仅支持数字与 + - * / ** % 及 sqrt/abs/round")
+
+    try:
+        return str(_eval(node))
+    except Exception as e:
+        return f"计算失败: {e}"
+
+
+def _tool_weather(city: str) -> str:
+    catalog = {
+        "北京": "晴，18~26℃，东北风 2 级",
+        "上海": "多云，20~27℃，东南风 3 级",
+        "广州": "阵雨，24~31℃，湿度 80%",
+        "深圳": "阴，23~30℃，偏南风",
+        "杭州": "晴转多云，19~28℃",
+        "成都": "小雨，17~23℃",
+    }
+    key = city.strip() or "北京"
+    for name, info in catalog.items():
+        if name in key:
+            return f"{name}：{info}（演示数据）"
+    return f"{key}：晴间多云，22℃ 左右（演示默认数据）"
+
+
+def _tool_note_search(query: str) -> str:
+    q = query.strip().lower()
+    hits = [
+        n for n in DEMO_NOTES
+        if q in n["title"].lower() or q in n["body"].lower() or any(ch in n["body"] for ch in q)
+    ]
+    if not hits:
+        hits = DEMO_NOTES
+    return "\n".join([f"- {n['title']}：{n['body']}" for n in hits[:3]])
+
+
+def run_tool(name: str, arg: str) -> str:
+    name = name.strip().lower()
+    if name in {"calculator", "calc", "math"}:
+        return _safe_eval_math(arg)
+    if name in {"weather", "天气"}:
+        return _tool_weather(arg)
+    if name in {"now", "time", "datetime", "时间"}:
+        return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    if name in {"note_search", "notes", "笔记"}:
+        return _tool_note_search(arg)
+    return f"未知工具：{name}。可用：calculator / weather / now / note_search"
+
+
+class ToolChatBody(BaseModel):
+    question: str = Field(..., min_length=1)
+
+
+@app.post("/tool_chat")
+def tool_chat(body: ToolChatBody):
+    """纯文本 ReAct：模型输出 TOOL 或 FINAL，服务端执行本地工具。"""
+    cleaned = moderation_input(body.question)
+    if cleaned.startswith("Invalid"):
+        return JSONResponse({"error": cleaned}, status_code=400)
+
+    system = """你是带工具能力的助手。只能通过下列工具获取外部信息，不要编造工具结果。
+
+可用工具：
+1) calculator — 参数：数学表达式，如 12*(3+4)
+2) weather — 参数：城市名，如 北京
+3) now — 参数：任意（可空），返回当前时间
+4) note_search — 参数：关键词，搜索本地课堂笔记
+
+输出格式（严格二选一，不要多余解释）：
+TOOL: 工具名 | 参数
+或
+FINAL: 最终中文回答
+
+需要信息时先 TOOL，拿到结果后再 FINAL。"""
+
+    transcript = [
+        ChatMessage(role="system", content=system),
+        ChatMessage(role="user", content=cleaned),
+    ]
+    steps: list[dict] = []
+    try:
+        for _ in range(4):
+            response = llm.chat(transcript)
+            text = (response.message.content or "").strip()
+            transcript.append(ChatMessage(role="assistant", content=text))
+
+            tool_match = re.search(r"TOOL\s*[:：]\s*([^|\n]+)\|\s*(.+)", text, re.I | re.S)
+            final_match = re.search(r"FINAL\s*[:：]\s*(.+)", text, re.I | re.S)
+
+            if tool_match:
+                tool_name = tool_match.group(1).strip()
+                tool_arg = tool_match.group(2).strip()
+                result = run_tool(tool_name, tool_arg)
+                steps.append({"type": "tool", "name": tool_name, "arg": tool_arg, "result": result})
+                transcript.append(
+                    ChatMessage(role="user", content=f"工具结果（{tool_name}）：{result}\n请继续，需要则再 TOOL，否则 FINAL。")
+                )
+                continue
+
+            if final_match:
+                answer = final_match.group(1).strip()
+                steps.append({"type": "final", "content": answer})
+                return {"question": cleaned, "steps": steps, "answer": answer}
+
+            # 模型没按格式：把整段当最终答案
+            steps.append({"type": "final", "content": text})
+            return {"question": cleaned, "steps": steps, "answer": text}
+
+        answer = steps[-1]["content"] if steps and steps[-1].get("type") == "final" else "工具调用轮次用尽，请换个问法。"
+        return {"question": cleaned, "steps": steps, "answer": answer}
+    except Exception as e:
+        return JSONResponse({"error": f"API error: {e}"}, status_code=500)
 
 
 if __name__ == "__main__":
