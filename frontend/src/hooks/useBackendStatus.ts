@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { apiFetch } from '../lib/api'
 
 export type BackendStatus = {
   ok: boolean
@@ -16,14 +17,14 @@ export function useBackendStatus() {
     let alive = true
     const load = async () => {
       try {
-        const res = await fetch('/health')
+        const res = await apiFetch('/health')
         const data = (await res.json()) as BackendStatus
         if (alive) setStatus(data)
       } catch {
         if (alive) {
           setStatus({
             ok: false,
-            hint: '后端未连接。请运行 python 910_ollama.py 或 910.py',
+            hint: '连不上本机 Ollama。请先打开 Ollama 应用。',
           })
         }
       }

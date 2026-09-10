@@ -1,43 +1,41 @@
 # RAG / 提示词策略聊天助手
 
-支持 **本地 Ollama**（推荐分享）与 **云端 DeepSeek**。
-
-## 同学怎么用（本地 Ollama，无需 API Key）
+## 直接打开网站就能用（推荐发给同学）
 
 1. 安装并打开 [Ollama](https://ollama.com/download)
-2. 拉取模型：`ollama pull deepseek-r1:1.5b`
-3. 安装 [Python 3.10+](https://www.python.org/downloads/)（勾选 Add to PATH）
-4. 克隆或下载本仓库后，双击 **`start_ollama.bat`**
-5. 浏览器打开 http://127.0.0.1:8002
+2. 执行：`ollama pull deepseek-r1:1.5b`
+3. **第一次**在 Windows 上双击仓库里的 [`enable_ollama_cors.bat`](./enable_ollama_cors.bat)，然后**重启 Ollama**
+4. 浏览器打开：
 
-更详细说明见：[README-分享Ollama.md](./README-分享Ollama.md)
+### https://liwenyu123-spec.github.io/rag/
+
+网页跑在 GitHub 上，模型仍在对方自己电脑的 Ollama 里，**不需要 API Key，也不用装 Python**。
+
+> 若页头提示连不上 Ollama：确认 Ollama 已打开，并已运行过 `enable_ollama_cors.bat`。
+
+---
+
+## 本地完整后端（可选）
+
+需要 Python 时，双击 [`start_ollama.bat`](./start_ollama.bat)，或：
 
 ```bash
-git clone https://github.com/Liwenyu123-spec/rag.git
-cd rag
-# Windows：双击 start_ollama.bat
-# 或手动：
 pip install -r requirements-ollama.txt
 python 910_ollama.py
 ```
 
+地址：http://127.0.0.1:8002
+
 ## 云端 DeepSeek
 
-配置 `.env` 中的 `DEEPSEEK_API_KEY` 后运行：
+配置 `.env` 的 `DEEPSEEK_API_KEY` 后：`python 910.py` → http://127.0.0.1:8001
 
-```bash
-python 910.py
-```
+## 说明
 
-默认端口：http://127.0.0.1:8001
+| 方式 | 别人要做什么 | 打开哪里 |
+|------|--------------|----------|
+| **GitHub 网页** | 只开 Ollama | https://liwenyu123-spec.github.io/rag/ |
+| 本地 bat | 装 Python + Ollama | http://127.0.0.1:8002 |
+| 云端 API | 配 DeepSeek Key | http://127.0.0.1:8001 |
 
-## 主要文件
-
-| 文件 | 说明 |
-|------|------|
-| `910_ollama.py` | 本地 Ollama 后端 + 前端 |
-| `910.py` | 云端 DeepSeek 后端 |
-| `start_ollama.bat` | 一键启动（装依赖并打开浏览器） |
-| `requirements-ollama.txt` | Ollama 版 Python 依赖 |
-| `.env.example` | 环境变量示例 |
-| `frontend/` | React 前端源码（已包含 `dist` 构建产物） |
+详细 Ollama 分享说明：[README-分享Ollama.md](./README-分享Ollama.md)
