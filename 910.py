@@ -221,45 +221,37 @@ def stream_chat(
 
 # ---------- demo02：自我一致性（多角度生成候选，再评选最优） ----------
 @app.get("/self_consistency")
-def self_consistency(question: str = Query(..., min_length=1), num: int = Query(5, ge=2, le=5)):
-    """会调用模型多次，耗时和费用更高，适合创意/决策类问题。"""
+def self_consistency(question: str = Query(..., min_length=1), num: int = Query(2, ge=2, le=5)):
+    """默认只生成 2 个候选再评选，缩短等待时间。"""
     cleaned = moderation_input(question)
     if cleaned.startswith("Invalid"):
         return JSONResponse({"error": cleaned}, status_code=400)
 
     base_prompt = f"""你是一位创意文案专家。
 任务：{cleaned}
-要求：简洁有力，突出核心价值。"""
+要求：简洁有力，突出核心价值。口号不超过15个字。"""
 
     angle_prompts = [
-        "请从「自由探索」的角度给出一个方案：",
-        "请从「可靠品质」的角度给出一个方案：",
-        "请从「冒险精神」的角度给出一个方案：",
-        "请从「轻便舒适」的角度给出一个方案：",
-        "请从「陪伴旅途」的角度给出一个方案：",
+        "请从「自由探索」的角度给出一个方案，只输出一句口号：",
+        "请从「可靠品质」的角度给出一个方案，只输出一句口号：",
+        "请从「冒险精神」的角度给出一个方案，只输出一句口号：",
+        "请从「轻便舒适」的角度给出一个方案，只输出一句口号：",
+        "请从「陪伴旅途」的角度给出一个方案，只输出一句口号：",
     ]
 
     candidates = []
     for i in range(num):
         varied = base_prompt + "\n" + angle_prompts[i]
         result = llm.complete(varied)
-        candidates.append(result.text or "")
+        candidates.append((result.text or "").strip())
 
-    evaluation_prompt = f"""请从以下{len(candidates)}个方案中选择最佳的一个：
+    evaluation_prompt = f"""请从以下{len(candidates)}个方案中选择最佳的一个，并只输出最终口号：
 {chr(10).join([f"{i + 1}. {c}" for i, c in enumerate(candidates)])}
-
-选择标准：
-1. 是否简洁有力
-2. 是否体现核心价值
-3. 是否具有记忆点
-4. 是否适合目标用户
-
-请分析每个选项的优缺点，并给出最终方案。
 """
     final = llm.complete(evaluation_prompt)
     return {
         "candidates": candidates,
-        "final": final.text or "",
+        "final": (final.text or "").strip(),
     }
 
 
