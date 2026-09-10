@@ -2,6 +2,7 @@ import { ArrowDown } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useChat } from './hooks/useChat'
 import { useTheme } from './hooks/useTheme'
+import { useWallpaper } from './hooks/useWallpaper'
 import { Composer } from './components/Composer'
 import {
   CompareModal,
@@ -15,6 +16,7 @@ import {
 import { EmptyState, ModeSelect } from './components/EmptyState'
 import { MessageBubble } from './components/MessageBubble'
 import { MobileMenuButton, Sidebar } from './components/Sidebar'
+import { WallpaperModal } from './components/WallpaperModal'
 import { downloadText, sessionToMarkdown } from './lib/export'
 import type { ChatMessage } from './types'
 
@@ -23,6 +25,7 @@ const BOTTOM_THRESHOLD = 80
 export default function App() {
   const { dark, toggle } = useTheme()
   const chat = useChat()
+  const { wallpaper, setFromFile, clear: clearWallpaper, setDim } = useWallpaper()
   const [input, setInput] = useState('')
   const [mobileOpen, setMobileOpen] = useState(false)
   const [collapsed, setCollapsed] = useState(false)
@@ -35,6 +38,7 @@ export default function App() {
   const [toolOpen, setToolOpen] = useState(false)
   const [systemOpen, setSystemOpen] = useState(false)
   const [templateOpen, setTemplateOpen] = useState(false)
+  const [wallpaperOpen, setWallpaperOpen] = useState(false)
   const listRef = useRef<HTMLDivElement>(null)
 
   const scrollToBottom = useCallback((smooth = false) => {
@@ -76,7 +80,18 @@ export default function App() {
   }
 
   return (
-    <div className="app-shell flex h-full text-body">
+    <div
+      className={`app-shell flex h-full text-body${wallpaper.dataUrl ? ' has-wallpaper' : ''}`}
+    >
+      {wallpaper.dataUrl && (
+        <div
+          className="wallpaper-layer"
+          style={{ backgroundImage: `url(${wallpaper.dataUrl})` }}
+          aria-hidden="true"
+        >
+          <div className="wallpaper-dim" style={{ opacity: wallpaper.dim }} />
+        </div>
+      )}
       <div className="ambient-orbs" aria-hidden="true">
         <div className="orb orb-blue" />
         <div className="orb orb-purple" />
@@ -95,6 +110,7 @@ export default function App() {
         onDelete={chat.deleteSession}
         onCloseMobile={() => setMobileOpen(false)}
         onToggleCollapse={() => setCollapsed((v) => !v)}
+        onWallpaper={() => setWallpaperOpen(true)}
         onEditSystem={() => setSystemOpen(true)}
         onExportSession={() => {
           if (!chat.active) return
@@ -239,6 +255,15 @@ export default function App() {
           setTemplateOpen(false)
           setInput(prompt)
         }}
+      />
+      <WallpaperModal
+        open={wallpaperOpen}
+        hasWallpaper={Boolean(wallpaper.dataUrl)}
+        dim={wallpaper.dim}
+        onClose={() => setWallpaperOpen(false)}
+        onPickFile={setFromFile}
+        onClear={clearWallpaper}
+        onDim={setDim}
       />
     </div>
   )

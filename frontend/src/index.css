@@ -119,6 +119,22 @@ html.dark body {
   background: var(--bg-app);
 }
 
+.wallpaper-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background-position: center;
+  background-size: cover;
+  background-repeat: no-repeat;
+}
+
+.wallpaper-dim {
+  position: absolute;
+  inset: 0;
+  background: var(--bg-app);
+}
+
 .ambient-orbs {
   position: fixed;
   inset: 0;
@@ -185,7 +201,7 @@ html.dark body {
   mix-blend-mode: overlay;
 }
 
-.app-shell > *:not(.ambient-orbs):not(.noise-layer) {
+.app-shell > *:not(.ambient-orbs):not(.noise-layer):not(.wallpaper-layer) {
   position: relative;
   z-index: 2;
 }
@@ -193,6 +209,15 @@ html.dark body {
 /* 主对话区：径向渐变 */
 .chat-canvas {
   background: var(--chat-radial);
+}
+
+/* 有自定义壁纸时，对话区改为半透明，露出背景图 */
+.app-shell.has-wallpaper .chat-canvas {
+  background: transparent;
+}
+
+.app-shell.has-wallpaper .ambient-orbs {
+  opacity: 0.35;
 }
 
 /* ---------- 细滚动条 ---------- */

@@ -1,5 +1,6 @@
 import {
   Download,
+  Image,
   Menu,
   MessageSquarePlus,
   Moon,
@@ -27,6 +28,7 @@ export function Sidebar({
   onToggleCollapse,
   onEditSystem,
   onExportSession,
+  onWallpaper,
 }: {
   open: boolean
   collapsed: boolean
@@ -41,6 +43,7 @@ export function Sidebar({
   onToggleCollapse: () => void
   onEditSystem?: () => void
   onExportSession?: () => void
+  onWallpaper?: () => void
 }) {
   const renderPanel = (forceOpen = false) => (
     <aside
@@ -112,6 +115,16 @@ export function Sidebar({
       </div>
 
       <div className="space-y-2 border-t border-white/10 p-3">
+        {onWallpaper && (
+          <button
+            type="button"
+            onClick={onWallpaper}
+            className="btn-motion btn-ghost flex w-full items-center justify-center gap-2 rounded-[12px] border px-3 py-2 text-sm text-[var(--text-main)]"
+          >
+            <Image size={16} />
+            聊天壁纸
+          </button>
+        )}
         {onEditSystem && (
           <button
             type="button"
