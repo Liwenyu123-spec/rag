@@ -1,5 +1,5 @@
 """本地 Ollama 版本：功能与 910.py 对齐，前端共用 React dist。
-不消耗 DeepSeek 云端额度；请先确认 Ollama 已启动且已拉取模型。
+别人只要本机安装并启动 Ollama、拉取模型，再运行本文件即可，无需 DeepSeek API Key。
 """
 
 import ast
@@ -9,10 +9,13 @@ import operator
 import os
 import re
 import threading
+import urllib.error
+import urllib.request
 import webbrowser
 from datetime import datetime
 from pathlib import Path
 
+from dotenv import load_dotenv
 from fastapi import FastAPI, Query
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, PlainTextResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
@@ -24,9 +27,12 @@ from pydantic import BaseModel, Field
 
 BASE_DIR = Path(__file__).resolve().parent
 FRONTEND_DIST = BASE_DIR / "frontend" / "dist"
+load_dotenv(BASE_DIR / ".env", override=True)
 
 MODEL_NAME = os.getenv("OLLAMA_MODEL", "deepseek-r1:1.5b")
-OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://127.0.0.1:11434")
+OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://127.0.0.1:11434").rstrip("/")
+HOST = os.getenv("HOST", "127.0.0.1")
+PORT = int(os.getenv("PORT", "8002"))
 
 app = FastAPI(title="Ollama 提示词策略 + 安全防护")
 
@@ -206,7 +212,55 @@ def list_modes():
         ],
         "backend": "ollama",
         "model": MODEL_NAME,
+        "ollama_base_url": OLLAMA_BASE_URL,
     }
+
+
+def check_ollama() -> dict:
+    """探测本机 Ollama 是否可用、目标模型是否已拉取。"""
+    tags_url = f"{OLLAMA_BASE_URL}/api/tags"
+    try:
+        with urllib.request.urlopen(tags_url, timeout=3) as resp:
+            payload = json.loads(resp.read().decode("utf-8"))
+        names = [m.get("name", "") for m in payload.get("models", [])]
+        model_ok = MODEL_NAME in names
+        if not model_ok and ":" not in MODEL_NAME:
+            model_ok = any(n == MODEL_NAME or n.startswith(MODEL_NAME + ":") for n in names)
+        return {
+            "ok": True,
+            "ollama": True,
+            "model": MODEL_NAME,
+            "model_ready": model_ok,
+            "models": names,
+            "hint": None
+            if model_ok
+            else f"未找到模型 {MODEL_NAME}，请执行: ollama pull {MODEL_NAME}",
+        }
+    except urllib.error.URLError as e:
+        return {
+            "ok": False,
+            "ollama": False,
+            "model": MODEL_NAME,
+            "model_ready": False,
+            "models": [],
+            "hint": f"连不上 Ollama（{OLLAMA_BASE_URL}）。请先打开 Ollama 应用。详情: {e}",
+        }
+    except Exception as e:
+        return {
+            "ok": False,
+            "ollama": False,
+            "model": MODEL_NAME,
+            "model_ready": False,
+            "models": [],
+            "hint": str(e),
+        }
+
+
+@app.get("/health")
+def health():
+    status = check_ollama()
+    status["backend"] = "ollama"
+    return status
 
 
 @app.get("/chat", response_class=PlainTextResponse)
@@ -682,6 +736,23 @@ FINAL: 最终中文回答
 if __name__ == "__main__":
     import uvicorn
 
-    threading.Timer(1.5, lambda: webbrowser.open("http://127.0.0.1:8002")).start()
-    # 8002：避免和 909(8000)、910 云端(8001) 冲突
-    uvicorn.run(app, host="127.0.0.1", port=8002)
+    status = check_ollama()
+    print("=" * 56)
+    print("  本地 Ollama 版聊天助手")
+    print(f"  地址: http://{HOST}:{PORT}")
+    print(f"  模型: {MODEL_NAME}")
+    print(f"  Ollama: {OLLAMA_BASE_URL}")
+    if status.get("ok") and status.get("model_ready"):
+        print("  状态: Ollama 已连接，模型可用")
+    elif status.get("ok"):
+        print(f"  警告: {status.get('hint')}")
+    else:
+        print(f"  错误: {status.get('hint')}")
+    if not (FRONTEND_DIST / "index.html").exists():
+        print("  提示: 未找到 frontend/dist，请先在 frontend 目录执行 npm run build")
+    print("=" * 56)
+
+    threading.Timer(
+        1.5, lambda: webbrowser.open(f"http://{HOST}:{PORT}")
+    ).start()
+    uvicorn.run(app, host=HOST, port=PORT)

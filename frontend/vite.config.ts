@@ -16,6 +16,7 @@ export default defineConfig({
       '/compare': 'http://127.0.0.1:8001',
       '/tool_chat': 'http://127.0.0.1:8001',
       '/system_prompt': 'http://127.0.0.1:8001',
+      '/health': 'http://127.0.0.1:8001',
       '/modes': 'http://127.0.0.1:8001',
       '/reset': 'http://127.0.0.1:8001',
     },

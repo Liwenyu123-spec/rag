@@ -212,7 +212,19 @@ def list_modes():
             {"id": "few_shot", "name": "少样本"},
             {"id": "cot", "name": "思维链"},
             {"id": "tot", "name": "思维树"},
-        ]
+        ],
+        "backend": "deepseek",
+        "model": "deepseek-v4-flash",
+    }
+
+
+@app.get("/health")
+def health():
+    return {
+        "ok": True,
+        "backend": "deepseek",
+        "model": "deepseek-v4-flash",
+        "hint": None,
     }
 
 

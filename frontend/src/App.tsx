@@ -1,5 +1,6 @@
 import { ArrowDown } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { useBackendStatus } from './hooks/useBackendStatus'
 import { useChat } from './hooks/useChat'
 import { useTheme } from './hooks/useTheme'
 import { useWallpaper } from './hooks/useWallpaper'
@@ -25,6 +26,7 @@ const BOTTOM_THRESHOLD = 80
 export default function App() {
   const { dark, toggle } = useTheme()
   const chat = useChat()
+  const backend = useBackendStatus()
   const { wallpaper, setFromFile, clear: clearWallpaper, setDim } = useWallpaper()
   const [input, setInput] = useState('')
   const [mobileOpen, setMobileOpen] = useState(false)
@@ -140,7 +142,21 @@ export default function App() {
             <MobileMenuButton onClick={() => setMobileOpen(true)} />
             <div>
               <div className="text-sm text-title">DeepSeek 助手</div>
-              <div className="text-[11px] text-aux">提示词策略 · 工具演示 · 安全防护</div>
+              <div className="text-[11px] text-aux">
+                {backend?.backend === 'ollama'
+                  ? `本地 Ollama · ${backend.model || '模型'}${
+                      backend.ok && backend.model_ready === false
+                        ? ' · 模型未就绪'
+                        : backend.ok
+                          ? ' · 已连接'
+                          : ' · 未连接'
+                    }`
+                  : backend?.backend === 'deepseek'
+                    ? `云端 DeepSeek · ${backend.model || ''}`
+                    : backend?.ok === false
+                      ? '后端未连接'
+                      : '提示词策略 · 工具演示'}
+              </div>
             </div>
           </div>
           <ModeSelect value={chat.active?.mode ?? 'zero_shot'} onChange={chat.setMode} />
