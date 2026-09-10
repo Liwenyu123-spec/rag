@@ -49,7 +49,7 @@ export function Sidebar({
         <button
           type="button"
           onClick={onNew}
-          className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-ds-blue px-3 py-2.5 text-sm font-medium text-white transition hover:bg-ds-blue-hover"
+          className="flex flex-1 items-center justify-center gap-2 rounded-[12px] bg-ds-blue px-3 py-2.5 text-sm font-medium text-white transition hover:bg-ds-blue-hover"
         >
           <MessageSquarePlus size={16} />
           新建对话
@@ -80,7 +80,7 @@ export function Sidebar({
           <div
             key={s.id}
             className={clsx(
-              'group flex items-center gap-1 rounded-xl px-2 py-2 transition',
+              'group flex items-center gap-1 rounded-[16px] px-2 py-2 transition',
               s.id === activeId
                 ? 'bg-white shadow-sm dark:bg-white/10'
                 : 'hover:bg-white/70 dark:hover:bg-white/5',
@@ -111,7 +111,7 @@ export function Sidebar({
         <button
           type="button"
           onClick={onToggleDark}
-          className="flex w-full items-center justify-center gap-2 rounded-xl border border-ds-border bg-ds-bg px-3 py-2 text-sm text-ds-text transition hover:border-ds-blue/40"
+          className="flex w-full items-center justify-center gap-2 rounded-[12px] border border-ds-border bg-ds-bg px-3 py-2 text-sm text-ds-text transition hover:border-ds-blue/40"
         >
           {dark ? <Sun size={16} /> : <Moon size={16} />}
           {dark ? '浅色主题' : '暗色主题'}

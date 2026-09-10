@@ -10,7 +10,7 @@ export function MessageBubble({ message }: { message: ChatMessage }) {
   if (isUser) {
     return (
       <div className="animate-fade-up flex justify-end">
-        <div className="max-w-[70%] rounded-2xl bg-ds-blue px-4 py-2.5 text-white shadow-sm whitespace-pre-wrap">
+        <div className="bubble-user max-w-[70%] px-4 py-2.5 whitespace-pre-wrap">
           {message.content}
         </div>
       </div>
@@ -22,7 +22,7 @@ export function MessageBubble({ message }: { message: ChatMessage }) {
       <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-ds-blue text-white shadow-sm">
         <Bot size={16} />
       </div>
-      <div className="min-w-0 max-w-[70%] rounded-2xl bg-ds-assistant px-4 py-2.5 text-ds-text shadow-sm">
+      <div className="bubble-assistant min-w-0 max-w-[70%] px-4 py-2.5 text-ds-text">
         {(message.thinking || (message.typing && !message.content)) && (
           <ThinkingBlock thinking={message.thinking || ''} streaming={message.typing} />
         )}

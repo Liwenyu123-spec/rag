@@ -25,7 +25,7 @@ export function Composer({
 
   return (
     <div className="border-t border-ds-border bg-ds-bg/90 px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-3 backdrop-blur">
-      <div className="mx-auto flex max-w-[768px] items-end gap-2 rounded-2xl border border-ds-border bg-ds-subtle px-3 py-2 shadow-sm transition focus-within:border-ds-blue/50 focus-within:shadow-[0_0_0_3px_rgba(77,107,254,0.12)]">
+      <div className="composer-shell mx-auto flex max-w-[768px] items-end gap-2 border border-ds-border bg-ds-subtle px-3 py-2 shadow-sm">
         <textarea
           ref={ref}
           rows={1}
@@ -45,7 +45,7 @@ export function Composer({
           <button
             type="button"
             onClick={onStop}
-            className="mb-0.5 inline-flex h-10 items-center gap-1.5 rounded-xl bg-[#ef4444] px-3 text-sm font-medium text-white transition hover:bg-[#dc2626]"
+            className="mb-0.5 inline-flex h-10 items-center gap-1.5 rounded-[12px] bg-[#ef4444] px-3 text-sm font-medium text-white transition hover:bg-[#dc2626]"
           >
             <Square size={14} fill="currentColor" />
             停止生成
@@ -55,7 +55,7 @@ export function Composer({
             type="button"
             disabled={!value.trim()}
             onClick={onSend}
-            className="mb-0.5 inline-flex h-10 w-10 items-center justify-center rounded-xl bg-ds-blue text-white transition hover:bg-ds-blue-hover disabled:cursor-not-allowed disabled:bg-[#c9cdd4]"
+            className="mb-0.5 inline-flex h-10 w-10 items-center justify-center rounded-[12px] bg-ds-blue text-white transition hover:bg-ds-blue-hover disabled:cursor-not-allowed disabled:bg-[#c9cdd4]"
           >
             <SendHorizontal size={18} />
           </button>

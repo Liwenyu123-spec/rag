@@ -6,7 +6,7 @@ export function ThinkingBlock({ thinking, streaming }: { thinking: string; strea
   if (!thinking && !streaming) return null
 
   return (
-    <div className="mb-2 overflow-hidden rounded-xl border border-ds-border bg-ds-subtle/80">
+    <div className="mb-2 overflow-hidden rounded-[16px] border border-ds-border bg-ds-subtle/80">
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}

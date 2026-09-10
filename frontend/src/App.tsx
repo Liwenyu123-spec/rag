@@ -53,7 +53,7 @@ export default function App() {
           <ModeSelect value={chat.active?.mode ?? 'zero_shot'} onChange={chat.setMode} />
         </header>
 
-        <div ref={listRef} className="min-h-0 flex-1 overflow-y-auto">
+        <div ref={listRef} className="chat-canvas min-h-0 flex-1 overflow-y-auto">
           {messages.length === 0 ? (
             <EmptyState
               onPick={(text: string) => {

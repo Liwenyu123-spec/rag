@@ -13,6 +13,8 @@
   --color-ds-muted: #8a919f;
   --color-ds-border: #e5e6eb;
   --font-sans: "Inter", "PingFang SC", "Microsoft YaHei", ui-sans-serif, system-ui, sans-serif;
+  --radius-surface: 16px;
+  --radius-button: 12px;
 }
 
 html,
@@ -44,6 +46,48 @@ html.dark body {
   --color-ds-text: #e8eaed;
   --color-ds-muted: #9aa3b2;
   --color-ds-border: #2a2f3a;
+}
+
+/* 主对话区：极淡径向渐变 */
+.chat-canvas {
+  background: radial-gradient(circle at center, #f7f8fa 0%, #eef0f4 100%);
+}
+
+.dark .chat-canvas {
+  background: radial-gradient(circle at center, #16181d 0%, #0f1115 100%);
+}
+
+/* 助手气泡：微弱渐变 + 1px 内发光边框 */
+.bubble-assistant {
+  border-radius: 16px;
+  border: 1px solid rgba(0, 0, 0, 0.04);
+  background: linear-gradient(180deg, #f8f9fb 0%, #f4f5f7 100%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7);
+}
+
+.dark .bubble-assistant {
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  background: linear-gradient(180deg, #22262e 0%, #1c1f26 100%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+/* 用户气泡：柔和投影 */
+.bubble-user {
+  border-radius: 16px;
+  background: #4d6bfe;
+  color: #fff;
+  box-shadow: 0 4px 12px rgba(77, 107, 254, 0.25);
+}
+
+/* 输入框聚焦外发光 */
+.composer-shell {
+  border-radius: 16px;
+  transition: box-shadow 0.2s ease, border-color 0.2s ease;
+}
+
+.composer-shell:focus-within {
+  border-color: rgba(77, 107, 254, 0.5);
+  box-shadow: 0 0 0 4px rgba(77, 107, 254, 0.18);
 }
 
 @keyframes fade-up {
@@ -81,7 +125,7 @@ html.dark body {
 .prose-chat pre {
   margin: 0.75rem 0;
   overflow-x: auto;
-  border-radius: 10px;
+  border-radius: 16px;
   background: #0d1117;
   color: #e6edf3;
 }

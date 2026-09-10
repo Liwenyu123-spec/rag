@@ -16,7 +16,7 @@ export function EmptyState({
 }) {
   return (
     <div className="flex h-full flex-col items-center justify-center px-4 pb-10">
-      <div className="mb-5 flex h-14 w-14 items-center justify-center rounded-2xl bg-ds-blue text-2xl text-white shadow-lg shadow-ds-blue/25">
+      <div className="mb-5 flex h-14 w-14 items-center justify-center rounded-[16px] bg-ds-blue text-2xl text-white shadow-lg shadow-ds-blue/25">
         ✦
       </div>
       <h2 className="mb-8 text-2xl font-semibold tracking-tight text-ds-text">
@@ -30,7 +30,7 @@ export function EmptyState({
             onClick={() =>
               item.text.includes('口号') ? onSelfConsistency() : onPick(item.text)
             }
-            className="rounded-2xl border border-ds-border bg-ds-bg px-4 py-3.5 text-left text-[14px] text-ds-text shadow-sm transition duration-200 hover:-translate-y-0.5 hover:border-ds-blue/40 hover:shadow-md"
+            className="rounded-[16px] border border-ds-border bg-ds-bg px-4 py-3.5 text-left text-[14px] text-ds-text shadow-sm transition duration-200 hover:-translate-y-0.5 hover:border-ds-blue/40 hover:shadow-md"
           >
             <span className="mr-2">{item.icon}</span>
             {item.text}

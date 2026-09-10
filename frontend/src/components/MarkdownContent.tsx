@@ -22,13 +22,13 @@ function CodeBlock({
   }
 
   return (
-    <div className="group relative my-3 overflow-hidden rounded-[10px] border border-ds-border bg-[#0d1117]">
+    <div className="group relative my-3 overflow-hidden rounded-[16px] border border-ds-border bg-[#0d1117]">
       <div className="flex items-center justify-between border-b border-white/10 px-3 py-1.5 text-xs text-white/60">
         <span>{lang}</span>
         <button
           type="button"
           onClick={copy}
-          className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-white/70 transition hover:bg-white/10 hover:text-white"
+          className="inline-flex items-center gap-1 rounded-[12px] px-2 py-1 text-white/70 transition hover:bg-white/10 hover:text-white"
         >
           {copied ? <Check size={14} /> : <Copy size={14} />}
           {copied ? '已复制' : '复制'}
