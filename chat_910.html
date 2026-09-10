@@ -1,0 +1,517 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DeepSeek 智能助手</title>
+  <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+  <style>
+    :root {
+      --ink: #18212f;
+      --muted: #738095;
+      --line: #e6eaf0;
+      --blue: #246bfd;
+      --blue-dark: #1552d8;
+      --navy: #101827;
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      min-height: 100vh;
+      padding: 28px;
+      font-family: Inter, "PingFang SC", "Microsoft YaHei", sans-serif;
+      color: var(--ink);
+      background:
+        radial-gradient(circle at 10% 10%, rgba(53, 112, 255, .24), transparent 32%),
+        radial-gradient(circle at 90% 90%, rgba(95, 67, 255, .18), transparent 30%),
+        #edf2f9;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
+    button, textarea { font: inherit; }
+    #app {
+      width: min(1180px, 100%);
+      height: min(860px, calc(100vh - 56px));
+      min-height: 600px;
+      display: grid;
+      grid-template-columns: 260px minmax(0, 1fr);
+      background: rgba(255,255,255,.95);
+      border: 1px solid rgba(255,255,255,.8);
+      border-radius: 24px;
+      box-shadow: 0 30px 80px rgba(35,49,78,.18);
+      overflow: hidden;
+      backdrop-filter: blur(16px);
+    }
+    .sidebar {
+      padding: 28px 22px;
+      color: #fff;
+      background: linear-gradient(180deg, rgba(36,107,253,.16), transparent 45%), var(--navy);
+      display: flex;
+      flex-direction: column;
+    }
+    .brand { display: flex; align-items: center; gap: 12px; }
+    .brand-mark {
+      width: 42px; height: 42px; border-radius: 13px;
+      background: linear-gradient(135deg, #5d91ff, #725cff);
+      display: grid; place-items: center; font-size: 21px;
+      box-shadow: 0 10px 24px rgba(72,108,255,.32);
+    }
+    .brand h1 { font-size: 17px; letter-spacing: .3px; }
+    .brand p { margin-top: 3px; color: #8e9ab0; font-size: 11px; }
+    .side-label {
+      margin: 34px 4px 12px;
+      color: #718097; font-size: 11px; font-weight: 700; letter-spacing: 1.2px;
+    }
+    .model-card {
+      padding: 15px;
+      border: 1px solid rgba(255,255,255,.09);
+      border-radius: 14px;
+      background: rgba(255,255,255,.055);
+    }
+    .model-row { display: flex; align-items: center; justify-content: space-between; }
+    .model-name { font-size: 13px; font-weight: 600; }
+    .status-dot {
+      width: 8px; height: 8px; border-radius: 50%;
+      background: #3ee49a; box-shadow: 0 0 0 4px rgba(62,228,154,.12);
+    }
+    .model-detail { margin-top: 8px; color: #8190a8; font-size: 11px; }
+    .side-tip {
+      margin-top: auto; padding: 15px;
+      color: #8b98ac; font-size: 12px; line-height: 1.7;
+      border-radius: 14px; background: rgba(255,255,255,.04);
+    }
+    .side-tip strong { display: block; margin-bottom: 3px; color: #c2cada; }
+    .chat-shell { min-width: 0; display: flex; flex-direction: column; }
+    .header {
+      height: 76px; padding: 0 28px;
+      border-bottom: 1px solid var(--line);
+      background: rgba(255,255,255,.82);
+      display: flex; justify-content: space-between; align-items: center;
+    }
+    .header h2 { font-size: 17px; font-weight: 650; }
+    .header-subtitle { margin-top: 4px; color: var(--muted); font-size: 12px; }
+    .mode-switch {
+      padding: 5px 6px 5px 12px;
+      display: flex; align-items: center; gap: 9px;
+      color: #5c697b; font-size: 12px;
+      border: 1px solid var(--line); border-radius: 99px; background: #f7f9fc;
+    }
+    .switch {
+      position: relative; width: 38px; height: 22px;
+      border-radius: 22px; background: #cbd3df; cursor: pointer; transition: .25s;
+    }
+    .switch::after {
+      content: ""; position: absolute; top: 3px; left: 3px;
+      width: 16px; height: 16px; border-radius: 50%;
+      background: #fff; box-shadow: 0 2px 5px rgba(0,0,0,.2); transition: .25s;
+    }
+    .switch.active { background: var(--blue); }
+    .switch.active::after { transform: translateX(16px); }
+    .messages {
+      flex: 1; overflow-y: auto; padding: 30px 34px 18px; background: #f8fafc;
+    }
+    .messages::-webkit-scrollbar { width: 6px; }
+    .messages::-webkit-scrollbar-thumb { background: #cdd5e1; border-radius: 8px; }
+    .empty-tip {
+      min-height: 100%; padding: 40px 0;
+      display: flex; flex-direction: column; justify-content: center; align-items: center;
+      text-align: center;
+    }
+    .empty-icon {
+      width: 68px; height: 68px; margin-bottom: 20px;
+      border-radius: 21px; color: #fff;
+      background: linear-gradient(135deg, #397bff, #7359ef);
+      box-shadow: 0 18px 35px rgba(68,94,226,.25);
+      display: grid; place-items: center; font-size: 30px;
+    }
+    .empty-tip h3 { font-size: 23px; font-weight: 650; }
+    .empty-tip > p { margin: 9px 0 24px; color: var(--muted); font-size: 14px; }
+    .suggestions {
+      width: min(620px, 100%); display: grid;
+      grid-template-columns: repeat(2, 1fr); gap: 10px;
+    }
+    .suggestion {
+      padding: 14px 16px; color: #4f5c6e; text-align: left;
+      border: 1px solid var(--line); border-radius: 12px;
+      background: #fff; cursor: pointer; transition: .2s ease;
+    }
+    .suggestion:hover {
+      color: var(--blue); border-color: #aac1ff; transform: translateY(-2px);
+      box-shadow: 0 8px 20px rgba(58,83,136,.08);
+    }
+    .message {
+      width: min(760px, 100%); margin: 0 auto 22px;
+      display: flex; align-items: flex-start; animation: fadeIn .25s ease;
+    }
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(8px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .message.user { flex-direction: row-reverse; }
+    .avatar {
+      width: 36px; height: 36px; border-radius: 11px;
+      display: grid; place-items: center; flex-shrink: 0; font-size: 16px;
+    }
+    .message.bot .avatar {
+      margin-right: 11px; color: #fff;
+      background: linear-gradient(135deg, #397bff, #725aec);
+    }
+    .message.user .avatar { margin-left: 11px; color: #344053; background: #e7ebf1; }
+    .bubble {
+      max-width: min(78%, 650px); padding: 12px 16px;
+      border-radius: 6px 16px 16px 16px;
+      font-size: 14px; line-height: 1.75;
+      white-space: pre-wrap; word-break: break-word;
+    }
+    .message.bot .bubble {
+      color: #303b4a; background: #fff; border: 1px solid #edf0f4;
+      box-shadow: 0 5px 16px rgba(42,55,80,.055);
+    }
+    .message.user .bubble {
+      color: #fff; border-radius: 16px 6px 16px 16px;
+      background: linear-gradient(135deg, var(--blue), var(--blue-dark));
+      box-shadow: 0 8px 18px rgba(36,107,253,.18);
+    }
+    .typing-cursor::after {
+      content: ""; display: inline-block; width: 5px; height: 15px;
+      margin-left: 4px; vertical-align: -2px; border-radius: 2px;
+      background: var(--blue); animation: blink .8s infinite;
+    }
+    @keyframes blink { 50% { opacity: 0; } }
+    .input-area {
+      padding: 16px 28px 22px; border-top: 1px solid var(--line); background: #fff;
+    }
+    .composer {
+      max-width: 780px; margin: 0 auto; padding: 7px 7px 7px 17px;
+      display: flex; gap: 8px; align-items: flex-end;
+      border: 1px solid #dce2eb; border-radius: 16px; background: #fbfcfe;
+      box-shadow: 0 7px 24px rgba(38,54,83,.06); transition: .2s;
+    }
+    .composer:focus-within {
+      border-color: #8eb0ff; box-shadow: 0 0 0 4px rgba(36,107,253,.08);
+    }
+    .composer textarea {
+      width: 100%; min-height: 42px; max-height: 120px;
+      padding: 10px 0 7px; border: 0; outline: 0; resize: none;
+      color: var(--ink); background: transparent; font-size: 14px; line-height: 1.5;
+    }
+    .composer textarea::placeholder { color: #98a3b2; }
+    .send-btn, .stop-btn {
+      min-width: 76px; height: 42px; padding: 0 17px;
+      color: #fff; border: 0; border-radius: 11px; cursor: pointer; transition: .2s;
+    }
+    .send-btn { background: var(--blue); box-shadow: 0 7px 15px rgba(36,107,253,.22); }
+    .send-btn:hover:not(:disabled) { background: var(--blue-dark); transform: translateY(-1px); }
+    .send-btn:disabled { opacity: .42; cursor: not-allowed; box-shadow: none; }
+    .stop-btn { background: #ec5268; }
+    .input-hint { margin-top: 9px; color: #a0a9b7; text-align: center; font-size: 11px; }
+    @media (max-width: 760px) {
+      body { padding: 0; }
+      #app { height: 100vh; min-height: 0; grid-template-columns: 1fr; border-radius: 0; }
+      .sidebar { display: none; }
+      .header { height: 68px; padding: 0 17px; }
+      .header-subtitle { display: none; }
+      .messages { padding: 22px 14px 12px; }
+      .suggestions { grid-template-columns: 1fr; }
+      .suggestion:nth-child(n+3) { display: none; }
+      .bubble { max-width: 82%; }
+      .input-area { padding: 12px 12px 16px; }
+      .mode-switch > span { display: none; }
+      .mode-switch { padding: 5px; border: 0; }
+    }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="brand-mark">✦</div>
+        <div>
+          <h1>DeepSeek AI</h1>
+          <p>PERSONAL ASSISTANT</p>
+        </div>
+      </div>
+      <div class="side-label">当前模型</div>
+      <div class="model-card">
+        <div class="model-row">
+          <span class="model-name">deepseek-v4-flash</span>
+          <span class="status-dot"></span>
+        </div>
+        <div class="model-detail">云端模型 · 多轮记忆已开启</div>
+      </div>
+      <div class="side-tip">
+        <strong>快捷提示</strong>
+        按 Enter 发送消息<br>
+        按 Shift + Enter 换行
+      </div>
+    </aside>
+
+    <main class="chat-shell">
+      <header class="header">
+        <div>
+          <h2>智能对话</h2>
+          <div class="header-subtitle">让想法更快成为答案</div>
+        </div>
+        <div style="display:flex;align-items:center;gap:12px;">
+          <select v-model="promptMode" style="padding:6px 10px;border:1px solid #e6eaf0;border-radius:10px;background:#f7f9fc;font-size:12px;">
+            <option value="zero_shot">零样本</option>
+            <option value="few_shot">少样本</option>
+            <option value="cot">思维链</option>
+            <option value="tot">思维树</option>
+          </select>
+          <div class="mode-switch">
+            <span>{{ streamMode ? '流式输出' : '普通输出' }}</span>
+            <div
+              class="switch"
+              :class="{ active: streamMode }"
+              @click="streamMode = !streamMode"
+              title="切换输出模式"
+            ></div>
+          </div>
+        </div>
+      </header>
+
+      <div class="messages" ref="messagesEl">
+        <div class="empty-tip" v-if="messages.length === 0">
+          <div class="empty-icon">✦</div>
+          <h3>今天想探索什么？</h3>
+          <p>你可以提问、学习知识，也可以让我协助分析和创作。</p>
+          <div class="suggestions">
+            <button class="suggestion" @click="inputText = '用简单的语言解释一下什么是大语言模型'">💡 解释一个复杂概念</button>
+            <button class="suggestion" @click="inputText = '帮我制定一份今天的学习计划'">📚 制定一份学习计划</button>
+            <button class="suggestion" @click="inputText = '帮我优化一段 Python 代码'">⌨️ 协助解决编程问题</button>
+            <button class="suggestion" @click="inputText = '为旅行背包品牌生成一句口号'">✨ 自我一致性示例</button>
+          </div>
+          <button
+            class="suggestion"
+            style="margin-top:12px;width:min(620px,100%);"
+            @click="runSelfConsistency"
+            :disabled="loading"
+          >🔁 用自我一致性生成并评选（会调用多次模型）</button>
+        </div>
+        <div
+          v-for="(msg, index) in messages"
+          :key="index"
+          class="message"
+          :class="msg.role"
+        >
+          <div class="avatar">{{ msg.role === 'user' ? '你' : '✦' }}</div>
+          <div
+            class="bubble"
+            :class="{ 'typing-cursor': msg.role === 'bot' && msg.typing }"
+          >{{ msg.content || (msg.role === 'bot' ? '正在思考...' : '') }}</div>
+        </div>
+      </div>
+
+      <div class="input-area">
+        <div class="composer">
+          <textarea
+            v-model="inputText"
+            @keydown.enter.exact.prevent="sendMessage"
+            @input="autoResize"
+            placeholder="给 DeepSeek 发送消息..."
+            :disabled="loading"
+            rows="1"
+          ></textarea>
+          <button
+            v-if="loading && streamMode"
+            class="stop-btn"
+            @click="stopStream"
+          >停止</button>
+          <button
+            v-else
+            class="send-btn"
+            :disabled="loading || !inputText.trim()"
+            @click="sendMessage"
+          >发送 ↑</button>
+        </div>
+        <div class="input-hint">AI 生成的内容可能存在错误，请核实重要信息</div>
+      </div>
+    </main>
+  </div>
+
+  <script>
+    const { createApp, ref, nextTick } = Vue;
+
+    createApp({
+      setup() {
+        const inputText = ref('');
+        const messages = ref([]);
+        const loading = ref(false);
+        const streamMode = ref(true);  // 默认打字机模式
+        const promptMode = ref('zero_shot');
+        const messagesEl = ref(null);
+        let abortController = null;
+
+        const autoResize = (e) => {
+          e.target.style.height = 'auto';
+          e.target.style.height = Math.min(e.target.scrollHeight, 120) + 'px';
+        };
+
+        const scrollToBottom = () => {
+          nextTick(() => {
+            if (messagesEl.value) {
+              messagesEl.value.scrollTop = messagesEl.value.scrollHeight;
+            }
+          });
+        };
+
+        // 普通非流式请求
+        const sendNormal = async (question) => {
+          try {
+            const res = await fetch(`/chat?question=${encodeURIComponent(question)}&mode=${encodeURIComponent(promptMode.value)}`);
+            const data = await res.text();
+            const botMsg = messages.value.find(m => m.role === 'bot' && m.typing);
+            if (botMsg) {
+              botMsg.content = data;
+              botMsg.typing = false;
+            }
+          } catch (err) {
+            console.error(err);
+            const botMsg = messages.value.find(m => m.role === 'bot' && m.typing);
+            if (botMsg) {
+              botMsg.content = '请求失败：' + err.message;
+              botMsg.typing = false;
+            }
+          } finally {
+            loading.value = false;
+          }
+        };
+
+        // SSE 流式请求
+        const sendStream = async (question) => {
+          abortController = new AbortController();
+          try {
+            const resp = await fetch(
+              `/stream_chat?question=${encodeURIComponent(question)}&mode=${encodeURIComponent(promptMode.value)}`,
+              { signal: abortController.signal }
+            );
+            const reader = resp.body.getReader();
+            const decoder = new TextDecoder();
+            let buffer = '';
+            const botMsg = messages.value.find(m => m.role === 'bot' && m.typing);
+
+            while (true) {
+              const { done, value } = await reader.read();
+              if (done) break;
+              buffer += decoder.decode(value, { stream: true });
+
+              // 按 SSE 格式解析 \n\n
+              const parts = buffer.split('\n\n');
+              buffer = parts.pop();
+
+              for (const part of parts) {
+                const line = part.trim();
+                if (line.startsWith('data: ')) {
+                  const data = line.slice(6);
+                  if (data === '[DONE]') {
+                    if (botMsg) botMsg.typing = false;
+                    break;
+                  }
+                  try {
+                    const json = JSON.parse(data);
+                    if (botMsg) {
+                      botMsg.content += json.content || '';
+                      scrollToBottom();
+                    }
+                  } catch (e) {
+                    console.warn('解析 SSE 数据失败:', e);
+                  }
+                }
+              }
+            }
+            if (botMsg && botMsg.typing) botMsg.typing = false;
+          } catch (err) {
+            if (err.name === 'AbortError') {
+              const botMsg = messages.value.find(m => m.role === 'bot' && m.typing);
+              if (botMsg) botMsg.typing = false;
+            } else {
+              console.error(err);
+              const botMsg = messages.value.find(m => m.role === 'bot' && m.typing);
+              if (botMsg) {
+                botMsg.content = botMsg.content || '请求失败：' + err.message;
+                botMsg.typing = false;
+              }
+            }
+          } finally {
+            loading.value = false;
+            abortController = null;
+          }
+        };
+
+        const stopStream = () => {
+          if (abortController) abortController.abort();
+        };
+
+        const sendMessage = () => {
+          const question = inputText.value.trim();
+          if (!question || loading.value) return;
+
+          // 添加用户消息
+          messages.value.push({ role: 'user', content: question });
+          inputText.value = '';
+          loading.value = true;
+          scrollToBottom();
+
+          // 添加空的机器人消息占位
+          messages.value.push({ role: 'bot', content: '', typing: true });
+
+          if (streamMode.value) {
+            sendStream(question);
+          } else {
+            sendNormal(question);
+          }
+        };
+
+        const runSelfConsistency = async () => {
+          const question = inputText.value.trim() || '为旅行背包品牌生成一句口号';
+          if (loading.value) return;
+          messages.value.push({ role: 'user', content: `[自我一致性] ${question}` });
+          messages.value.push({ role: 'bot', content: '', typing: true });
+          loading.value = true;
+          scrollToBottom();
+          try {
+            const res = await fetch(`/self_consistency?question=${encodeURIComponent(question)}`);
+            const data = await res.json();
+            const botMsg = messages.value.find(m => m.role === 'bot' && m.typing);
+            if (botMsg) {
+              if (data.error) {
+                botMsg.content = data.error;
+              } else {
+                botMsg.content =
+                  '候选方案：\n' +
+                  (data.candidates || []).map((c, i) => `${i + 1}. ${c}`).join('\n') +
+                  '\n\n最终评选：\n' +
+                  (data.final || '');
+              }
+              botMsg.typing = false;
+            }
+          } catch (err) {
+            const botMsg = messages.value.find(m => m.role === 'bot' && m.typing);
+            if (botMsg) {
+              botMsg.content = '请求失败：' + err.message;
+              botMsg.typing = false;
+            }
+          } finally {
+            loading.value = false;
+            scrollToBottom();
+          }
+        };
+
+        return {
+          inputText,
+          messages,
+          loading,
+          streamMode,
+          promptMode,
+          messagesEl,
+          autoResize,
+          sendMessage,
+          stopStream,
+          runSelfConsistency,
+        };
+      }
+    }).mount('#app');
+  </script>
+</body>
+</html>
