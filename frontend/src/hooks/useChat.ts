@@ -38,7 +38,7 @@ function loadSystemPrompt() {
 function createSession(mode: PromptMode = 'zero_shot'): Session {
   return {
     id: uid(),
-    title: 'æ°å¯¹è¯?,
+    title: '新对话',
     updatedAt: Date.now(),
     messages: [],
     mode,
@@ -47,7 +47,7 @@ function createSession(mode: PromptMode = 'zero_shot'): Session {
 
 function formatCompare(results: Record<string, string>, modes: PromptMode[]) {
   return modes
-    .map((m) => `### ${MODE_LABELS[m] || m}\n\n${results[m] || 'ï¼æ ç»æï¼?}`)
+    .map((m) => `### ${MODE_LABELS[m] || m}\n\n${results[m] || '（无结果）'}`)
     .join('\n\n---\n\n')
 }
 
@@ -58,10 +58,10 @@ function formatToolSteps(
   const parts: string[] = []
   for (const s of steps) {
     if (s.type === 'tool') {
-      parts.push(`**è°ç¨å·¥å·** \`${s.name}\`\n- åæ°ï¼?{s.arg}\n- ç»æï¼?{s.result}`)
+      parts.push(`**调用工具** \`${s.name}\`\n- 参数：${s.arg}\n- 结果：${s.result}`)
     }
   }
-  parts.push(`### æç»åç­\n\n${answer}`)
+  parts.push(`### 最终回答\n\n${answer}`)
   return parts.join('\n\n')
 }
 
@@ -247,7 +247,7 @@ export function useChat() {
         )
         if (!resp.ok) throw new Error(`HTTP ${resp.status}`)
         const reader = resp.body?.getReader()
-        if (!reader) throw new Error('æ æ³è¯»åæµå¼ååº')
+        if (!reader) throw new Error('无法读取流式响应')
 
         const decoder = new TextDecoder()
         let buffer = ''
@@ -301,7 +301,7 @@ export function useChat() {
           patchBotMessage(botId, { typing: false })
         } else {
           patchBotMessage(botId, {
-            content: `è¯·æ±å¤±è´¥ï¼?{(err as Error).message}`,
+            content: `请求失败：${(err as Error).message}`,
             typing: false,
             error: true,
             kind: 'chat',
@@ -334,14 +334,14 @@ export function useChat() {
 
   const runSelfConsistency = useCallback(
     async (text: string) => {
-      const question = text.trim() || 'ä¸ºæè¡èååççæä¸å¥å£å?
+      const question = text.trim() || '为旅行背包品牌生成一句口号'
       if (loading) return
 
-      const botId = pushPair(`[èªæä¸è´æ§] ${question}`, {
+      const botId = pushPair(`[自我一致性] ${question}`, {
         kind: 'self_consistency',
         sourceQuestion: question,
         meta: { question },
-        content: 'èªæä¸è´æ§éå¤æ¬¡è°ç¨æ¨¡åï¼è¯·ç¨åâ?,
+        content: '自我一致性需多次调用模型，请稍候…',
       }, question)
 
       setLoading(true)
@@ -354,9 +354,9 @@ export function useChat() {
         const failed = Boolean(data.error)
         const content = data.error
           ? String(data.error)
-          : `åéæ¹æ¡ï¼\n${(data.candidates || [])
+          : `候选方案：\n${(data.candidates || [])
               .map((c: string, i: number) => `${i + 1}. ${c}`)
-              .join('\n')}\n\næç»è¯éï¼\n${data.final || ''}`
+              .join('\n')}\n\n最终评选：\n${data.final || ''}`
         patchBotMessage(botId, {
           content,
           typing: false,
@@ -367,7 +367,7 @@ export function useChat() {
         })
       } catch (err) {
         patchBotMessage(botId, {
-          content: `è¯·æ±å¤±è´¥ï¼?{(err as Error).message}`,
+          content: `请求失败：${(err as Error).message}`,
           typing: false,
           error: true,
           kind: 'self_consistency',
@@ -385,20 +385,20 @@ export function useChat() {
     async (product?: ProductPayload) => {
       if (loading) return
       const payload = product || {
-        name: 'å¨èªå¨è±æµæº',
-        features: '1åééç­, 20Baré«åèå, ææºAppæ§å¶',
-        audience: 'è¿½æ±çæ´»åè´¨çç¬å±ç½é¢?,
+        name: '全自动豆浆机',
+        features: '1分钟速热, 20Bar高压萃取, 手机App控制',
+        audience: '追求生活品质的独居白领',
       }
 
       const botId = pushPair(
-        `[çµåææ¡] ${payload.name}ï½åç¹ï¼${payload.features}ï½äººç¾¤ï¼${payload.audience}`,
+        `[电商文案] ${payload.name}｜卖点：${payload.features}｜人群：${payload.audience}`,
         {
           kind: 'product_copy',
           sourceQuestion: payload.name,
           meta: { product: payload },
-          content: 'æ­£å¨æ?Few-Shot + CoT çæäº§åææ¡â?,
+          content: '正在按 Few-Shot + CoT 生成产品文案…',
         },
-        `çµåææ¡Â·${payload.name}`,
+        `电商文案·${payload.name}`,
       )
 
       setLoading(true)
@@ -410,7 +410,7 @@ export function useChat() {
         })
         const data = await res.json()
         patchBotMessage(botId, {
-          content: data.error ? String(data.error) : data.result || 'æªçæåå®?,
+          content: data.error ? String(data.error) : data.result || '未生成内容',
           typing: false,
           error: Boolean(data.error),
           kind: 'product_copy',
@@ -419,7 +419,7 @@ export function useChat() {
         })
       } catch (err) {
         patchBotMessage(botId, {
-          content: `è¯·æ±å¤±è´¥ï¼?{(err as Error).message}`,
+          content: `请求失败：${(err as Error).message}`,
           typing: false,
           error: true,
           kind: 'product_copy',
@@ -435,17 +435,17 @@ export function useChat() {
   const runSocialPlan = useCallback(
     async (topic?: string) => {
       if (loading) return
-      const subject = (topic || 'ç¬å±å¥³ççä½ææ¬ç²¾è´çæ´»').trim()
+      const subject = (topic || '独居女生的低成本精致生活').trim()
 
       const botId = pushPair(
-        `[ç¤¾äº¤ç­å] ${subject}`,
+        `[社交策划] ${subject}`,
         {
           kind: 'social_plan',
           sourceQuestion: subject,
           meta: { topic: subject },
-          content: 'é¶æ®µ 1/4ï¼æ­£å¨åæ£ç­ååæ¯â?,
+          content: '阶段 1/4：正在发散策划分支…',
         },
-        `ç¤¾äº¤ç­åÂ·${subject.slice(0, 16)}`,
+        `社交策划·${subject.slice(0, 16)}`,
       )
 
       setLoading(true)
@@ -466,7 +466,7 @@ export function useChat() {
         )
         if (!resp.ok) throw new Error(`HTTP ${resp.status}`)
         const reader = resp.body?.getReader()
-        if (!reader) throw new Error('æ æ³è¯»åæµå¼ååº')
+        if (!reader) throw new Error('无法读取流式响应')
 
         const decoder = new TextDecoder()
         let buffer = ''
@@ -484,7 +484,7 @@ export function useChat() {
             if (!line.startsWith('data: ')) continue
             const data = line.slice(6)
             if (data === '[DONE]') {
-              patch(sections.join('\n\n---\n\n') || 'ç­åå®æ', false, false)
+              patch(sections.join('\n\n---\n\n') || '策划完成', false, false)
               continue
             }
             try {
@@ -495,13 +495,13 @@ export function useChat() {
                 done?: boolean
               }
               if (json.stage === 'error') {
-                patch(json.content || 'ç­åå¤±è´¥', false, true)
+                patch(json.content || '策划失败', false, true)
                 continue
               }
               if (json.content && json.title) {
                 if (json.content.length < 40 && !json.done) {
                   patch(
-                    `${sections.length ? sections.join('\n\n---\n\n') + '\n\n---\n\n' : ''}é¶æ®µ ${json.stage}/4ï¼?{json.content}`,
+                    `${sections.length ? sections.join('\n\n---\n\n') + '\n\n---\n\n' : ''}阶段 ${json.stage}/4：${json.content}`,
                     true,
                   )
                 } else {
@@ -516,7 +516,7 @@ export function useChat() {
         }
         if (sections.length) patch(sections.join('\n\n---\n\n'), false)
       } catch (err) {
-        patch(`è¯·æ±å¤±è´¥ï¼?{(err as Error).message}`, false, true)
+        patch(`请求失败：${(err as Error).message}`, false, true)
       } finally {
         setLoading(false)
       }
@@ -531,14 +531,14 @@ export function useChat() {
       if (!q || modes.length < 2) return
 
       const botId = pushPair(
-        `[æ¨¡å¼å¯¹æ¯] ${q}`,
+        `[模式对比] ${q}`,
         {
           kind: 'compare',
           sourceQuestion: q,
           meta: { question: q, modes },
-          content: `æ­£å¨å¯¹æ¯ ${modes.map((m) => MODE_LABELS[m]).join(' / ')}ï¼è¯·ç¨åâ¦`,
+          content: `正在对比 ${modes.map((m) => MODE_LABELS[m]).join(' / ')}，请稍候…`,
         },
-        `å¯¹æ¯Â·${q.slice(0, 16)}`,
+        `对比·${q.slice(0, 16)}`,
       )
 
       setLoading(true)
@@ -569,7 +569,7 @@ export function useChat() {
         }
       } catch (err) {
         patchBotMessage(botId, {
-          content: `è¯·æ±å¤±è´¥ï¼?{(err as Error).message}`,
+          content: `请求失败：${(err as Error).message}`,
           typing: false,
           error: true,
           kind: 'compare',
@@ -589,14 +589,14 @@ export function useChat() {
       if (!q) return
 
       const botId = pushPair(
-        `[å·¥å·è°ç¨] ${q}`,
+        `[工具调用] ${q}`,
         {
           kind: 'tool_chat',
           sourceQuestion: q,
           meta: { question: q },
-          content: 'æ­£å¨æ?ReAct å³å®æ¯å¦è°ç¨å·¥å·â?,
+          content: '正在按 ReAct 决定是否调用工具…',
         },
-        `å·¥å·Â·${q.slice(0, 16)}`,
+        `工具·${q.slice(0, 16)}`,
       )
 
       setLoading(true)
@@ -627,7 +627,7 @@ export function useChat() {
         }
       } catch (err) {
         patchBotMessage(botId, {
-          content: `è¯·æ±å¤±è´¥ï¼?{(err as Error).message}`,
+          content: `请求失败：${(err as Error).message}`,
           typing: false,
           error: true,
           kind: 'tool_chat',
@@ -687,8 +687,6 @@ export function useChat() {
         content: '',
         thinking: '',
       })
-      // pushPair already added user+bot; remove duplicate user from regenerate path
-      // Actually we filtered both and then pushPair adds user again - good.
       await requestAssistant(question, botId, true)
     },
     [
