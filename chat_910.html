@@ -81,12 +81,19 @@
       border-radius: 14px; background: rgba(255,255,255,.04);
     }
     .side-tip strong { display: block; margin-bottom: 3px; color: #c2cada; }
-    .chat-shell { min-width: 0; display: flex; flex-direction: column; }
+    .chat-shell {
+      min-width: 0;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
     .header {
       height: 76px; padding: 0 28px;
       border-bottom: 1px solid var(--line);
       background: rgba(255,255,255,.82);
       display: flex; justify-content: space-between; align-items: center;
+      flex-shrink: 0;
     }
     .header h2 { font-size: 17px; font-weight: 650; }
     .header-subtitle { margin-top: 4px; color: var(--muted); font-size: 12px; }
@@ -108,7 +115,13 @@
     .switch.active { background: var(--blue); }
     .switch.active::after { transform: translateX(16px); }
     .messages {
-      flex: 1; overflow-y: auto; padding: 30px 34px 18px; background: #f8fafc;
+      flex: 1;
+      min-height: 0;
+      overflow-y: auto;
+      overflow-x: hidden;
+      padding: 30px 34px 18px;
+      background: #f8fafc;
+      -webkit-overflow-scrolling: touch;
     }
     .messages::-webkit-scrollbar { width: 6px; }
     .messages::-webkit-scrollbar-thumb { background: #cdd5e1; border-radius: 8px; }
@@ -162,6 +175,7 @@
       border-radius: 6px 16px 16px 16px;
       font-size: 14px; line-height: 1.75;
       white-space: pre-wrap; word-break: break-word;
+      overflow-wrap: anywhere;
     }
     .message.bot .bubble {
       color: #303b4a; background: #fff; border: 1px solid #edf0f4;
@@ -180,6 +194,7 @@
     @keyframes blink { 50% { opacity: 0; } }
     .input-area {
       padding: 16px 28px 22px; border-top: 1px solid var(--line); background: #fff;
+      flex-shrink: 0;
     }
     .composer {
       max-width: 780px; margin: 0 auto; padding: 7px 7px 7px 17px;
@@ -350,9 +365,11 @@
 
         const scrollToBottom = () => {
           nextTick(() => {
-            if (messagesEl.value) {
-              messagesEl.value.scrollTop = messagesEl.value.scrollHeight;
-            }
+            requestAnimationFrame(() => {
+              if (messagesEl.value) {
+                messagesEl.value.scrollTop = messagesEl.value.scrollHeight;
+              }
+            });
           });
         };
 
