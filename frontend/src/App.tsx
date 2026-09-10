@@ -4,12 +4,18 @@ import { useChat } from './hooks/useChat'
 import { useTheme } from './hooks/useTheme'
 import { Composer } from './components/Composer'
 import {
+  CompareModal,
   ProductCopyModal,
+  SloganModal,
   SocialPlanModal,
+  SystemPromptModal,
+  TemplatePickerModal,
+  ToolChatModal,
 } from './components/DemoFormModal'
 import { EmptyState, ModeSelect } from './components/EmptyState'
 import { MessageBubble } from './components/MessageBubble'
 import { MobileMenuButton, Sidebar } from './components/Sidebar'
+import { downloadText, sessionToMarkdown } from './lib/export'
 import type { ChatMessage } from './types'
 
 const BOTTOM_THRESHOLD = 80
@@ -24,6 +30,11 @@ export default function App() {
   const [showJump, setShowJump] = useState(false)
   const [productOpen, setProductOpen] = useState(false)
   const [socialOpen, setSocialOpen] = useState(false)
+  const [sloganOpen, setSloganOpen] = useState(false)
+  const [compareOpen, setCompareOpen] = useState(false)
+  const [toolOpen, setToolOpen] = useState(false)
+  const [systemOpen, setSystemOpen] = useState(false)
+  const [templateOpen, setTemplateOpen] = useState(false)
   const listRef = useRef<HTMLDivElement>(null)
 
   const scrollToBottom = useCallback((smooth = false) => {
@@ -49,7 +60,6 @@ export default function App() {
     requestAnimationFrame(() => scrollToBottom(false))
   }, [chat.active?.messages, chat.loading, stickToBottom, scrollToBottom])
 
-  // 切换会话时回到底部跟踪
   useEffect(() => {
     setStickToBottom(true)
     setShowJump(false)
@@ -57,6 +67,13 @@ export default function App() {
   }, [chat.activeId, scrollToBottom])
 
   const messages: ChatMessage[] = chat.active?.messages ?? []
+
+  const continueFrom = (content: string) => {
+    setInput(
+      `请基于以下内容继续帮我优化/展开，保留可执行细节：\n\n${content.slice(0, 3500)}`,
+    )
+    setStickToBottom(true)
+  }
 
   return (
     <div className="app-shell flex h-full text-body">
@@ -78,6 +95,13 @@ export default function App() {
         onDelete={chat.deleteSession}
         onCloseMobile={() => setMobileOpen(false)}
         onToggleCollapse={() => setCollapsed((v) => !v)}
+        onEditSystem={() => setSystemOpen(true)}
+        onExportSession={() => {
+          if (!chat.active) return
+          const md = sessionToMarkdown(chat.active)
+          const stamp = new Date().toISOString().slice(0, 10)
+          downloadText(`${chat.active.title || 'chat'}-${stamp}.md`, md)
+        }}
       />
 
       <main className="relative flex min-h-0 min-w-0 flex-1 flex-col">
@@ -86,7 +110,7 @@ export default function App() {
             <MobileMenuButton onClick={() => setMobileOpen(true)} />
             <div>
               <div className="text-sm text-title">DeepSeek 助手</div>
-              <div className="text-[11px] text-aux">提示词策略 · 安全防护</div>
+              <div className="text-[11px] text-aux">提示词策略 · 工具演示 · 安全防护</div>
             </div>
           </div>
           <ModeSelect value={chat.active?.mode ?? 'zero_shot'} onChange={chat.setMode} />
@@ -103,12 +127,12 @@ export default function App() {
                 setStickToBottom(true)
                 void chat.send(text, true)
               }}
-              onSelfConsistency={() => {
-                setStickToBottom(true)
-                void chat.runSelfConsistency('为旅行背包品牌生成一句口号')
-              }}
+              onSelfConsistency={() => setSloganOpen(true)}
               onProductCopy={() => setProductOpen(true)}
               onSocialPlan={() => setSocialOpen(true)}
+              onCompare={() => setCompareOpen(true)}
+              onToolChat={() => setToolOpen(true)}
+              onTemplates={() => setTemplateOpen(true)}
             />
           ) : (
             <div className="mx-auto flex w-full max-w-[768px] flex-col gap-6 px-4 py-6">
@@ -119,6 +143,7 @@ export default function App() {
                   loading={chat.loading}
                   onRegenerate={chat.regenerate}
                   onLike={chat.toggleLike}
+                  onContinue={continueFrom}
                 />
               ))}
             </div>
@@ -170,6 +195,49 @@ export default function App() {
           setSocialOpen(false)
           setStickToBottom(true)
           void chat.runSocialPlan(topic)
+        }}
+      />
+      <SloganModal
+        open={sloganOpen}
+        onClose={() => setSloganOpen(false)}
+        onSubmit={(q) => {
+          setSloganOpen(false)
+          setStickToBottom(true)
+          void chat.runSelfConsistency(q)
+        }}
+      />
+      <CompareModal
+        open={compareOpen}
+        onClose={() => setCompareOpen(false)}
+        onSubmit={(q, modes) => {
+          setCompareOpen(false)
+          setStickToBottom(true)
+          void chat.runCompare(q, modes)
+        }}
+      />
+      <ToolChatModal
+        open={toolOpen}
+        onClose={() => setToolOpen(false)}
+        onSubmit={(q) => {
+          setToolOpen(false)
+          setStickToBottom(true)
+          void chat.runToolChat(q)
+        }}
+      />
+      <SystemPromptModal
+        open={systemOpen}
+        value={chat.systemPrompt}
+        onClose={() => setSystemOpen(false)}
+        onSubmit={(content) => {
+          void chat.saveSystemPrompt(content).then(() => setSystemOpen(false))
+        }}
+      />
+      <TemplatePickerModal
+        open={templateOpen}
+        onClose={() => setTemplateOpen(false)}
+        onPick={(prompt) => {
+          setTemplateOpen(false)
+          setInput(prompt)
         }}
       />
     </div>

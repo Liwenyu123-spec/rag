@@ -599,8 +599,9 @@ def _tool_weather(city: str) -> str:
 def _tool_note_search(query: str) -> str:
     q = query.strip().lower()
     hits = [
-        n for n in DEMO_NOTES
-        if q in n["title"].lower() or q in n["body"].lower() or any(ch in n["body"] for ch in q)
+        n
+        for n in DEMO_NOTES
+        if q in n["title"].lower() or q in n["body"].lower()
     ]
     if not hits:
         hits = DEMO_NOTES
