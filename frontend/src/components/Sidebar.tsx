@@ -39,7 +39,7 @@ export function Sidebar({
   const renderPanel = (forceOpen = false) => (
     <aside
       className={clsx(
-        'flex h-full flex-col border-r border-ds-border bg-ds-subtle transition-all duration-200',
+        'sidebar-panel flex h-full flex-col border-r border-ds-border bg-ds-subtle',
         !forceOpen && collapsed
           ? 'w-0 overflow-hidden border-0 p-0 opacity-0'
           : 'w-[240px] opacity-100',
@@ -49,14 +49,14 @@ export function Sidebar({
         <button
           type="button"
           onClick={onNew}
-          className="flex flex-1 items-center justify-center gap-2 rounded-[12px] bg-ds-blue px-3 py-2.5 text-sm font-medium text-white transition hover:bg-ds-blue-hover"
+          className="btn-motion btn-primary flex flex-1 items-center justify-center gap-2 rounded-[12px] bg-ds-blue px-3 py-2.5 text-sm font-medium text-white hover:bg-ds-blue-hover"
         >
           <MessageSquarePlus size={16} />
           新建对话
         </button>
         <button
           type="button"
-          className="hidden rounded-lg p-2 text-ds-muted transition hover:bg-black/5 hover:text-ds-text md:inline-flex dark:hover:bg-white/5"
+          className="btn-motion btn-ghost hidden rounded-[12px] p-2 text-ds-muted hover:bg-black/5 hover:text-ds-text md:inline-flex dark:hover:bg-white/5"
           onClick={onToggleCollapse}
           title="折叠侧边栏"
         >
@@ -64,7 +64,7 @@ export function Sidebar({
         </button>
         <button
           type="button"
-          className="inline-flex rounded-lg p-2 text-ds-muted md:hidden"
+          className="btn-motion btn-ghost inline-flex rounded-[12px] p-2 text-ds-muted md:hidden"
           onClick={onCloseMobile}
         >
           <X size={18} />
@@ -80,7 +80,7 @@ export function Sidebar({
           <div
             key={s.id}
             className={clsx(
-              'group flex items-center gap-1 rounded-[16px] px-2 py-2 transition',
+              'group flex items-center gap-1 rounded-[16px] px-2 py-2 transition-[background-color] duration-150',
               s.id === activeId
                 ? 'bg-white shadow-sm dark:bg-white/10'
                 : 'hover:bg-white/70 dark:hover:bg-white/5',
@@ -99,7 +99,7 @@ export function Sidebar({
             <button
               type="button"
               onClick={() => onDelete(s.id)}
-              className="rounded-md p-1 text-ds-muted opacity-0 transition group-hover:opacity-100 hover:bg-red-50 hover:text-red-500 dark:hover:bg-red-500/10"
+              className="btn-motion rounded-[12px] p-1 text-ds-muted opacity-0 transition group-hover:opacity-100 hover:bg-red-50 hover:text-red-500 dark:hover:bg-red-500/10"
             >
               <Trash2 size={14} />
             </button>
@@ -111,7 +111,7 @@ export function Sidebar({
         <button
           type="button"
           onClick={onToggleDark}
-          className="flex w-full items-center justify-center gap-2 rounded-[12px] border border-ds-border bg-ds-bg px-3 py-2 text-sm text-ds-text transition hover:border-ds-blue/40"
+          className="btn-motion btn-ghost flex w-full items-center justify-center gap-2 rounded-[12px] border border-ds-border bg-ds-bg px-3 py-2 text-sm text-ds-text hover:border-ds-blue/40"
         >
           {dark ? <Sun size={16} /> : <Moon size={16} />}
           {dark ? '浅色主题' : '暗色主题'}
@@ -129,7 +129,7 @@ export function Sidebar({
           <button
             type="button"
             onClick={onToggleCollapse}
-            className="absolute left-3 top-3 z-10 rounded-lg border border-ds-border bg-ds-bg p-2 text-ds-muted shadow-sm transition hover:text-ds-text"
+            className="btn-motion btn-ghost absolute left-3 top-3 z-10 rounded-[12px] border border-ds-border bg-ds-bg p-2 text-ds-muted shadow-sm hover:text-ds-text"
             title="展开侧边栏"
           >
             <PanelLeftOpen size={18} />
@@ -140,7 +140,7 @@ export function Sidebar({
       {/* Mobile drawer */}
       <div
         className={clsx(
-          'fixed inset-0 z-40 md:hidden transition-opacity duration-200',
+          'sidebar-overlay fixed inset-0 z-40 md:hidden',
           open ? 'pointer-events-auto opacity-100' : 'pointer-events-none opacity-0',
         )}
       >
@@ -152,7 +152,7 @@ export function Sidebar({
         />
         <div
           className={clsx(
-            'absolute left-0 top-0 h-full transition-transform duration-200',
+            'sidebar-drawer absolute left-0 top-0 h-full',
             open ? 'translate-x-0' : '-translate-x-full',
           )}
         >
@@ -168,7 +168,7 @@ export function MobileMenuButton({ onClick }: { onClick: () => void }) {
     <button
       type="button"
       onClick={onClick}
-      className="inline-flex rounded-lg border border-ds-border bg-ds-bg p-2 text-ds-muted md:hidden"
+      className="btn-motion btn-ghost inline-flex rounded-[12px] border border-ds-border bg-ds-bg p-2 text-ds-muted md:hidden"
     >
       <Menu size={18} />
     </button>

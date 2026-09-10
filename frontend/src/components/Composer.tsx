@@ -45,7 +45,7 @@ export function Composer({
           <button
             type="button"
             onClick={onStop}
-            className="mb-0.5 inline-flex h-10 items-center gap-1.5 rounded-[12px] bg-[#ef4444] px-3 text-sm font-medium text-white transition hover:bg-[#dc2626]"
+            className="btn-motion btn-danger mb-0.5 inline-flex h-10 items-center gap-1.5 rounded-[12px] bg-[#ef4444] px-3 text-sm font-medium text-white hover:bg-[#dc2626]"
           >
             <Square size={14} fill="currentColor" />
             停止生成
@@ -55,7 +55,7 @@ export function Composer({
             type="button"
             disabled={!value.trim()}
             onClick={onSend}
-            className="mb-0.5 inline-flex h-10 w-10 items-center justify-center rounded-[12px] bg-ds-blue text-white transition hover:bg-ds-blue-hover disabled:cursor-not-allowed disabled:bg-[#c9cdd4]"
+            className="btn-motion btn-primary mb-0.5 inline-flex h-10 w-10 items-center justify-center rounded-[12px] bg-ds-blue text-white hover:bg-ds-blue-hover disabled:cursor-not-allowed disabled:bg-[#c9cdd4] disabled:shadow-none"
           >
             <SendHorizontal size={18} />
           </button>

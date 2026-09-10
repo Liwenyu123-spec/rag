@@ -28,7 +28,7 @@ function CodeBlock({
         <button
           type="button"
           onClick={copy}
-          className="inline-flex items-center gap-1 rounded-[12px] px-2 py-1 text-white/70 transition hover:bg-white/10 hover:text-white"
+          className="btn-motion inline-flex items-center gap-1 rounded-[12px] px-2 py-1 text-white/70 hover:bg-white/10 hover:text-white"
         >
           {copied ? <Check size={14} /> : <Copy size={14} />}
           {copied ? '已复制' : '复制'}

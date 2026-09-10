@@ -15,6 +15,7 @@
   --font-sans: "Inter", "PingFang SC", "Microsoft YaHei", ui-sans-serif, system-ui, sans-serif;
   --radius-surface: 16px;
   --radius-button: 12px;
+  --ease-out-soft: cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 html,
@@ -90,6 +91,7 @@ html.dark body {
   box-shadow: 0 0 0 4px rgba(77, 107, 254, 0.18);
 }
 
+/* ---------- 动效：新消息进入 ---------- */
 @keyframes fade-up {
   from {
     opacity: 0;
@@ -102,12 +104,17 @@ html.dark body {
 }
 
 .animate-fade-up {
-  animation: fade-up 0.25s ease forwards;
+  animation: fade-up 0.35s cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
-@keyframes blink {
+/* ---------- 动效：打字光标呼吸闪烁（不用 steps） ---------- */
+@keyframes caret-breathe {
+  0%,
+  100% {
+    opacity: 0.2;
+  }
   50% {
-    opacity: 0;
+    opacity: 1;
   }
 }
 
@@ -118,8 +125,108 @@ html.dark body {
   height: 1em;
   margin-left: 2px;
   vertical-align: -2px;
+  border-radius: 1px;
   background: var(--color-ds-blue);
-  animation: blink 0.8s step-end infinite;
+  animation: caret-breathe 1.2s ease-in-out infinite;
+}
+
+/* ---------- 动效：按钮 hover ---------- */
+.btn-motion {
+  transition:
+    transform 0.15s ease,
+    box-shadow 0.15s ease,
+    background-color 0.15s ease,
+    border-color 0.15s ease,
+    opacity 0.15s ease;
+  will-change: transform;
+}
+
+.btn-motion:hover:not(:disabled) {
+  transform: scale(1.02);
+}
+
+.btn-motion:active:not(:disabled) {
+  transform: scale(0.99);
+}
+
+.btn-primary {
+  box-shadow: 0 2px 8px rgba(77, 107, 254, 0.22);
+}
+
+.btn-primary:hover:not(:disabled) {
+  box-shadow: 0 6px 16px rgba(77, 107, 254, 0.32);
+}
+
+.btn-danger {
+  box-shadow: 0 2px 8px rgba(239, 68, 68, 0.2);
+}
+
+.btn-danger:hover:not(:disabled) {
+  box-shadow: 0 6px 16px rgba(239, 68, 68, 0.3);
+}
+
+.btn-ghost {
+  box-shadow: 0 0 0 transparent;
+}
+
+.btn-ghost:hover:not(:disabled) {
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.08);
+}
+
+.dark .btn-ghost:hover:not(:disabled) {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
+}
+
+/* ---------- 动效：侧边栏折叠 ---------- */
+.sidebar-panel {
+  transition:
+    width 0.25s ease-in-out,
+    opacity 0.25s ease-in-out,
+    padding 0.25s ease-in-out,
+    border-color 0.25s ease-in-out;
+}
+
+.sidebar-drawer {
+  transition: transform 0.25s ease-in-out;
+}
+
+.sidebar-overlay {
+  transition: opacity 0.25s ease-in-out;
+}
+
+/* ---------- 动效：推荐问题卡片 hover ---------- */
+.suggestion-card {
+  transition:
+    transform 0.2s cubic-bezier(0.16, 1, 0.3, 1),
+    box-shadow 0.2s ease,
+    border-color 0.2s ease;
+}
+
+.suggestion-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 24px rgba(58, 83, 136, 0.12);
+}
+
+.dark .suggestion-card:hover {
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.35);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-fade-up,
+  .typing-caret::after,
+  .btn-motion,
+  .sidebar-panel,
+  .sidebar-drawer,
+  .sidebar-overlay,
+  .suggestion-card {
+    animation: none !important;
+    transition: none !important;
+  }
+
+  .btn-motion:hover:not(:disabled),
+  .suggestion-card:hover {
+    transform: none;
+  }
 }
 
 .prose-chat pre {

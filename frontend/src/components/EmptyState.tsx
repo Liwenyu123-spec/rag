@@ -30,7 +30,7 @@ export function EmptyState({
             onClick={() =>
               item.text.includes('口号') ? onSelfConsistency() : onPick(item.text)
             }
-            className="rounded-[16px] border border-ds-border bg-ds-bg px-4 py-3.5 text-left text-[14px] text-ds-text shadow-sm transition duration-200 hover:-translate-y-0.5 hover:border-ds-blue/40 hover:shadow-md"
+            className="suggestion-card rounded-[16px] border border-ds-border bg-ds-bg px-4 py-3.5 text-left text-[14px] text-ds-text shadow-sm hover:border-ds-blue/40"
           >
             <span className="mr-2">{item.icon}</span>
             {item.text}
@@ -55,7 +55,7 @@ export function ModeSelect({
     <select
       value={value}
       onChange={(e) => onChange(e.target.value as PromptMode)}
-      className="rounded-full border border-ds-border bg-ds-subtle px-3 py-1.5 text-xs text-ds-text outline-none transition hover:border-ds-blue/40"
+      className="rounded-[12px] border border-ds-border bg-ds-subtle px-3 py-1.5 text-xs text-ds-text outline-none transition-[border-color] duration-150 hover:border-ds-blue/40"
     >
       {(Object.keys(MODE_LABELS) as PromptMode[]).map((k) => (
         <option key={k} value={k}>
