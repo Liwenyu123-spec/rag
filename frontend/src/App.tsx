@@ -4,6 +4,7 @@ import { useBackendStatus } from './hooks/useBackendStatus'
 import { useChat } from './hooks/useChat'
 import { useTheme } from './hooks/useTheme'
 import { useWallpaper } from './hooks/useWallpaper'
+import { getOllamaThink, setOllamaThink } from './lib/api'
 import { Composer } from './components/Composer'
 import {
   CompareModal,
@@ -14,7 +15,7 @@ import {
   TemplatePickerModal,
   ToolChatModal,
 } from './components/DemoFormModal'
-import { EmptyState, ModeSelect, OllamaModelSelect } from './components/EmptyState'
+import { EmptyState, ModeSelect, OllamaModelSelect, ThinkToggle } from './components/EmptyState'
 import { MessageBubble } from './components/MessageBubble'
 import { OllamaSetupBanner } from './components/OllamaSetupBanner'
 import { MobileMenuButton, Sidebar } from './components/Sidebar'
@@ -49,6 +50,7 @@ export default function App() {
   const [systemOpen, setSystemOpen] = useState(false)
   const [templateOpen, setTemplateOpen] = useState(false)
   const [wallpaperOpen, setWallpaperOpen] = useState(false)
+  const [thinkOn, setThinkOn] = useState(() => getOllamaThink())
   const listRef = useRef<HTMLDivElement>(null)
 
   const scrollToBottom = useCallback((smooth = false) => {
@@ -174,11 +176,20 @@ export default function App() {
           </div>
           <div className="flex items-center gap-2">
             {isBrowserOllama && (
-              <OllamaModelSelect
-                value={ollamaModel}
-                models={ollamaModels}
-                onChange={selectModel}
-              />
+              <>
+                <ThinkToggle
+                  on={thinkOn}
+                  onChange={(v) => {
+                    setOllamaThink(v)
+                    setThinkOn(v)
+                  }}
+                />
+                <OllamaModelSelect
+                  value={ollamaModel}
+                  models={ollamaModels}
+                  onChange={selectModel}
+                />
+              </>
             )}
             <ModeSelect value={chat.active?.mode ?? 'zero_shot'} onChange={chat.setMode} />
           </div>

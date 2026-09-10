@@ -3,6 +3,7 @@
 const SYS_KEY = 'ds-system-prompt'
 const MODEL_KEY = 'ds-ollama-model'
 const OLLAMA_BASE_KEY = 'ds-ollama-base'
+const THINK_KEY = 'ds-ollama-think'
 
 /** GitHub 网页默认走本地桥接端口；本地 FastAPI 模式不走这里 */
 function defaultOllamaBase() {
@@ -28,6 +29,21 @@ export function getOllamaBase() {
 
 export function setOllamaBase(url: string) {
   localStorage.setItem(OLLAMA_BASE_KEY, url.replace(/\/$/, ''))
+}
+
+/** 默认关闭深度思考，回复更快；需要时再打开 */
+export function getOllamaThink() {
+  try {
+    const v = localStorage.getItem(THINK_KEY)
+    if (v === null) return false
+    return v === '1' || v === 'true'
+  } catch {
+    return false
+  }
+}
+
+export function setOllamaThink(on: boolean) {
+  localStorage.setItem(THINK_KEY, on ? '1' : '0')
 }
 
 function ollamaBase() {
@@ -155,7 +171,7 @@ async function ollamaChat(messages: Msg[], signal?: AbortSignal) {
       model: getModel(),
       messages,
       stream: false,
-      think: true,
+      think: getOllamaThink(),
     }),
     signal,
   })
@@ -188,7 +204,7 @@ function sseFromOllamaChat(messages: Msg[], signal?: AbortSignal) {
             model: getModel(),
             messages,
             stream: true,
-            think: true,
+            think: getOllamaThink(),
           }),
           signal,
         })

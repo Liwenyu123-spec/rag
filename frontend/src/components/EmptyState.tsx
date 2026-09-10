@@ -164,3 +164,26 @@ export function OllamaModelSelect({
   )
 }
 
+export function ThinkToggle({
+  on,
+  onChange,
+}: {
+  on: boolean
+  onChange: (v: boolean) => void
+}) {
+  return (
+    <button
+      type="button"
+      onClick={() => onChange(!on)}
+      title={on ? '关闭深度思考（更快）' : '开启深度思考（更慢但更细）'}
+      className={`rounded-[12px] border px-3 py-1.5 text-xs transition ${
+        on
+          ? 'border-[#4d6bfe] bg-[#4d6bfe]/15 text-[#4d6bfe]'
+          : 'border-[var(--border-soft)] bg-white/60 text-aux dark:bg-white/5'
+      }`}
+    >
+      {on ? '思考·开' : '思考·关'}
+    </button>
+  )
+}
+
