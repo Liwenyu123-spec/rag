@@ -34,12 +34,12 @@ function ActionBar({
   onLike?: () => void
 }) {
   return (
-    <div className="msg-actions absolute -top-2 right-0 z-10 flex items-center gap-1 rounded-[12px] border border-white/10 bg-[#0f172a]/90 px-1.5 py-1 opacity-0 shadow-[0_12px_32px_rgba(0,0,0,0.28)] backdrop-blur-md transition-opacity duration-150 group-hover:opacity-100">
+    <div className="msg-actions absolute -top-2 right-0 z-10 flex items-center gap-1 rounded-[12px] border px-1.5 py-1 opacity-0 shadow-[0_12px_32px_rgba(15,23,42,0.12)] backdrop-blur-md transition-opacity duration-150 group-hover:opacity-100">
       <button
         type="button"
         title="复制"
         onClick={onCopy}
-        className="btn-motion rounded-[10px] p-1.5 text-[#8a8f99] hover:bg-white/10 hover:text-[#e8eefc]"
+        className="btn-motion rounded-[10px] p-1.5 text-[var(--text-aux)] hover:bg-black/5 hover:text-[var(--text-main)] dark:hover:bg-white/10"
       >
         <Copy size={14} />
       </button>
@@ -48,7 +48,7 @@ function ActionBar({
           type="button"
           title="重新生成"
           onClick={onRegenerate}
-          className="btn-motion rounded-[10px] p-1.5 text-[#8a8f99] hover:bg-white/10 hover:text-[#e8eefc]"
+          className="btn-motion rounded-[10px] p-1.5 text-[var(--text-aux)] hover:bg-black/5 hover:text-[var(--text-main)] dark:hover:bg-white/10"
         >
           <RefreshCw size={14} />
         </button>
@@ -59,8 +59,8 @@ function ActionBar({
           title="点赞"
           onClick={onLike}
           className={clsx(
-            'btn-motion rounded-[10px] p-1.5 hover:bg-white/10',
-            liked ? 'text-[#4d6bfe]' : 'text-[#8a8f99] hover:text-[#e8eefc]',
+            'btn-motion rounded-[10px] p-1.5 hover:bg-black/5 dark:hover:bg-white/10',
+            liked ? 'text-[#4d6bfe]' : 'text-[var(--text-aux)] hover:text-[var(--text-main)]',
           )}
         >
           <ThumbsUp size={14} fill={liked ? 'currentColor' : 'none'} />

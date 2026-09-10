@@ -47,7 +47,7 @@ export function Composer({
             }
           }}
           style={{ maxHeight: MAX_HEIGHT }}
-          className="min-h-[44px] flex-1 resize-none bg-transparent py-2.5 text-[15px] font-normal leading-[1.7] text-[#e8eefc] outline-none placeholder:text-[#8a8f99] disabled:opacity-60"
+          className="max-h-40 min-h-[44px] flex-1 resize-none bg-transparent py-2.5 text-[15px] font-normal leading-[1.7] text-[var(--text-main)] outline-none placeholder:text-[var(--text-aux)] disabled:opacity-60"
         />
         {loading ? (
           <button

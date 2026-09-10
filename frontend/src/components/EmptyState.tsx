@@ -55,10 +55,10 @@ export function ModeSelect({
     <select
       value={value}
       onChange={(e) => onChange(e.target.value as PromptMode)}
-      className="rounded-[12px] border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-normal text-[#e8eefc] outline-none backdrop-blur-md transition-[border-color] duration-150 hover:border-[#4d6bfe]/50"
+      className="rounded-[12px] border border-[var(--border-soft)] bg-white/60 px-3 py-1.5 text-xs font-normal text-[var(--text-main)] outline-none backdrop-blur-md transition-[border-color] duration-150 hover:border-[#4d6bfe]/50 dark:bg-white/5"
     >
       {(Object.keys(MODE_LABELS) as PromptMode[]).map((k) => (
-        <option key={k} value={k} className="bg-[#0f172a] text-[#e8eefc]">
+        <option key={k} value={k} className="bg-white text-[#1f2329] dark:bg-[#0f172a] dark:text-[#e8eefc]">
           {MODE_LABELS[k]}
         </option>
       ))}

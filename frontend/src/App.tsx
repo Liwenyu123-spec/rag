@@ -43,10 +43,6 @@ export default function App() {
     requestAnimationFrame(() => scrollToBottom(false))
   }, [chat.active?.messages, chat.loading, stickToBottom, scrollToBottom])
 
-  useEffect(() => {
-    document.documentElement.classList.add('dark')
-  }, [])
-
   // 切换会话时回到底部跟踪
   useEffect(() => {
     setStickToBottom(true)
@@ -58,6 +54,12 @@ export default function App() {
 
   return (
     <div className="app-shell flex h-full text-body">
+      <div className="ambient-orbs" aria-hidden="true">
+        <div className="orb orb-blue" />
+        <div className="orb orb-purple" />
+      </div>
+      <div className="noise-layer" aria-hidden="true" />
+
       <Sidebar
         open={mobileOpen}
         collapsed={collapsed}
@@ -123,7 +125,7 @@ export default function App() {
               setShowJump(false)
               scrollToBottom(true)
             }}
-            className="btn-motion btn-ghost absolute bottom-28 right-6 z-20 inline-flex h-10 items-center gap-1.5 rounded-full border px-3 text-[13px] text-[#e8eefc] shadow-[0_16px_40px_rgba(0,0,0,0.35)]"
+            className="btn-motion btn-ghost absolute bottom-28 right-6 z-20 inline-flex h-10 items-center gap-1.5 rounded-full border px-3 text-[13px] text-body"
           >
             <ArrowDown size={16} />
             回到底部

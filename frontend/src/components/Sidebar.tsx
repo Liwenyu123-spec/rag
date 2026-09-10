@@ -56,7 +56,7 @@ export function Sidebar({
         </button>
         <button
           type="button"
-          className="btn-motion btn-ghost hidden rounded-[12px] p-2 text-[#8a8f99] hover:text-[#e8eefc] md:inline-flex"
+          className="btn-motion btn-ghost hidden rounded-[12px] p-2 text-[var(--text-aux)] hover:text-[var(--text-main)] md:inline-flex"
           onClick={onToggleCollapse}
           title="折叠侧边栏"
         >
@@ -64,7 +64,7 @@ export function Sidebar({
         </button>
         <button
           type="button"
-          className="btn-motion btn-ghost inline-flex rounded-[12px] p-2 text-[#8a8f99] md:hidden"
+          className="btn-motion btn-ghost inline-flex rounded-[12px] p-2 text-[var(--text-aux)] md:hidden"
           onClick={onCloseMobile}
         >
           <X size={18} />
@@ -90,14 +90,14 @@ export function Sidebar({
                 onSelect(s.id)
                 onCloseMobile()
               }}
-              className="min-w-0 flex-1 truncate px-1 text-left text-[13px] font-normal text-[#e8eefc]"
+              className="min-w-0 flex-1 truncate px-1 text-left text-[13px] font-normal text-[var(--text-main)]"
             >
               {s.title || '新对话'}
             </button>
             <button
               type="button"
               onClick={() => onDelete(s.id)}
-              className="btn-motion rounded-[12px] p-1 text-[#8a8f99] opacity-0 transition group-hover:opacity-100 hover:bg-red-500/10 hover:text-red-400"
+              className="btn-motion rounded-[12px] p-1 text-[var(--text-aux)] opacity-0 transition group-hover:opacity-100 hover:bg-red-50 hover:text-red-500 dark:hover:bg-red-500/10"
             >
               <Trash2 size={14} />
             </button>
@@ -109,7 +109,7 @@ export function Sidebar({
         <button
           type="button"
           onClick={onToggleDark}
-          className="btn-motion btn-ghost flex w-full items-center justify-center gap-2 rounded-[12px] border px-3 py-2 text-sm text-[#e8eefc]"
+          className="btn-motion btn-ghost flex w-full items-center justify-center gap-2 rounded-[12px] border px-3 py-2 text-sm text-[var(--text-main)]"
         >
           {dark ? <Sun size={16} /> : <Moon size={16} />}
           {dark ? '浅色主题' : '暗色主题'}
@@ -126,7 +126,7 @@ export function Sidebar({
           <button
             type="button"
             onClick={onToggleCollapse}
-            className="btn-motion btn-ghost absolute left-3 top-3 z-10 rounded-[12px] border p-2 text-[#8a8f99] hover:text-[#e8eefc]"
+            className="btn-motion btn-ghost absolute left-3 top-3 z-10 rounded-[12px] border p-2 text-[var(--text-aux)] hover:text-[var(--text-main)]"
             title="展开侧边栏"
           >
             <PanelLeftOpen size={18} />
@@ -164,7 +164,7 @@ export function MobileMenuButton({ onClick }: { onClick: () => void }) {
     <button
       type="button"
       onClick={onClick}
-      className="btn-motion btn-ghost inline-flex rounded-[12px] border p-2 text-[#8a8f99] md:hidden"
+      className="btn-motion btn-ghost inline-flex rounded-[12px] border p-2 text-[var(--text-aux)] md:hidden"
     >
       <Menu size={18} />
     </button>
