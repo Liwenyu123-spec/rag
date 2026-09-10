@@ -1,5 +1,26 @@
 export type Role = 'user' | 'assistant'
 
+export type MessageKind =
+  | 'chat'
+  | 'self_consistency'
+  | 'product_copy'
+  | 'social_plan'
+  | 'compare'
+  | 'tool_chat'
+
+export type ProductPayload = {
+  name: string
+  features: string
+  audience: string
+}
+
+export interface MessageMeta {
+  product?: ProductPayload
+  topic?: string
+  question?: string
+  modes?: PromptMode[]
+}
+
 export interface ChatMessage {
   id: string
   role: Role
@@ -8,6 +29,8 @@ export interface ChatMessage {
   typing?: boolean
   error?: boolean
   liked?: boolean
+  kind?: MessageKind
+  meta?: MessageMeta
   /** 助手消息对应的用户问题，用于重试/重新生成 */
   sourceQuestion?: string
   createdAt: number
