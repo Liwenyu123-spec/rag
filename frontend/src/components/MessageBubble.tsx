@@ -1,7 +1,12 @@
 import clsx from 'clsx'
-import { Copy, RefreshCw, ThumbsUp } from 'lucide-react'
+import { Copy, Download, MessageSquareQuote, RefreshCw, ThumbsUp } from 'lucide-react'
 import { useState } from 'react'
 import type { ChatMessage } from '../types'
+import {
+  downloadText,
+  messageExportName,
+  productCopyToTableMarkdown,
+} from '../lib/export'
 import { MarkdownContent } from './MarkdownContent'
 import { ThinkingBlock } from './ThinkingBlock'
 
@@ -25,13 +30,17 @@ function UserAvatar({ content }: { content: string }) {
 function ActionBar({
   liked,
   onCopy,
+  onDownload,
   onRegenerate,
   onLike,
+  onContinue,
 }: {
   liked?: boolean
   onCopy: () => void
+  onDownload?: () => void
   onRegenerate?: () => void
   onLike?: () => void
+  onContinue?: () => void
 }) {
   return (
     <div className="msg-actions absolute -top-2 right-0 z-10 flex items-center gap-1 rounded-[12px] border px-1.5 py-1 opacity-0 shadow-[0_12px_32px_rgba(15,23,42,0.12)] backdrop-blur-md transition-opacity duration-150 group-hover:opacity-100">
@@ -43,6 +52,26 @@ function ActionBar({
       >
         <Copy size={14} />
       </button>
+      {onDownload && (
+        <button
+          type="button"
+          title="导出 Markdown"
+          onClick={onDownload}
+          className="btn-motion rounded-[10px] p-1.5 text-[var(--text-aux)] hover:bg-black/5 hover:text-[var(--text-main)] dark:hover:bg-white/10"
+        >
+          <Download size={14} />
+        </button>
+      )}
+      {onContinue && (
+        <button
+          type="button"
+          title="基于这段继续聊"
+          onClick={onContinue}
+          className="btn-motion rounded-[10px] p-1.5 text-[var(--text-aux)] hover:bg-black/5 hover:text-[var(--text-main)] dark:hover:bg-white/10"
+        >
+          <MessageSquareQuote size={14} />
+        </button>
+      )}
       {onRegenerate && (
         <button
           type="button"
@@ -75,11 +104,13 @@ export function MessageBubble({
   loading,
   onRegenerate,
   onLike,
+  onContinue,
 }: {
   message: ChatMessage
   loading?: boolean
   onRegenerate?: (id: string) => void
   onLike?: (id: string) => void
+  onContinue?: (content: string) => void
 }) {
   const [copied, setCopied] = useState(false)
   const isUser = message.role === 'user'
@@ -90,6 +121,14 @@ export function MessageBubble({
     await navigator.clipboard.writeText(text)
     setCopied(true)
     setTimeout(() => setCopied(false), 1200)
+  }
+
+  const downloadMsg = () => {
+    const text =
+      message.kind === 'product_copy'
+        ? productCopyToTableMarkdown(message.content, message.meta?.product?.name)
+        : message.content
+    downloadText(messageExportName(message), text)
   }
 
   if (isUser) {
@@ -111,14 +150,27 @@ export function MessageBubble({
     )
   }
 
+  const canContinue =
+    Boolean(onContinue) &&
+    !message.typing &&
+    Boolean(message.content) &&
+    (message.kind === 'social_plan' ||
+      message.kind === 'product_copy' ||
+      message.kind === 'compare' ||
+      message.kind === 'tool_chat')
+
   return (
     <div className="group relative animate-fade-up flex items-start gap-3">
       <AssistantAvatar />
-      <div className="relative min-w-0 max-w-[70%]">
+      <div className="relative min-w-0 max-w-[85%]">
         {!message.typing && message.content && (
           <ActionBar
             liked={message.liked}
             onCopy={copyText}
+            onDownload={downloadMsg}
+            onContinue={
+              canContinue ? () => onContinue?.(message.content) : undefined
+            }
             onRegenerate={
               onRegenerate && !loading ? () => onRegenerate(message.id) : undefined
             }

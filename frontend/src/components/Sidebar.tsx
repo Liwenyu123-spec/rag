@@ -1,9 +1,11 @@
 import {
+  Download,
   Menu,
   MessageSquarePlus,
   Moon,
   PanelLeftClose,
   PanelLeftOpen,
+  Settings2,
   Sun,
   Trash2,
   X,
@@ -23,6 +25,8 @@ export function Sidebar({
   onDelete,
   onCloseMobile,
   onToggleCollapse,
+  onEditSystem,
+  onExportSession,
 }: {
   open: boolean
   collapsed: boolean
@@ -35,6 +39,8 @@ export function Sidebar({
   onDelete: (id: string) => void
   onCloseMobile: () => void
   onToggleCollapse: () => void
+  onEditSystem?: () => void
+  onExportSession?: () => void
 }) {
   const renderPanel = (forceOpen = false) => (
     <aside
@@ -72,7 +78,7 @@ export function Sidebar({
       </div>
 
       <div className="px-3 pb-2 text-[11px] font-normal tracking-wider text-aux">
-        历史会话
+        历史会话（本地已保存）
       </div>
 
       <div className="sidebar-scroll flex-1 space-y-1 overflow-y-auto px-2 pb-3">
@@ -105,7 +111,27 @@ export function Sidebar({
         ))}
       </div>
 
-      <div className="border-t border-white/10 p-3">
+      <div className="space-y-2 border-t border-white/10 p-3">
+        {onEditSystem && (
+          <button
+            type="button"
+            onClick={onEditSystem}
+            className="btn-motion btn-ghost flex w-full items-center justify-center gap-2 rounded-[12px] border px-3 py-2 text-sm text-[var(--text-main)]"
+          >
+            <Settings2 size={16} />
+            系统提示词
+          </button>
+        )}
+        {onExportSession && (
+          <button
+            type="button"
+            onClick={onExportSession}
+            className="btn-motion btn-ghost flex w-full items-center justify-center gap-2 rounded-[12px] border px-3 py-2 text-sm text-[var(--text-main)]"
+          >
+            <Download size={16} />
+            导出当前对话
+          </button>
+        )}
         <button
           type="button"
           onClick={onToggleDark}
