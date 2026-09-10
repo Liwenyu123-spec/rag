@@ -10,14 +10,14 @@ export function ThinkingBlock({ thinking, streaming }: { thinking: string; strea
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="flex w-full items-center gap-2 px-3 py-2 text-left text-[13px] text-[#94a3b8] transition hover:text-[#e8eefc]"
+        className="flex w-full items-center gap-2 px-3 py-2 text-left text-[13px] text-aux transition hover:text-[#e8eefc]"
       >
         {open ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
         <Sparkles size={14} className="text-ds-blue" />
         <span>{streaming && !thinking.includes('\n') ? '正在深度思考…' : '已深度思考'}</span>
       </button>
       {open && (
-        <div className="border-t border-white/10 px-3 py-2 text-[13px] leading-6 text-[#94a3b8] whitespace-pre-wrap">
+        <div className="border-t border-white/10 px-3 py-2 text-[13px] leading-6 text-aux whitespace-pre-wrap">
           {thinking || '…'}
         </div>
       )}

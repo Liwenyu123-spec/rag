@@ -23,7 +23,6 @@ export default function App() {
     })
   }, [chat.active?.messages, chat.loading])
 
-  // 玻璃拟态固定深色，避免浅色主题冲掉风格
   useEffect(() => {
     document.documentElement.classList.add('dark')
   }, [])
@@ -31,7 +30,7 @@ export default function App() {
   const messages: ChatMessage[] = chat.active?.messages ?? []
 
   return (
-    <div className="app-shell flex h-full text-ds-text">
+    <div className="app-shell flex h-full text-body">
       <Sidebar
         open={mobileOpen}
         collapsed={collapsed}
@@ -51,8 +50,8 @@ export default function App() {
           <div className="flex items-center gap-2">
             <MobileMenuButton onClick={() => setMobileOpen(true)} />
             <div>
-              <div className="text-sm font-semibold text-[#e8eefc]">DeepSeek 助手</div>
-              <div className="text-[11px] text-[#94a3b8]">提示词策略 · 安全防护</div>
+              <div className="text-sm text-title">DeepSeek 助手</div>
+              <div className="text-[11px] text-aux">提示词策略 · 安全防护</div>
             </div>
           </div>
           <ModeSelect value={chat.active?.mode ?? 'zero_shot'} onChange={chat.setMode} />
@@ -67,7 +66,7 @@ export default function App() {
               onSelfConsistency={() => chat.runSelfConsistency('为旅行背包品牌生成一句口号')}
             />
           ) : (
-            <div className="mx-auto flex w-full max-w-[768px] flex-col gap-5 px-4 py-6">
+            <div className="mx-auto flex w-full max-w-[768px] flex-col gap-6 px-4 py-6">
               {messages.map((m) => (
                 <MessageBubble key={m.id} message={m} />
               ))}

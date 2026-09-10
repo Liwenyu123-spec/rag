@@ -24,7 +24,7 @@ export function Composer({
   }, [value])
 
   return (
-    <div className="glass-composer-wrap border-t px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-3">
+    <div className="glass-composer-wrap border-t px-4 py-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
       <div className="composer-shell mx-auto flex max-w-[768px] items-end gap-2 px-3 py-2">
         <textarea
           ref={ref}
@@ -39,13 +39,13 @@ export function Composer({
               onSend()
             }
           }}
-          className="max-h-40 min-h-[44px] flex-1 resize-none bg-transparent py-2.5 text-[15px] leading-[1.7] text-[#e8eefc] outline-none placeholder:text-[#94a3b8] disabled:opacity-60"
+          className="max-h-40 min-h-[44px] flex-1 resize-none bg-transparent py-2.5 text-[15px] font-normal leading-[1.7] text-[#e8eefc] outline-none placeholder:text-[#8a8f99] disabled:opacity-60"
         />
         {loading ? (
           <button
             type="button"
             onClick={onStop}
-            className="btn-motion btn-danger mb-0.5 inline-flex h-10 items-center gap-1.5 rounded-[12px] bg-[#ef4444] px-3 text-sm font-medium text-white hover:bg-[#dc2626]"
+            className="btn-motion btn-danger mb-0.5 inline-flex h-10 items-center gap-1.5 rounded-[12px] bg-[#ef4444] px-3 text-sm font-normal text-white hover:bg-[#dc2626]"
           >
             <Square size={14} fill="currentColor" />
             停止生成
@@ -61,7 +61,7 @@ export function Composer({
           </button>
         )}
       </div>
-      <p className="mx-auto mt-2 max-w-[768px] text-center text-[11px] text-[#94a3b8]">
+      <p className="mx-auto mt-2 max-w-[768px] text-center text-[11px] text-aux">
         Enter 发送 · Shift+Enter 换行 · AI 内容请自行核实
       </p>
     </div>

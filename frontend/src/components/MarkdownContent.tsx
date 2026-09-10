@@ -22,19 +22,19 @@ function CodeBlock({
   }
 
   return (
-    <div className="group relative my-3 overflow-hidden rounded-[16px] border border-white/10 bg-[rgba(2,6,23,0.72)] shadow-[0_16px_40px_rgba(0,0,0,0.28)]">
-      <div className="flex items-center justify-between border-b border-white/10 px-3 py-1.5 text-xs text-white/60">
-        <span>{lang}</span>
+    <div className="code-block">
+      <div className="code-toolbar">
+        <span className="uppercase tracking-wide">{lang}</span>
         <button
           type="button"
           onClick={copy}
-          className="btn-motion inline-flex items-center gap-1 rounded-[12px] px-2 py-1 text-white/70 hover:bg-white/10 hover:text-white"
+          className="btn-motion inline-flex items-center gap-1 rounded-[12px] px-2 py-1 text-[#8a8f99] hover:bg-white/10 hover:text-[#e8eefc]"
         >
           {copied ? <Check size={14} /> : <Copy size={14} />}
           {copied ? '已复制' : '复制'}
         </button>
       </div>
-      <pre className="m-0 overflow-x-auto p-3 text-[13px] leading-6">
+      <pre>
         <code className={className}>{children}</code>
       </pre>
     </div>
@@ -45,7 +45,7 @@ export function MarkdownContent({ content }: { content: string }) {
   if (!content) return null
 
   return (
-    <div className="prose-chat break-words">
+    <div className="prose-chat break-words text-body">
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
         rehypePlugins={[rehypeHighlight]}
