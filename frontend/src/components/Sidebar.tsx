@@ -124,7 +124,7 @@ export function Sidebar({
     <>
       {/* Desktop */}
       <div className="relative hidden h-full shrink-0 md:block">
-        {panel}
+        {renderPanel(false)}
         {collapsed && (
           <button
             type="button"
@@ -156,9 +156,7 @@ export function Sidebar({
             open ? 'translate-x-0' : '-translate-x-full',
           )}
         >
-          <div className="h-full w-[240px] [&_aside]:w-[240px] [&_aside]:opacity-100">
-            {panel}
-          </div>
+          {renderPanel(true)}
         </div>
       </div>
     </>

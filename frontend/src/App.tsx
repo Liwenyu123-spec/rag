@@ -56,9 +56,9 @@ export default function App() {
           {messages.length === 0 ? (
             <EmptyState
               onPick={(text) => {
-                setInput(text)
+                void chat.send(text, true)
               }}
-              onSelfConsistency={() => chat.runSelfConsistency(input)}
+              onSelfConsistency={() => chat.runSelfConsistency('为旅行背包品牌生成一句口号')}
             />
           ) : (
             <div className="mx-auto flex w-full max-w-[768px] flex-col gap-5 px-4 py-6">
