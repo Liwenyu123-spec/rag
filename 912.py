@@ -102,7 +102,7 @@ upper_bound = 100
 # ==========================================
 
 # 【挖空 ①】
-abnormal_rows = ((df[['PH值','浊度']]<0|[['PH值','浊度']]>100).any(axis=1))
+abnormal_rows = ((df[['PH值','浊度']]<0)|([['PH值','浊度']]>100).any(axis=1))
 
 print("\n=== 检测到异常数据行 ===")
 print(abnormal_rows)
