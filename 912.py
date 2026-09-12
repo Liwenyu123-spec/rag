@@ -26,7 +26,7 @@ missing_cols = missing_count[missing_count / len(df) > 0.5].index
 # =============================
 
 # 【挖空 ②】
-df_cleaned = df.dropna(axis=1, thresh=len(df) * 0.5)
+df_cleaned = df.drop(columns=missing_cols)
 
 print("\n=== 删除高缺失列后 ===")
 print(df_cleaned)
