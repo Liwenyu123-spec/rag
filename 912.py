@@ -17,7 +17,7 @@ print(df)
 # ==============================================
 
 #  【挖空 ①】
-missing_count = df._____①_______
+missing_count = df.isnull().sum()
 
 missing_cols = missing_count[missing_count / len(df) > 0.5].index
 
@@ -36,7 +36,7 @@ print(df_cleaned)
 # ========================================================
 
 # 【挖空 ③】
-df.final = df_cleaned.___③___
+df.final = df_cleaned.drop_duplicates(keep='last')
 
 print("\n=== 删除重复值后 ===")
 print(df_final)
