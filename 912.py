@@ -36,7 +36,7 @@ print(df_cleaned)
 # ========================================================
 
 # 【挖空 ③】
-df.final = df_cleaned.drop_duplicates(keep='last')
+df_final = df_cleaned.drop_duplicates(keep='last')
 
 print("\n=== 删除重复值后 ===")
 print(df_final)
