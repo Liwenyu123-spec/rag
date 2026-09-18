@@ -96,31 +96,43 @@ client = chromadb.PersistentClient(path="./chroma_data")
 #     ids=["doc1", "doc2", "doc3"]
 # )
 
-# 方式2：直接添加向量（跳过嵌入生成）
 import numpy as np
-# 随机产生3个384维向量。
-collection = client.get_collection("ruzhi")
 
-vectors = np.random.random((3, 384)).astype('float32')  # 384维向量
+# 方式2：直接添加向量（跳过嵌入生成）
+# 注意：首次运行必须用 get_or_create；get_collection 只能取「已经存在」的集合
+collection = client.get_or_create_collection("ruzhi")
+
+vectors = np.random.random((3, 384)).astype("float32")  # 384维向量
+# 若重复运行，先删掉旧 id，避免 DuplicateID 报错
+try:
+    collection.delete(ids=["vec1", "vec2", "vec3"])
+except Exception:
+    pass
+
 collection.add(
-    embeddings=vectors,
+    embeddings=vectors.tolist(),  # chromadb 更稳妥用 list
     documents=["文档1", "文档2", "文档3"],
     metadatas=[{"type": "direct"}, {"type": "direct"}, {"type": "direct"}],
-    ids=["vec1", "vec2", "vec3"]
+    ids=["vec1", "vec2", "vec3"],
 )
+print("方式2完成：ruzhi 集合条数 =", collection.count())
 
-#
-# 方式3：批量添加（提高性能）
-# collection = client.get_or_create_collection("jihe")
-# batch_size = 10
-# documents = [f"文档{i}" for i in range(100)]   
-# metadatas = [{"index": i} for i in range(100)]
-# ids = [f"doc{i}" for i in range(100)]
-#
-# # 分批添加
-# for i in range(0, len(documents), batch_size):
-#     collection.add(
-#         documents=documents[i:i+batch_size],
-#         metadatas=metadatas[i:i+batch_size],
-#         ids=ids[i:i+batch_size]
-#     )
+# 方式3：批量添加（提高性能，走自动 embedding）
+collection3 = client.get_or_create_collection("jihe")
+batch_size = 10
+documents = [f"文档{i}" for i in range(100)]
+metadatas = [{"index": i} for i in range(100)]
+ids = [f"doc{i}" for i in range(100)]
+
+# 重复运行时清空旧数据，方便反复试验
+existing = collection3.get(include=[])
+if existing["ids"]:
+    collection3.delete(ids=existing["ids"])
+
+for i in range(0, len(documents), batch_size):
+    collection3.add(
+        documents=documents[i : i + batch_size],
+        metadatas=metadatas[i : i + batch_size],
+        ids=ids[i : i + batch_size],
+    )
+print("方式3完成：jihe 集合条数 =", collection3.count())
