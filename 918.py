@@ -40,3 +40,36 @@
 # print(f"\n查询结果：")
 # for i, (distance, idx) in enumerate(zip(distances[0], indices[0])):
 #    print(f"第{i+1}相似向量：索引{idx}，距离{distance:.4f}")
+
+import faiss
+import numpy as np
+
+dimension = 128 # 向量的维度
+nlist = 100  # 将空间划分为100个聚类中心
+
+# 第一步：创建量化器（底层的精确索引）
+quantizer = faiss.IndexFlatL2(dimension)
+
+# 第二步：创建IVF索引对象
+index = faiss.IndexIVFFlat(quantizer, dimension, nlist)
+
+# 第三步：训练索引（必需！），才能使用索引进行搜索。
+print("训练索引中...")
+# 1、生成10000个128维的向量的矩阵（就是库中的数据）
+vectors = np.random.random((10000, dimension)).astype('float32')
+index.train(vectors)  # 使用k-means找到聚类中心
+print("训练完成")
+
+# 第四步：添加数据到索引中。
+index.add(vectors)
+
+# 第五步：设置搜索参数
+index.nprobe = 10  # 搜索最近的10个聚类中心
+
+# 第六步：查询
+# 1）、生成需要查询的向量（相当于用户搜索的内容的向量）
+query = np.random.random((1, dimension)).astype('float32')
+# 2）、执行查询
+distances, indices = index.search(query, k=5)
+# 3）、输出距离最近的5个向量的索引，也就是语义相似的5个向量的索引。
+print(f"查询结果：{indices}")
