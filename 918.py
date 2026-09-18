@@ -81,33 +81,33 @@ import chromadb
 client = chromadb.PersistentClient(path="./chroma_data")
 
 # 方式1：添加文档（自动生成向量）
-collection = client.get_or_create_collection("kaoqin")
-collection.add(
-    documents=[
-        "正常工作时间：周一至周五：9:00 - 18:00。可以弹性处理一个小时。如：9:30-18:30，午休时间：12:00-13:30",
-        "年假：员工入职满一年后可以享受带薪年假 3 天，每增加一年工龄增加 1 天，最多不超过 10 天。年假需提前一周申请，经部门主管批准后安排。年假为带薪假",
-        "婚假：结婚证登记日期在试用期内的员工，可在试用期通过后申请婚假，婚假天数以员工合同签署地法律法规为准。需提供结婚证复印件。建议一次性休完。婚假为带薪假"
-    ],
-    metadatas=[
-            {"category": "工作时间"},
-            {"category": "年假" },
-            {"category": "婚假"}
-        ],
-    ids=["doc1", "doc2", "doc3"]
-)
+# collection = client.get_or_create_collection("kaoqin")
+# collection.add(
+#     documents=[
+#         "正常工作时间：周一至周五：9:00 - 18:00。可以弹性处理一个小时。如：9:30-18:30，午休时间：12:00-13:30",
+#         "年假：员工入职满一年后可以享受带薪年假 3 天，每增加一年工龄增加 1 天，最多不超过 10 天。年假需提前一周申请，经部门主管批准后安排。年假为带薪假",
+#         "婚假：结婚证登记日期在试用期内的员工，可在试用期通过后申请婚假，婚假天数以员工合同签署地法律法规为准。需提供结婚证复印件。建议一次性休完。婚假为带薪假"
+#     ],
+#     metadatas=[
+#             {"category": "工作时间"},
+#             {"category": "年假" },
+#             {"category": "婚假"}
+#         ],
+#     ids=["doc1", "doc2", "doc3"]
+# )
 
 # 方式2：直接添加向量（跳过嵌入生成）
-# import numpy as np
-# # 随机产生3个384维向量。
-# collection = client.get_collection("ruzhi")
-#
-# vectors = np.random.random((3, 384)).astype('float32')  # 384维向量
-# collection.add(
-#     embeddings=vectors,
-#     documents=["文档1", "文档2", "文档3"],
-#     metadatas=[{"type": "direct"}, {"type": "direct"}, {"type": "direct"}],
-#     ids=["vec1", "vec2", "vec3"]
-# )
+import numpy as np
+# 随机产生3个384维向量。
+collection = client.get_collection("ruzhi")
+
+vectors = np.random.random((3, 384)).astype('float32')  # 384维向量
+collection.add(
+    embeddings=vectors,
+    documents=["文档1", "文档2", "文档3"],
+    metadatas=[{"type": "direct"}, {"type": "direct"}, {"type": "direct"}],
+    ids=["vec1", "vec2", "vec3"]
+)
 
 #
 # 方式3：批量添加（提高性能）
