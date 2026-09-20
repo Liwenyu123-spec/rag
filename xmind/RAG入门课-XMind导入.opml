@@ -1,0 +1,428 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<opml version="2.0">
+  <head><title>RAG入门课</title></head>
+  <body>
+    <outline text="RAG入门课">
+    <outline text="01 认知阶段：大模型介绍、调用、RAG">
+    <outline text="一、人工智能介绍">
+    <outline text="从人工智能到大模型">
+    <outline text="AI 最外层：规则系统、搜索、专家系统、机器学习"/>
+    <outline text="ML 第二层：从数据学习，决策树、SVM、浅层网络"/>
+    <outline text="DL 第三层：深层神经网络，CNN、RNN、Transformer"/>
+    <outline text="大模型最内层：数十亿到万亿参数，基于 Transformer"/>
+    <outline text="关系：AI ⊃ ML ⊃ DL ⊃ LLM"/>
+    </outline>
+    <outline text="人工智能 vs 生成式人工智能">
+    <outline text="AI：让机器模拟智能、学习、推理、行动">
+    <outline text="早期：规则系统 MYCIN、搜索深蓝、知识图谱、符号主义"/>
+    <outline text="现代主流：机器学习尤其是深度学习"/>
+    <outline text="阶段：传统ML→深度学习→大模型涌现"/>
+    </outline>
+    <outline text="GAI 生成式AI：按提示生成文本图像音频视频代码">
+    <outline text="文本：ChatGPT、文心一言、DeepSeek"/>
+    <outline text="图像：Midjourney、Stable Diffusion"/>
+    <outline text="音频：Suno、语音合成"/>
+    <outline text="视频：Sora"/>
+    <outline text="状态：已成熟并广泛应用"/>
+    </outline>
+    <outline text="AGI 通用人工智能：能像人一样完成任意智力任务">
+    <outline text="特征：跨领域迁移、常识推理、元认知"/>
+    <outline text="状态：尚在理论探索，当前系统远未达到"/>
+    </outline>
+    </outline>
+    <outline text="机器学习与深度学习">
+    <outline text="ML">
+    <outline text="监督学习：有标签数据"/>
+    <outline text="无监督学习：找隐藏结构"/>
+    <outline text="强化学习：奖励惩罚学策略"/>
+    <outline text="案例：垃圾邮件过滤、推荐系统"/>
+    </outline>
+    <outline text="DL">
+    <outline text="ANN 人工神经网络"/>
+    <outline text="CNN 图像视觉"/>
+    <outline text="RNN 序列文本"/>
+    <outline text="Transformer 是 GPT、DeepSeek 等主流架构"/>
+    <outline text="神经网络只是拟人概念，不是真的模拟大脑"/>
+    </outline>
+    <outline text="NLP：词嵌入、Transformer、情感分析、翻译、语音助手"/>
+    <outline text="CV：分类检测、特征提取、安防相册自动驾驶"/>
+    </outline>
+    <outline text="大模型 vs 大语言模型">
+    <outline text="LLM：海量文本预训练，理解并生成语言"/>
+    <outline text="LM 大模型：参数大、数据大、通用强、有涌现"/>
+    <outline text="所有 LLM 都是大模型，但大模型不只有语言"/>
+    <outline text="已走向多模态：文本、视觉、语音"/>
+    </outline>
+    <outline text="爆炸式发展">
+    <outline text="2021 基础模型 Foundational Models"/>
+    <outline text="2022.11 ChatGPT 引爆对话应用"/>
+    <outline text="随后百模大战"/>
+    <outline text="2025 DeepSeek"/>
+    <outline text="常把 2023 称为 AI 元年"/>
+    </outline>
+    </outline>
+    <outline text="二、大模型介绍与调用">
+    <outline text="四个“大”">
+    <outline text="参数量大：记忆单元，单位 B=10亿"/>
+    <outline text="训练数据大：互联网多源多模态"/>
+    <outline text="算力消耗大：GPU/TPU 集群，训练数周到数月"/>
+    <outline text="应用效果大：NLP、视觉、语音都有突破"/>
+    </outline>
+    <outline text="Token">
+    <outline text="模型读写的最小信息块，不一定是字或词"/>
+    <outline text="DeepSeek 约：1英文字符≈0.3 token，1汉字≈0.6 token"/>
+    <outline text="经验：1000 token ≈ 750 英文词 或 400-500 汉字"/>
+    <outline text="重要性：计费单位、上下文上限、超出就遗忘"/>
+    </outline>
+    <outline text="国际阵营">
+    <outline text="OpenAI GPT 系列：综合强，擅长工具和 Agent"/>
+    <outline text="o 系列：推理数学分析强，成本高"/>
+    <outline text="Anthropic Claude：编程、长上下文、安全场景"/>
+    <outline text="Google Gemini：原生多模态、性价比"/>
+    <outline text="xAI Grok：与 X 平台集成"/>
+    </outline>
+    <outline text="国产阵营">
+    <outline text="DeepSeek：开源、推理强、训练成本低"/>
+    <outline text="Kimi：长文本、法律条文"/>
+    <outline text="智谱 GLM：中英双语、Agent、国产硬件"/>
+    <outline text="通义千问 Qwen：开源生态、中文场景"/>
+    <outline text="豆包：语音与实时交互、MoE"/>
+    <outline text="文心一言、商汤、MiniMax 等"/>
+    </outline>
+    <outline text="怎么调用">
+    <outline text="OpenAI 官方">
+    <outline text="developers.openai.com 创建 API Key"/>
+    <outline text="需充值，常要境外卡"/>
+    <outline text="也可走国内中转或直接用国产模型"/>
+    </outline>
+    <outline text="阿里百炼 推荐入门">
+    <outline text="国内直连、新人免费额度、模型全、生态完善"/>
+    <outline text="兼容 OpenAI 接口"/>
+    <outline text="Endpoint: dashscope compatible-mode v1"/>
+    <outline text="模型：qwen-turbo/plus/max、deepseek-r1"/>
+    <outline text="Key 放环境变量 DASHSCOPE_API_KEY"/>
+    </outline>
+    <outline text="OpenAI 库三步">
+    <outline text="1 创建客户端：base_url + api_key"/>
+    <outline text="2 调 chat：model + messages"/>
+    <outline text="3 取结果"/>
+    <outline text="messages：system / user / assistant / tool"/>
+    <outline text="stream=true 流式输出，防超时、体验更好"/>
+    <outline text="带上历史 messages 才能多轮不跑偏"/>
+    </outline>
+    </outline>
+    </outline>
+    <outline text="三、部署方式">
+    <outline text="云端 API">
+    <outline text="优点：不养硬件、顶级模型、厂商保障"/>
+    <outline text="缺点：数据出网、按量计费、网络延迟"/>
+    </outline>
+    <outline text="云上自托管">
+    <outline text="引擎：vLLM、TGI、llama.cpp、Ollama"/>
+    <outline text="对外：Nginx、FastAPI、gRPC"/>
+    <outline text="优点：可控、可监控、可私有化"/>
+    <outline text="缺点：要自己运维显存扩容，需要 MLOps"/>
+    </outline>
+    <outline text="本地与边缘">
+    <outline text="工具：Ollama、LM Studio、MLX、llama.cpp、vLLM"/>
+    <outline text="常用 7B/14B + 量化"/>
+    <outline text="优点：隐私、无 API 费、可离线"/>
+    <outline text="挑战：硬件和模型管理"/>
+    </outline>
+    <outline text="Ollama">
+    <outline text="定位：本地大模型运行容器，不训练只推理"/>
+    <outline text="一条命令拉模型、一条命令对话"/>
+    <outline text="改模型保存路径，别塞满 C 盘"/>
+    <outline text="内存：7B约8G，13B约16G，33B约32G；盘预留50G"/>
+    <outline text="默认只监听 127.0.0.1:11434"/>
+    <outline text="局域网：OLLAMA_HOST=0.0.0.0，OLLAMA_ORIGINS=*"/>
+    <outline text="Python 调本地 HTTP，可接 FastAPI 流式"/>
+    <outline text="课上要求：知道即可，后面用 vLLM"/>
+    </outline>
+    </outline>
+    <outline text="四、大模型应用与 LlamaIndex">
+    <outline text="四种应用">
+    <outline text="Prompt 工程：会说话，格式和逻辑才稳"/>
+    <outline text="对话系统：加 Memory，记住多轮上下文"/>
+    <outline text="RAG：外挂知识库，先检索再生成，压幻觉"/>
+    <outline text="Agent：规划 + 调工具 API，当手脚用"/>
+    </outline>
+    <outline text="构建难点">
+    <outline text="私有数据怎么接上 LLM"/>
+    <outline text="长对话上下文怎么管"/>
+    <outline text="怎么调外部 API 和数据库"/>
+    <outline text="多步推理与任务分解"/>
+    <outline text="可观察性：怎么调试优化"/>
+    </outline>
+    <outline text="LlamaIndex 六模块">
+    <outline text="Data Connectors 数据加载"/>
+    <outline text="Index 索引"/>
+    <outline text="Retriever 检索"/>
+    <outline text="Query Engine 查询引擎"/>
+    <outline text="Agents 智能体"/>
+    <outline text="Workflows 工作流"/>
+    </outline>
+    <outline text="框架调用模型">
+    <outline text="DeepSeek / 千问 DashScope / Ollama 都要单独装包"/>
+    <outline text="complete 单轮补全；chat 多轮对话，实际多用 chat"/>
+    </outline>
+    <outline text="RAG 在 LlamaIndex 里">
+    <outline text="建库：Reader 加载 → Splitter 切块 → Embedding → Chroma 存储"/>
+    <outline text="检索：加载向量库 → 设回答模型 → Query Engine"/>
+    <outline text="切分与向量化在建索引时真正执行，前面只是配置"/>
+    <outline text="本地嵌入：nomic-embed-text 或 qwen3-embedding"/>
+    <outline text="云端嵌入：DashScope 千问"/>
+    <outline text="可加记忆做成知识型 Chatbot"/>
+    </outline>
+    <outline text="作业">
+    <outline text="FastAPI 提供接口"/>
+    <outline text="页面上传文档，向量化入库"/>
+    <outline text="简易对话窗口聊天"/>
+    </outline>
+    </outline>
+    </outline>
+    <outline text="02 提示词工程">
+    <outline text="概述">
+    <outline text="Prompt：给 AI 的指令"/>
+    <outline text="Prompt Engineering：设计、测试、优化指令的方法"/>
+    <outline text="差例子：写一篇关于AI的文章"/>
+    <outline text="好例子：角色+字数+读者+案例+工具+语气"/>
+    </outline>
+    <outline text="优质 Prompt 四要素">
+    <outline text="角色 Role：身份和专业领域"/>
+    <outline text="任务 Task：要做什么、输出什么"/>
+    <outline text="上下文 Context：受众、平台、背景"/>
+    <outline text="约束 Constraints：格式、长度、禁忌、风格"/>
+    </outline>
+    <outline text="CLEAR 原则">
+    <outline text="Context 上下文"/>
+    <outline text="Length 长度"/>
+    <outline text="Examples 示例"/>
+    <outline text="Audience 受众"/>
+    <outline text="Role 角色"/>
+    </outline>
+    <outline text="基础技巧">
+    <outline text="明确：生成3条健康饮食微博，而不是写一些饮食"/>
+    <outline text="结构化：分点分段"/>
+    <outline text="示例引导：给输入输出样例"/>
+    </outline>
+    <outline text="调优实战技法">
+    <outline text="环境：pip install openai dashscope，配置 DASHSCOPE_API_KEY"/>
+    <outline text="零样本 Zero-Shot：直接下指令，适合简单任务"/>
+    <outline text="少样本 Few-Shot：给几个输入输出样例，锁格式风格"/>
+    <outline text="思维链 COT：先一步步思考，适合复杂推理"/>
+    <outline text="自我一致性：多生成几个再投票或自选最优"/>
+    <outline text="思维树 ToT：多分支发散→评估剪枝→再执行"/>
+    </outline>
+    <outline text="攻击防范 了解即可">
+    <outline text="提示注入：输入里塞指令覆盖系统设定"/>
+    <outline text="越狱 Jailbreak：绕过安全限制"/>
+    <outline text="数据泄露：套取训练或系统敏感信息"/>
+    <outline text="防御：输入净化、多层审核、沙箱限权、数据脱敏"/>
+    <outline text="课上代码：content_sanitize.py、content_moderation.py"/>
+    </outline>
+    <outline text="案例">
+    <outline text="电商产品描述 ecprompt.py">
+    <outline text="角色：电商金牌文案专家"/>
+    <outline text="少样本：输入-思考-输出范例"/>
+    <outline text="COT：先分析痛点再转卖点"/>
+    <outline text="temperature=0.7 平衡创意与稳定"/>
+    </outline>
+    <outline text="社交媒体内容策划">
+    <outline text="ToT：3个切入角度"/>
+    <outline text="评估爆款潜力后选最佳"/>
+    <outline text="输出一周5个选题 Markdown 表"/>
+    <outline text="加自我反思一步"/>
+    </outline>
+    </outline>
+    <outline text="最佳实践">
+    <outline text="原则：明确、完整、一致、安全"/>
+    <outline text="策略：先简单再复杂、迭代、量化评估、记有效模板"/>
+    <outline text="趋势：自动生成提示、多模态、实时反馈、个性化"/>
+    </outline>
+    </outline>
+    <outline text="03 RAG整体认知">
+    <outline text="是什么">
+    <outline text="Retrieval-Augmented Generation 检索增强生成"/>
+    <outline text="生成前先从外部知识库检索相关文档，再当上下文"/>
+    <outline text="本质：检索器 Retriever + 生成器 Generator"/>
+    <outline text="比喻：开卷考试，先翻书再答题"/>
+    <outline text="不是替代大模型，是给它装实时可信可控的记忆外挂"/>
+    </outline>
+    <outline text="核心流程">
+    <outline text="Query：用户问题，可能口语、指代不明"/>
+    <outline text="Embedding：同一套向量模型把问题变成高维坐标"/>
+    <outline text="Retrieval：余弦相似度召回 Top-K，这一步决定原材料质量"/>
+    <outline text="Context：拼接片段+约束提示，必要时裁剪适配窗口"/>
+    <outline text="LLM：当摘要者和解释者，不是当记忆库"/>
+    <outline text="Answer：返回答案，最好带来源便于核查"/>
+    </outline>
+    <outline text="三大痛点">
+    <outline text="幻觉：没知识就编。RAG 要求只基于检索内容，没有就说不知道"/>
+    <outline text="时效差：训练有截止日期。RAG 更新知识库即可，不必重训"/>
+    <outline text="私有数据：云端模型难接内网。RAG 可本地 LLM+嵌入+向量库"/>
+    <outline text="误区：RAG 不能 100% 消幻觉，取决于检索精度和 Prompt 约束"/>
+    </outline>
+    <outline text="落地场景">
+    <outline text="本地私有问答：笔记、公司手册，不联网"/>
+    <outline text="PDF 问答：论文教材说明书，先定位再生成"/>
+    <outline text="智能客服：FAQ 售后流程，FastAPI 封接口"/>
+    <outline text="多知识库：PDF+Word+网页一次提问全检索"/>
+    </outline>
+    <outline text="经典五步">
+    <outline text="1 文档加载：PDF/Word/TXT/网页变成文本"/>
+    <outline text="2 文本分割：chunk_size 与 chunk_overlap，适配窗口、提高检索精度"/>
+    <outline text="3 向量化 Embedding：文本变语义向量，常用 BGE/M3E"/>
+    <outline text="4 向量存储：FAISS/Chroma，毫秒级相似检索"/>
+    <outline text="5 检索+生成：问题向量化→召回→拼 Prompt→LLM 回答"/>
+    </outline>
+    <outline text="数据流三块">
+    <outline text="数据准备：解析、清洗页眉广告、切块重叠、提元数据"/>
+    <outline text="检索系统：向量检索 + BM25 稀疏 + 混合检索"/>
+    <outline text="生成系统：结构化注入检索结果、禁止编造、后处理加引用"/>
+    </outline>
+    <outline text="五大范式 学霸养成记">
+    <outline text="Naive RAG：小学生翻书。线性流程，原型快，检索粗、易幻觉"/>
+    <outline text="Advanced RAG：初中生找得更准。查询改写、重排序，工业主流"/>
+    <outline text="Modular RAG：高中生灵活用工具。模块路由调度，LangChain/LlamaIndex"/>
+    <outline text="Graph RAG：大学生理解关系。实体关系多跳推理，微软 GraphRAG"/>
+    <outline text="Agentic RAG：研究生自己规划。拆任务、调工具、不足再检索"/>
+    </outline>
+    <outline text="RAG vs 微调">
+    <outline text="知识常更新、要引用、要私有化 → RAG"/>
+    <outline text="知识固定、要低延迟、要改风格口吻 → 微调更合适"/>
+    <outline text="可结合：微调让模型更会用检索资料，RAG 注入新知识"/>
+    <outline text="思考：校园通知每月更新，该用 RAG"/>
+    </outline>
+    <outline text="局限">
+    <outline text="检索质量决定上限，没召回到生成再强也没用"/>
+    <outline text="上下文窗口：多处证据可能被截断"/>
+    <outline text="检索噪声会误导模型"/>
+    <outline text="多了检索环节，延迟变长，需缓存或异步"/>
+    <outline text="中文和术语对 Embedding 与切分策略很敏感"/>
+    </outline>
+    </outline>
+    <outline text="04 Embedding 向量表示">
+    <outline text="向量是什么">
+    <outline text="有大小和方向的量，如二维 (x,y)"/>
+    <outline text="Embedding：用数值向量表示一个对象"/>
+    </outline>
+    <outline text="余弦相似度">
+    <outline text="比的是方向像不像，范围约 -1 到 1，越近 1 越像"/>
+    <outline text="点积：对应维度相乘再相加，共同高频词越多越大"/>
+    <outline text="模长：句子有多长多丰富"/>
+    <outline text="公式：点积 / (A模长 × B模长)"/>
+    <outline text="词频例子：分词→词表→词频向量→算余弦"/>
+    <outline text="一句话：共同词又多又频，除以各自有多长"/>
+    </outline>
+    <outline text="好的语义向量">
+    <outline text="语义关系被编码成空间中的方向，且跨词通用"/>
+    <outline text="性别轴：king - man + woman ≈ queen"/>
+    <outline text="时态轴：walked - walking ≈ swam - swimming"/>
+    <outline text="词向量把语义变成算术"/>
+    </outline>
+    <outline text="LLM 里怎么用">
+    <outline text="把词变成上下文感知的高维向量，再用余弦衡量亲疏"/>
+    <outline text="距离越小含义越近，是搜索聚类情感分析的基础"/>
+    </outline>
+    <outline text="三大作用">
+    <outline text="输入端语义编码：token→向量，注意力才能算"/>
+    <outline text="RAG 语义检索：问题向量对文档向量，相似度匹配、去重聚类"/>
+    <outline text="跨模态：图文可进同一空间，图文检索、零样本分类"/>
+    </outline>
+    <outline text="Word2Vec 了解">
+    <outline text="CBOW：用上下文猜中心词，众人推举一个代表"/>
+    <outline text="Skip-gram：用中心词猜上下文，一个代表辐射众人"/>
+    <outline text="结构：三层网络，One-hot / Multi-hot，隐藏层 N"/>
+    <outline text="词向量就在隐藏层权重矩阵里，相当于查找表"/>
+    </outline>
+    </outline>
+    <outline text="05 向量数据库">
+    <outline text="第一部分 向量检索基础">
+    <outline text="传统关键词搜：不懂笔记本≈电脑，跨语言差，缺语境"/>
+    <outline text="向量搜：文本图像变成高维向量，在空间里比远近"/>
+    <outline text="为何专用库：近似搜索换速度，HNSW/IVF 专用索引，可 GPU 批量"/>
+    <outline text="指标：延迟、召回精度、内存、索引磁盘占用"/>
+    </outline>
+    <outline text="第二部分 FAISS">
+    <outline text="Facebook 开源相似性搜索库，C++ 内核 + Python 接口"/>
+    <outline text="可上十亿级向量，被 Milvus、Qdrant 等采用"/>
+    <outline text="IndexFlat 精确搜">
+    <outline text="FlatL2 欧氏距离、FlatIP 内积、余弦=IP+向量归一化"/>
+    <outline text="适合小于约10万、要极准、当精度基准"/>
+    </outline>
+    <outline text="IndexIVFFlat 倒排">
+    <outline text="先聚类成 Voronoi 区，查询只搜最近几个簇"/>
+    <outline text="nlist 聚类中心数，常取 sqrt(N)"/>
+    <outline text="nprobe 查几个簇：1最快最糙，等于 nlist 就变精确搜"/>
+    </outline>
+    <outline text="IndexHNSWFlat 图索引">
+    <outline text="分层可导航小世界，灵感来自六度分隔和高速公路"/>
+    <outline text="上层快速跳、下层精细搜"/>
+    <outline text="多数系统默认推荐，精度和速度较均衡"/>
+    </outline>
+    <outline text="选型：HNSW 通用；IVF 更适合超大规模且资源紧"/>
+    </outline>
+    <outline text="常见向量库对照">
+    <outline text="Milvus：分布式，海量，HNSW/IVF/FLAT"/>
+    <outline text="Pinecone：全托管，内部偏 HNSW"/>
+    <outline text="Weaviate：HNSW，关键词+语义混合"/>
+    <outline text="Qdrant：Rust，过滤和地理查询"/>
+    <outline text="Chroma：轻量，LLM 应用友好，可嵌入式"/>
+    <outline text="Faiss：库不是完整数据库，研究与大规模实验"/>
+    <outline text="ES 向量插件、Deep Lake、Vearch 等"/>
+    </outline>
+    <outline text="第三部分 Chroma">
+    <outline text="AI 原生向量库，4 个核心 API，对接 LangChain/LlamaIndex"/>
+    <outline text="add 参数">
+    <outline text="ids 必填，唯一，重复默认跳过"/>
+    <outline text="documents 原文，可自动嵌入"/>
+    <outline text="metadatas 附加信息，供 where 过滤"/>
+    <outline text="embeddings 也可直接塞预计算向量"/>
+    </outline>
+    <outline text="query 参数">
+    <outline text="query_texts 或 query_embeddings 二选一"/>
+    <outline text="n_results 返回条数，默认 10"/>
+    <outline text="where 按元数据过滤"/>
+    <outline text="where_document 按原文包含过滤"/>
+    <outline text="include 控制返回 documents/metadatas/embeddings/distances"/>
+    </outline>
+    <outline text="距离函数创建集合时指定，之后不能改：L2 / IP / cosine"/>
+    <outline text="可换嵌入：OpenAI 或千问 DashScope"/>
+    <outline text="可当 HTTP 服务跑，像启动 MySQL 再远程连"/>
+    <outline text="支持 update / delete"/>
+    </outline>
+    <outline text="第四部分 实战">
+    <outline text="目标：自然语言查询，返回最相关文档"/>
+    <outline text="技术栈：Chroma + 千问嵌入 + FastAPI"/>
+    <outline text="阶段1：分块→get_embedding→和原文一起放进索引"/>
+    <outline text="阶段2：问题向量化→索引得下标→从 documents 取回原文"/>
+    <outline text="文档：faiss.ai 、 docs.trychroma.com"/>
+    </outline>
+    </outline>
+    <outline text="06 配套资料 百度网盘">
+    <outline text="code / rag_pros0908 对着讲义敲">
+    <outline text="01_模型调用"/>
+    <outline text="02_Ollama"/>
+    <outline text="03_聊天机器人"/>
+    <outline text="04_LlamaIndex框架"/>
+    <outline text="05_提示词工程"/>
+    <outline text="06_提示词综合案例"/>
+    <outline text="07_聊天机器人安全校验"/>
+    <outline text="08_向量"/>
+    <outline text="09_向量数据库"/>
+    </outline>
+    <outline text="video：5 个视频，对应向量库那一课"/>
+    <outline text="另有 笔记 文件；.env 是密钥配置，不要提交公开仓库"/>
+    </outline>
+    <outline text="学习路径 从左到右">
+    <outline text="1 认知：搞懂 AI/LLM、百炼调用、Ollama、四种应用"/>
+    <outline text="2 提示词：四要素 + COT/Few-Shot，先跑电商和社媒案例"/>
+    <outline text="3 RAG认知：背下五步流程和检索决定上限"/>
+    <outline text="4 Embedding：会算余弦，知道向量是语义坐标"/>
+    <outline text="5 向量库：Flat/IVF/HNSW 选型，Chroma 增查改删"/>
+    <outline text="6 用网盘 01→09 把知识库问答作业做出来"/>
+    </outline>
+    </outline>
+  </body>
+</opml>
