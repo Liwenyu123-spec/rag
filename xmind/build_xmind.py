@@ -23,178 +23,343 @@ def topic(title, children=None, note=None):
 
 TREE = topic(
     "RAG入门课",
-    note=(
-        "来源：5篇飞书讲义 + 1个百度网盘配套资料。\n"
-        "主线：认识大模型 → 提示词 → RAG认知 → Embedding → 向量库 → 代码实战。\n"
-        "建议按 01→09 目录对着讲义敲代码。"
-    ),
+    note="根据5篇飞书讲义整理：认知阶段、提示词、RAG整体认知、Embedding、向量数据库。",
     children=[
         topic(
             "01 认知阶段：大模型介绍、调用、RAG",
-            note="飞书：01-认知阶段（大模型介绍，调用，RAG）",
+            note="飞书文档：01-认知阶段（大模型介绍，调用，RAG）",
             children=[
                 topic(
                     "一、人工智能介绍",
                     children=[
                         topic(
-                            "从人工智能到大模型",
+                            "1 从人工智能到大模型",
                             children=[
-                                topic("AI 最外层：规则系统、搜索、专家系统、机器学习"),
-                                topic("ML 第二层：从数据学习，决策树、SVM、浅层网络"),
-                                topic("DL 第三层：深层神经网络，CNN、RNN、Transformer"),
-                                topic("大模型最内层：数十亿到万亿参数，基于 Transformer"),
-                                topic("关系：AI ⊃ ML ⊃ DL ⊃ LLM"),
+                                topic("关系式：AI ⊃ 机器学习ML ⊃ 深度学习DL ⊃ 大模型LLM"),
+                                topic(
+                                    "四层含义",
+                                    children=[
+                                        topic("最外层 AI：最广，让机器模拟人类智能，含规则系统、搜索、专家系统、机器学习"),
+                                        topic("第二层 ML：从数据自动学习规律，含决策树、SVM、随机森林、浅层神经网络"),
+                                        topic("第三层 DL：深层神经网络自动提特征，含 CNN、RNN、Transformer"),
+                                        topic("最内层 大模型：数十亿至数万亿参数，基于 Transformer，如 GPT、Kimi、文心一言"),
+                                    ],
+                                ),
+                                topic("说明：大模型本质是深度学习的一种实现，因规模涌现和技术生态常被单独强调"),
                             ],
                         ),
                         topic(
-                            "人工智能 vs 生成式人工智能",
+                            "2 人工智能和生成式人工智能",
+                            note="AI 和 GAI 都是提出目标，GAI 的目标更具体",
                             children=[
                                 topic(
-                                    "AI：让机器模拟智能、学习、推理、行动",
+                                    "2.1 人工智能 AI",
+                                    note="跨计算机、数据、统计、工程、语言学、神经科学、哲学、心理学，研究能学习、推理、行动的机器",
                                     children=[
-                                        topic("早期：规则系统 MYCIN、搜索深蓝、知识图谱、符号主义"),
-                                        topic("现代主流：机器学习尤其是深度学习"),
-                                        topic("阶段：传统ML→深度学习→大模型涌现"),
+                                        topic(
+                                            "历史上长期依赖非机器学习",
+                                            children=[
+                                                topic("规则系统：IF-THEN 硬编码，如专家系统 MYCIN"),
+                                                topic("搜索算法：1997 深蓝击败卡斯帕罗夫，暴力搜索+符号主义"),
+                                                topic("知识图谱：结构化知识推理，如 Google Knowledge Graph"),
+                                                topic("符号主义 AI：逻辑推理、知识表示"),
+                                            ],
+                                        ),
+                                        topic(
+                                            "机器学习是主流实现方式",
+                                            children=[
+                                                topic("2010年前传统ML：数据少，特征靠人工设计"),
+                                                topic("2010-2020 深度学习：自动特征提取，大数据驱动"),
+                                                topic("2020至今大模型：通用预训练，出现涌现能力"),
+                                            ],
+                                        ),
                                     ],
                                 ),
                                 topic(
-                                    "GAI 生成式AI：按提示生成文本图像音频视频代码",
+                                    "2.1.3 生成式人工智能 GAI",
                                     children=[
-                                        topic("文本：ChatGPT、文心一言、DeepSeek"),
-                                        topic("图像：Midjourney、Stable Diffusion"),
-                                        topic("音频：Suno、语音合成"),
-                                        topic("视频：Sora"),
-                                        topic("状态：已成熟并广泛应用"),
+                                        topic("定义：按用户提示，学习海量数据模式，生成以前不存在的文本、图像、音频、视频、代码"),
+                                        topic("文本生成：ChatGPT、文心一言、DeepSeek"),
+                                        topic("图像生成：Midjourney、Stable Diffusion"),
+                                        topic("音频生成：Suno AI、语音合成"),
+                                        topic("视频生成：Sora"),
+                                        topic("当前状态：已成熟并广泛应用"),
                                     ],
                                 ),
                                 topic(
-                                    "AGI 通用人工智能：能像人一样完成任意智力任务",
+                                    "2.1.4 通用人工智能 AGI",
                                     children=[
-                                        topic("特征：跨领域迁移、常识推理、元认知"),
-                                        topic("状态：尚在理论探索，当前系统远未达到"),
+                                        topic("定义：假设中能像人一样理解和学习任何智力任务，不限特定领域"),
+                                        topic("跨领域迁移：学会下棋后把策略用到经济问题上"),
+                                        topic("常识推理：理解杯子推下桌子会摔碎"),
+                                        topic("元认知：知道自己不知道，再去学"),
+                                        topic("当前状态：理论探索阶段，现有系统远未达到，是长期目标"),
                                     ],
                                 ),
                             ],
                         ),
                         topic(
-                            "机器学习与深度学习",
+                            "2.2 机器学习和深度学习",
+                            note="都是手段，深度学习是更强的手段",
                             children=[
                                 topic(
-                                    "ML",
+                                    "机器学习 ML",
                                     children=[
-                                        topic("监督学习：有标签数据"),
-                                        topic("无监督学习：找隐藏结构"),
-                                        topic("强化学习：奖励惩罚学策略"),
-                                        topic("案例：垃圾邮件过滤、推荐系统"),
+                                        topic("核心理念：无需显式编程即可从数据学习"),
+                                        topic("监督学习：用已标注数据训练，如标了猫的照片"),
+                                        topic("无监督学习：无标签中找结构，如客户分群"),
+                                        topic("强化学习：与环境互动，靠奖励惩罚学策略，如游戏AI"),
+                                        topic("案例：垃圾邮件过滤、Netflix推荐、股市预测"),
                                     ],
                                 ),
                                 topic(
-                                    "DL",
+                                    "深度学习 DL",
                                     children=[
-                                        topic("ANN 人工神经网络"),
-                                        topic("CNN 图像视觉"),
-                                        topic("RNN 序列文本"),
-                                        topic("Transformer 是 GPT、DeepSeek 等主流架构"),
-                                        topic("神经网络只是拟人概念，不是真的模拟大脑"),
+                                        topic("模仿神经元分层：输入层、多个隐藏层、输出层"),
+                                        topic("ANN：算法支柱，模拟信号传递"),
+                                        topic("CNN：图像和视觉"),
+                                        topic("RNN：序列，如时间序列、文本"),
+                                        topic("案例：人脸解锁、医疗影像、自动驾驶"),
+                                        topic("神经网络：拟人概念，分层是不同维度的信息处理，并非真模拟大脑"),
+                                        topic("Transformer：ChatGPT、DeepSeek 等主流模型的架构"),
                                     ],
                                 ),
-                                topic("NLP：词嵌入、Transformer、情感分析、翻译、语音助手"),
-                                topic("CV：分类检测、特征提取、安防相册自动驾驶"),
+                                topic(
+                                    "NLP 自然语言处理",
+                                    children=[
+                                        topic("让机器理解、解释、生成人类语言，处理语气情感语境"),
+                                        topic("词嵌入：词变成向量，表示语义远近"),
+                                        topic("Transformer：可大规模并行训练，是大模型核心"),
+                                        topic("情感分析：从社交文本判断情绪"),
+                                        topic("案例：ChatGPT、Google翻译、Siri Alexa 小艺"),
+                                    ],
+                                ),
+                                topic(
+                                    "CV 计算机视觉",
+                                    children=[
+                                        topic("让计算机看懂视觉世界：识别、定位、描述"),
+                                        topic("图像分类与目标检测：是什么、在哪里"),
+                                        topic("特征提取：边缘、轮廓等关键模式"),
+                                        topic("案例：安防行人检测、相册人脸分类、自动驾驶道路识别"),
+                                    ],
+                                ),
                             ],
                         ),
                         topic(
-                            "大模型 vs 大语言模型",
+                            "2.3 大模型和大语言模型",
                             children=[
-                                topic("LLM：海量文本预训练，理解并生成语言"),
-                                topic("LM 大模型：参数大、数据大、通用强、有涌现"),
-                                topic("所有 LLM 都是大模型，但大模型不只有语言"),
-                                topic("已走向多模态：文本、视觉、语音"),
+                                topic(
+                                    "LLM 大语言模型",
+                                    children=[
+                                        topic("用大量文本训练的深度学习模型，能生成或理解自然语言"),
+                                        topic("核心：大规模无监督训练，学习语言模式和结构"),
+                                        topic("能力：拼写语法、摘要、翻译、情感分析、对话、推荐"),
+                                        topic("预训练后具备通用建模和泛化能力"),
+                                    ],
+                                ),
+                                topic(
+                                    "LM 大模型",
+                                    children=[
+                                        topic("参数规模：通常数十亿到数千亿"),
+                                        topic("训练数据：互联网文本、书籍、代码等"),
+                                        topic("通用能力：理解、推理、生成、分类"),
+                                        topic("涌现能力：规模到一定程度后出现意想不到的能力"),
+                                    ],
+                                ),
+                                topic(
+                                    "区别与一句话总结",
+                                    children=[
+                                        topic("LLM 专注自然语言：理解、生成、翻译、推理文本"),
+                                        topic("LLM 是大模型家族里最成熟、应用最广的分支"),
+                                        topic("大模型已发展为多模态，不止语言"),
+                                        topic("所有大语言模型都是大模型，但并非所有大模型都是大语言模型"),
+                                    ],
+                                ),
                             ],
                         ),
                         topic(
-                            "爆炸式发展",
+                            "2.4 大模型的爆炸式发展",
                             children=[
-                                topic("2021 基础模型 Foundational Models"),
-                                topic("2022.11 ChatGPT 引爆对话应用"),
-                                topic("随后百模大战"),
+                                topic("有人把大模型发明类比为人类学会用火"),
+                                topic("2021 斯坦福提出 Foundational Models 基础模型"),
+                                topic("2022.11 OpenAI 发布 ChatGPT，对话交互，能写论文邮件脚本代码翻译"),
+                                topic("随后百模大战，成为技术和公众热点"),
                                 topic("2025 DeepSeek"),
-                                topic("常把 2023 称为 AI 元年"),
+                                topic("常把 2023 称为 AI 元年：问答、辅助编程、看图、创作进步极快"),
                             ],
                         ),
                     ],
                 ),
                 topic(
-                    "二、大模型介绍与调用",
+                    "二、大模型介绍及其常用大模型",
                     children=[
+                        topic(
+                            "1.1 基本概念",
+                            children=[
+                                topic("超大参数神经网络，通常基于 Transformer"),
+                                topic("在海量文本上自监督训练，通过预测下一个 token 学习语言和知识"),
+                                topic(
+                                    "什么是 token",
+                                    children=[
+                                        topic("模型处理文本的最小信息块，不完全等于字或词"),
+                                        topic("可以是完整英文单词、一个汉字、单词片段、标点或空格"),
+                                        topic("如 unbelievable 可能拆成 un + believ + able"),
+                                        topic("各模型分词方式不同"),
+                                        topic("DeepSeek 约：1个英文字符≈0.3 token；1个中文字符≈0.6 token"),
+                                        topic("经验：1000 token ≈ 750 英文词，或 400-500 汉字"),
+                                        topic("可视化：gpt-tokenizer.dev 可看 GPT 如何切 token"),
+                                    ],
+                                ),
+                                topic(
+                                    "为什么 token 重要",
+                                    children=[
+                                        topic("计费单位：输入+输出都按 token 收费"),
+                                        topic("上下文限制：一次能处理的 token 有上限"),
+                                        topic("超出窗口会遗忘之前内容"),
+                                        topic("例子：15万汉字约20万 token，早期 4K 窗口读不完，百万级窗口可以"),
+                                    ],
+                                ),
+                                topic("类比：token 像乐高积木，先拆开理解，再拼成回复"),
+                            ],
+                        ),
                         topic(
                             "四个“大”",
                             children=[
-                                topic("参数量大：记忆单元，单位 B=10亿"),
-                                topic("训练数据大：互联网多源多模态"),
-                                topic("算力消耗大：GPU/TPU 集群，训练数周到数月"),
-                                topic("应用效果大：NLP、视觉、语音都有突破"),
-                            ],
-                        ),
-                        topic(
-                            "Token",
-                            children=[
-                                topic("模型读写的最小信息块，不一定是字或词"),
-                                topic("DeepSeek 约：1英文字符≈0.3 token，1汉字≈0.6 token"),
-                                topic("经验：1000 token ≈ 750 英文词 或 400-500 汉字"),
-                                topic("重要性：计费单位、上下文上限、超出就遗忘"),
-                            ],
-                        ),
-                        topic(
-                            "国际阵营",
-                            children=[
-                                topic("OpenAI GPT 系列：综合强，擅长工具和 Agent"),
-                                topic("o 系列：推理数学分析强，成本高"),
-                                topic("Anthropic Claude：编程、长上下文、安全场景"),
-                                topic("Google Gemini：原生多模态、性价比"),
-                                topic("xAI Grok：与 X 平台集成"),
-                            ],
-                        ),
-                        topic(
-                            "国产阵营",
-                            children=[
-                                topic("DeepSeek：开源、推理强、训练成本低"),
-                                topic("Kimi：长文本、法律条文"),
-                                topic("智谱 GLM：中英双语、Agent、国产硬件"),
-                                topic("通义千问 Qwen：开源生态、中文场景"),
-                                topic("豆包：语音与实时交互、MoE"),
-                                topic("文心一言、商汤、MiniMax 等"),
-                            ],
-                        ),
-                        topic(
-                            "怎么调用",
-                            children=[
                                 topic(
-                                    "OpenAI 官方",
+                                    "参数量“大”",
                                     children=[
-                                        topic("developers.openai.com 创建 API Key"),
-                                        topic("需充值，常要境外卡"),
-                                        topic("也可走国内中转或直接用国产模型"),
+                                        topic("从百万、千万到数亿、数百亿甚至万亿，单位 B=10亿"),
+                                        topic("参数即记忆单元，是存储和表达知识的载体"),
+                                        topic("参数越多，能拟合的模式越复杂，语义关系和知识更精细"),
+                                        topic("比喻：参数=学生大脑里的解题套路，知识级别越高能解的题越多"),
                                     ],
                                 ),
                                 topic(
-                                    "阿里百炼 推荐入门",
+                                    "训练数据量“大”",
                                     children=[
-                                        topic("国内直连、新人免费额度、模型全、生态完善"),
-                                        topic("兼容 OpenAI 接口"),
-                                        topic("Endpoint: dashscope compatible-mode v1"),
-                                        topic("模型：qwen-turbo/plus/max、deepseek-r1"),
-                                        topic("Key 放环境变量 DASHSCOPE_API_KEY"),
+                                        topic("支撑庞大参数需要海量数据"),
+                                        topic("来源广：互联网爬取，文本图像音频视频多模态"),
+                                        topic("覆盖面广才有通用性，像人博览群书"),
                                     ],
                                 ),
                                 topic(
-                                    "OpenAI 库三步",
+                                    "计算资源消耗“大”",
                                     children=[
-                                        topic("1 创建客户端：base_url + api_key"),
-                                        topic("2 调 chat：model + messages"),
-                                        topic("3 取结果"),
-                                        topic("messages：system / user / assistant / tool"),
-                                        topic("stream=true 流式输出，防超时、体验更好"),
-                                        topic("带上历史 messages 才能多轮不跑偏"),
+                                        topic("GPU：图形处理器，数千 CUDA 核心，通用并行，图形、科学计算、AI"),
+                                        topic("TPU：张量处理单元，脉动阵列，专为稠密矩阵乘优化，适合 Transformer"),
+                                        topic("训练周期：数周到数月，取决于规模和硬件"),
+                                        topic("电力和硬件成本高，微调和推理部署对工程能力要求也高"),
+                                    ],
+                                ),
+                                topic(
+                                    "应用范围广、效果提升大",
+                                    children=[
+                                        topic("NLP：生成、翻译、问答、对话"),
+                                        topic("CV：图像理解、生成、多模态对齐"),
+                                        topic("语音：识别、合成、多模态交互"),
+                                        topic("长上下文理解与多轮对话，部分任务接近或超过人类水平"),
+                                    ],
+                                ),
+                            ],
+                        ),
+                        topic(
+                            "1.2 常用大模型",
+                            note="有开源协议模型，也有闭源 API 按 token 收费",
+                            children=[
+                                topic(
+                                    "国际阵营",
+                                    children=[
+                                        topic("OpenAI GPT 系列：综合均衡，擅长工具运用和 Agent 工作流"),
+                                        topic("o 系列：推理专用，数学和复杂分析强，成本较高"),
+                                        topic("Anthropic Claude：编程领先，超长上下文，安全敏感场景好"),
+                                        topic("Google Gemini：原生多模态文本图像音频视频，窗口大、性价比高；Flash 更快更便宜"),
+                                        topic("xAI Grok：文本生成榜靠前，与 X 平台深度集成"),
+                                    ],
+                                ),
+                                topic(
+                                    "国产阵营",
+                                    children=[
+                                        topic("DeepSeek R1/V3：开源代表，推理逼近闭源，训练成本低、性价比高"),
+                                        topic("月之暗面 Kimi：长文本专家，法律条文分析突出"),
+                                        topic("智谱 GLM：清华系，中英双语和 Agent 好，国产硬件适配好"),
+                                        topic("阿里通义千问 Qwen：开源生态强，中文场景优化好"),
+                                        topic("字节豆包：语音识别与实时交互，稀疏 MoE 降成本"),
+                                        topic("百度文心一言：文言文互译、方言交互"),
+                                        topic("商汤 SenseChat、MiniMax 角色扮演与创意写作"),
+                                    ],
+                                ),
+                            ],
+                        ),
+                        topic(
+                            "2 大模型调用",
+                            children=[
+                                topic(
+                                    "2.1 OpenAI",
+                                    children=[
+                                        topic("开发平台：developers.openai.com"),
+                                        topic("API Platform → Get started → Create an API Key"),
+                                        topic("Key 放到环境变量后要重启 IDE"),
+                                        topic("现在不免费，需充值，常要可境外结算的 Visa"),
+                                        topic("没额度会报错；也可找国内中转，或直接用国内大模型"),
+                                    ],
+                                ),
+                                topic(
+                                    "2.2 阿里百炼 适合入门",
+                                    children=[
+                                        topic("一站式大模型开发平台 Model Studio"),
+                                        topic("模型广场：通义千问、Llama、DeepSeek 等上百款"),
+                                        topic("统一 API：OpenAI 兼容，降低接入成本"),
+                                        topic("工具链：提示词、RAG 知识库、微调、智能体编排"),
+                                        topic("企业级：高并发、内容安全、用量监控"),
+                                        topic("为什么选它：国内直连低延迟、新人免费额度、从 turbo 到 max/R1 全覆盖、和 OSS/函数计算集成"),
+                                        topic("关键概念：API-KEY 身份凭证"),
+                                        topic("Endpoint：https://dashscope.aliyuncs.com/compatible-mode/v1"),
+                                        topic("模型名：qwen-plus、qwen-max、deepseek-r1、qwen-turbo"),
+                                        topic("需注册并实名，支付宝可完成；控制台底部 API-KEY 管理里创建"),
+                                    ],
+                                ),
+                                topic(
+                                    "2.3 调用百炼",
+                                    children=[
+                                        topic("Python >= 3.8"),
+                                        topic("两种 SDK 二选一：DashScope 官方，或 OpenAI 多语言 SDK"),
+                                        topic("建议装 openai，以后换别的兼容服务也能用"),
+                                        topic("Key 写入系统环境变量，代码用 os.getenv 读取"),
+                                        topic("若配置了 OPENAI_API_KEY，有的写法可省略显式传 key"),
+                                    ],
+                                ),
+                                topic(
+                                    "2.4 使用 OpenAI 库",
+                                    children=[
+                                        topic("官方 Python SDK：聊天、绘图、语音等，不用自己拼 HTTP"),
+                                        topic("很多国产服务兼容这套调用方式"),
+                                        topic(
+                                            "基础三步",
+                                            children=[
+                                                topic("创建 OpenAI 对象，设 base_url 和 api_key"),
+                                                topic("调用时必填 model 和 messages"),
+                                                topic("从返回里取文本结果"),
+                                            ],
+                                        ),
+                                        topic(
+                                            "messages 四类",
+                                            children=[
+                                                topic("system：设角色、语气、目标、约束，一般放第一位"),
+                                                topic("user：用户问题或指令，必填"),
+                                                topic("assistant：模型历史回复，多轮时回传"),
+                                                topic("tool：工具输出"),
+                                                topic("都是字典，key/value 按官方文档写"),
+                                            ],
+                                        ),
+                                        topic(
+                                            "流式输出 stream",
+                                            children=[
+                                                topic("默认 false：整段生成完一次性返回"),
+                                                topic("true：边生成边返回 chunk，要自己拼接"),
+                                                topic("推荐 true：阅读体验好，也降低超时风险"),
+                                            ],
+                                        ),
+                                        topic("附带历史：messages 是 list，把过往对话填回去，模型才知道上下文"),
                                     ],
                                 ),
                             ],
@@ -202,105 +367,154 @@ TREE = topic(
                     ],
                 ),
                 topic(
-                    "三、部署方式",
+                    "三、大模型部署方式",
+                    note="按成本和控制权分三种：云端 API、云上自托管、本地/边缘",
                     children=[
                         topic(
-                            "云端 API",
+                            "1 云端 API",
                             children=[
-                                topic("优点：不养硬件、顶级模型、厂商保障"),
-                                topic("缺点：数据出网、按量计费、网络延迟"),
+                                topic("直接调 OpenAI、Anthropic、Google、阿里云、腾讯云、火山引擎"),
+                                topic("拿到 Key，后端或前端 HTTP 调用"),
+                                topic("优点：不养模型和硬件、快速用顶级模型、扩展稳定由厂商保障"),
+                                topic("缺点：数据出网要评估合规、费用随调用量和定价变、延迟受网络影响"),
                             ],
                         ),
                         topic(
-                            "云上自托管",
+                            "2 云上自托管",
                             children=[
-                                topic("引擎：vLLM、TGI、llama.cpp、Ollama"),
-                                topic("对外：Nginx、FastAPI、gRPC"),
-                                topic("优点：可控、可监控、可私有化"),
-                                topic("缺点：要自己运维显存扩容，需要 MLOps"),
+                                topic("在 AWS/阿里云/腾讯云上部署开源模型"),
+                                topic("推理引擎：Transformer、vLLM、TGI、llama.cpp、Ollama"),
+                                topic("对外服务：Nginx、FastAPI、gRPC"),
+                                topic("优点：可控版本路由限流、细粒度监控日志、要私有化又想用云算力"),
+                                topic("缺点：自己管下载、显存、扩容、监控，要 MLOps 能力"),
+                                topic("MLOps：把 DevOps 用到机器学习全生命周期自动化"),
                             ],
                         ),
                         topic(
-                            "本地与边缘",
+                            "4 本地与边缘部署",
                             children=[
-                                topic("工具：Ollama、LM Studio、MLX、llama.cpp、vLLM"),
-                                topic("常用 7B/14B + 量化"),
-                                topic("优点：隐私、无 API 费、可离线"),
-                                topic("挑战：硬件和模型管理"),
+                                topic("个人电脑、实验室、私有机房推理"),
+                                topic("工具：Ollama、LM Studio、Mac 上 MLX LM、llama.cpp、vLLM"),
+                                topic("常用中小模型 7B/14B，加量化降显存"),
+                                topic("优点：数据不出本地、无 API 费、可离线"),
+                                topic("挑战：要 GPU 或强 CPU，自己管模型文件和版本"),
+                                topic("边缘：把一部分云能力下沉到离用户更近的地方"),
                             ],
                         ),
                         topic(
-                            "Ollama",
+                            "5 Ollama",
+                            note="课上定位：知道即可，后面还要用 vLLM",
                             children=[
-                                topic("定位：本地大模型运行容器，不训练只推理"),
-                                topic("一条命令拉模型、一条命令对话"),
-                                topic("改模型保存路径，别塞满 C 盘"),
-                                topic("内存：7B约8G，13B约16G，33B约32G；盘预留50G"),
-                                topic("默认只监听 127.0.0.1:11434"),
-                                topic("局域网：OLLAMA_HOST=0.0.0.0，OLLAMA_ORIGINS=*"),
-                                topic("Python 调本地 HTTP，可接 FastAPI 流式"),
-                                topic("课上要求：知道即可，后面用 vLLM"),
+                                topic("是什么：开源、跨平台、轻量的本地大模型运行管理引擎"),
+                                topic("不是模型本身，是运行容器和调度工具：下载、加载、推理、资源管理、对外服务"),
+                                topic("过去要配 CUDA、转模型、手写参数；现在一条命令拉模型、一条命令对话"),
+                                topic("官网 ollama.com，默认装 C 盘，模型目录务必改走"),
+                                topic("内存：7B 约 8G 可用，13B 约 16G，33B 约 32G；磁盘建议预留 50G"),
+                                topic("支持纯 CPU；有 NVIDIA GPU 可加速"),
+                                topic("装模型：官网选模型看体积，终端拉下来就能对话"),
+                                topic("本地 HTTP 默认 http://localhost:11434/api"),
+                                topic("默认只允许本机 127.0.0.1 访问"),
+                                topic("局域网：环境变量 OLLAMA_HOST=0.0.0.0，OLLAMA_ORIGINS=* 防跨域"),
+                                topic("或改 ~/.ollama/config.json，改完必须重启"),
+                                topic("浏览器访问 ip:11434 看到 Ollama is running 即成功"),
+                                topic("Python 可普通调用、流式、接到 FastAPI；思考模型开始会短暂停顿无输出"),
                             ],
                         ),
                     ],
                 ),
                 topic(
-                    "四、大模型应用与 LlamaIndex",
+                    "四、大模型应用介绍",
                     children=[
                         topic(
-                            "四种应用",
+                            "定义",
                             children=[
-                                topic("Prompt 工程：会说话，格式和逻辑才稳"),
-                                topic("对话系统：加 Memory，记住多轮上下文"),
-                                topic("RAG：外挂知识库，先检索再生成，压幻觉"),
-                                topic("Agent：规划 + 调工具 API，当手脚用"),
+                                topic("以 LLM 为大脑，结合外部数据、记忆、工具，解决具体业务问题"),
+                                topic("不只是聊天机器人，而是业务场景里的智能系统"),
                             ],
                         ),
                         topic(
-                            "构建难点",
+                            "1 常见类型",
                             children=[
-                                topic("私有数据怎么接上 LLM"),
-                                topic("长对话上下文怎么管"),
-                                topic("怎么调外部 API 和数据库"),
-                                topic("多步推理与任务分解"),
-                                topic("可观察性：怎么调试优化"),
+                                topic("Prompt Engineering：设计提示让输出符合格式逻辑，如文案、翻译。人要会说话对方才懂"),
+                                topic("Conversational AI：加 Memory，记住多轮上下文，如 ChatGPT、智能客服"),
+                                topic("RAG：外挂知识库，先检索私有资料再生成，解决没读过内部文档和幻觉"),
+                                topic("RAG 比喻：预训练像通识，入职后再学公司制度才能答内部问题"),
+                                topic("Agents：装手脚，能规划并调用工具查天气、跑代码、操作数据库"),
+                                topic("Agent 比喻：自己不行就找同事、其他部门、领导协调；拧螺丝=工具+记忆中的经验"),
                             ],
                         ),
                         topic(
-                            "LlamaIndex 六模块",
+                            "2 构建挑战",
                             children=[
-                                topic("Data Connectors 数据加载"),
-                                topic("Index 索引"),
-                                topic("Retriever 检索"),
-                                topic("Query Engine 查询引擎"),
-                                topic("Agents 智能体"),
-                                topic("Workflows 工作流"),
+                                topic("数据连接：企业文档、数据库怎么接到 LLM"),
+                                topic("上下文管理：长对话如何一致，面试常问 Agent 怎么记上下文"),
+                                topic("工具调用：怎么调外部 API、数据库"),
+                                topic("多步骤推理：决策链和任务分解"),
+                                topic("可观察性：怎么调试和优化"),
                             ],
                         ),
                         topic(
-                            "框架调用模型",
+                            "3 为什么需要框架",
                             children=[
-                                topic("DeepSeek / 千问 DashScope / Ollama 都要单独装包"),
-                                topic("complete 单轮补全；chat 多轮对话，实际多用 chat"),
+                                topic("不是只会写提示词，需要完整工具链"),
+                                topic("类似 Web 要用 Django、FastAPI、Spring、Vue"),
+                                topic("LlamaIndex 等提供标准化、模块化组件"),
                             ],
                         ),
                         topic(
-                            "RAG 在 LlamaIndex 里",
+                            "4 LlamaIndex",
                             children=[
-                                topic("建库：Reader 加载 → Splitter 切块 → Embedding → Chroma 存储"),
-                                topic("检索：加载向量库 → 设回答模型 → Query Engine"),
-                                topic("切分与向量化在建索引时真正执行，前面只是配置"),
-                                topic("本地嵌入：nomic-embed-text 或 qwen3-embedding"),
-                                topic("云端嵌入：DashScope 千问"),
-                                topic("可加记忆做成知识型 Chatbot"),
+                                topic("定位：把私有数据接到 LLM，做 RAG、机器人、文档理解、Agent"),
+                                topic("官网 llamaindex.ai，中文文档 docs.llamaindex.org.cn，GitHub run-llama/llama_index"),
+                                topic("六模块：Data Connectors、Index、Retriever、Query Engine、Agents、Workflows"),
+                            ],
+                        ),
+                        topic(
+                            "5 LlamaIndex 使用",
+                            children=[
+                                topic(
+                                    "调用不同模型要单独装包",
+                                    children=[
+                                        topic("DeepSeek：llama-index-llms-deepseek"),
+                                        topic("千问不在默认列表，用 DashScope：llama-index-llms-dashscope"),
+                                        topic("Ollama：llama-index-llms-ollama，模型必须本机已部署，ollama list 可查"),
+                                        topic("多模态要选支持多模态的模型，如 qwen3.5:4b"),
+                                    ],
+                                ),
+                                topic("llm.complete：单轮纯字符串，无角色、无状态"),
+                                topic("llm.chat：消息列表可分 system/user/assistant，内置多轮，实际开发首选"),
+                                topic("stream_complete 是生成器，delta 是本段新增文本"),
+                                topic(
+                                    "对话系统 Chatbot",
+                                    children=[
+                                        topic("无记忆：每轮独立"),
+                                        topic("有记忆：Context + Memory 多轮连贯"),
+                                        topic("可接 OpenAI、Qwen、Ollama、Llama、Claude"),
+                                        topic("再接知识库就变成知识型 Chatbot"),
+                                    ],
+                                ),
+                                topic(
+                                    "RAG 能力清单",
+                                    children=[
+                                        topic("Reader 文档加载，SimpleDirectoryReader 可读杂乱无结构文件"),
+                                        topic("Splitter 分块，前面往往只配置，真正切分在建索引时"),
+                                        topic("Embedding 向量化：语义近则向量近，语义远则向量远"),
+                                        topic("本地嵌入：Ollama 的 nomic-embed-text 或 qwen3-embedding:0.6b"),
+                                        topic("云端嵌入：DashScope 千问，pip install llama-index-embeddings-dashscope"),
+                                        topic("切分先用 Tokenizer 转 token 再按 token 数切块"),
+                                        topic("VectorStoreIndex + Chroma 存储"),
+                                        topic("Query Engine 查询；可加记忆做 RAG+多轮"),
+                                    ],
+                                ),
+                                topic("示例数据：考勤知识入库、了凡四训问答"),
                             ],
                         ),
                         topic(
                             "作业",
                             children=[
                                 topic("FastAPI 提供接口"),
-                                topic("页面上传文档，向量化入库"),
-                                topic("简易对话窗口聊天"),
+                                topic("页面上传文档，向量化后存向量库"),
+                                topic("简易对话窗口能聊天"),
                             ],
                         ),
                     ],
@@ -309,375 +523,723 @@ TREE = topic(
         ),
         topic(
             "02 提示词工程",
-            note="飞书：01-提示词",
+            note="飞书文档：01-提示词。Prompt 是指令，Prompt Engineering 是优化指令的技术。",
             children=[
                 topic(
-                    "概述",
+                    "一、概述",
                     children=[
-                        topic("Prompt：给 AI 的指令"),
-                        topic("Prompt Engineering：设计、测试、优化指令的方法"),
-                        topic("差例子：写一篇关于AI的文章"),
-                        topic("好例子：角色+字数+读者+案例+工具+语气"),
+                        topic("把 AI 当能力强但缺经验的新助手，指令清不清楚决定成果质量"),
+                        topic("差提示：写一篇文章关于AI → 容易得到百科摘要式空文"),
+                        topic("好提示：科技记者、800字、普通人用AI提效、25-40岁白领、具体案例、推荐3个工具、轻松幽默"),
+                        topic(
+                            "高质量提示通常含",
+                            children=[
+                                topic("角色：身份、专业领域"),
+                                topic("任务：明确要做什么"),
+                                topic("规则：边界、禁止、判断标准"),
+                                topic("输出：格式、长度、示例、JSON 结构"),
+                            ],
+                        ),
+                        topic("提示工程是系统化设计、测试、优化提示词的学科，不只写一句话"),
                     ],
                 ),
                 topic(
-                    "优质 Prompt 四要素",
-                    children=[
-                        topic("角色 Role：身份和专业领域"),
-                        topic("任务 Task：要做什么、输出什么"),
-                        topic("上下文 Context：受众、平台、背景"),
-                        topic("约束 Constraints：格式、长度、禁忌、风格"),
-                    ],
-                ),
-                topic(
-                    "CLEAR 原则",
-                    children=[
-                        topic("Context 上下文"),
-                        topic("Length 长度"),
-                        topic("Examples 示例"),
-                        topic("Audience 受众"),
-                        topic("Role 角色"),
-                    ],
-                ),
-                topic(
-                    "基础技巧",
-                    children=[
-                        topic("明确：生成3条健康饮食微博，而不是写一些饮食"),
-                        topic("结构化：分点分段"),
-                        topic("示例引导：给输入输出样例"),
-                    ],
-                ),
-                topic(
-                    "调优实战技法",
-                    children=[
-                        topic("环境：pip install openai dashscope，配置 DASHSCOPE_API_KEY"),
-                        topic("零样本 Zero-Shot：直接下指令，适合简单任务"),
-                        topic("少样本 Few-Shot：给几个输入输出样例，锁格式风格"),
-                        topic("思维链 COT：先一步步思考，适合复杂推理"),
-                        topic("自我一致性：多生成几个再投票或自选最优"),
-                        topic("思维树 ToT：多分支发散→评估剪枝→再执行"),
-                    ],
-                ),
-                topic(
-                    "攻击防范 了解即可",
-                    children=[
-                        topic("提示注入：输入里塞指令覆盖系统设定"),
-                        topic("越狱 Jailbreak：绕过安全限制"),
-                        topic("数据泄露：套取训练或系统敏感信息"),
-                        topic("防御：输入净化、多层审核、沙箱限权、数据脱敏"),
-                        topic("课上代码：content_sanitize.py、content_moderation.py"),
-                    ],
-                ),
-                topic(
-                    "案例",
+                    "1.2 设计原则",
                     children=[
                         topic(
-                            "电商产品描述 ecprompt.py",
+                            "CLEAR 原则",
                             children=[
-                                topic("角色：电商金牌文案专家"),
-                                topic("少样本：输入-思考-输出范例"),
-                                topic("COT：先分析痛点再转卖点"),
-                                topic("temperature=0.7 平衡创意与稳定"),
+                                topic("Context 上下文：充分背景"),
+                                topic("Length 长度：明确输出多长"),
+                                topic("Examples 示例：给参考案例"),
+                                topic("Audience 受众：指定读者"),
+                                topic("Role 角色：定义 AI 身份"),
                             ],
                         ),
                         topic(
-                            "社交媒体内容策划",
+                            "优质 Prompt 特征",
                             children=[
-                                topic("ToT：3个切入角度"),
-                                topic("评估爆款潜力后选最佳"),
-                                topic("输出一周5个选题 Markdown 表"),
-                                topic("加自我反思一步"),
+                                topic("目标明确具体"),
+                                topic("包含必要约束"),
+                                topic("提供参考框架"),
+                                topic("指定输出格式"),
                             ],
                         ),
                     ],
                 ),
                 topic(
-                    "最佳实践",
+                    "二、构成要素和技巧",
                     children=[
-                        topic("原则：明确、完整、一致、安全"),
-                        topic("策略：先简单再复杂、迭代、量化评估、记有效模板"),
-                        topic("趋势：自动生成提示、多模态、实时反馈、个性化"),
+                        topic(
+                            "2.1 核心四要素",
+                            children=[
+                                topic("角色 Role：你是一位资深营销专家，专注社交媒体内容创作"),
+                                topic("任务 Task：请生成5个小红书标题，每个不超过20字"),
+                                topic("上下文 Context：目标用户25-35岁都市女性，关注美妆和生活"),
+                                topic("约束 Constraints：避免夸张营销词，保持自然真实"),
+                            ],
+                        ),
+                        topic(
+                            "2.2 基础技巧",
+                            children=[
+                                topic("明确性：好=生成3个健康饮食微博；坏=写一些关于饮食的东西"),
+                                topic("结构化：分点分段，便于执行"),
+                                topic("示例引导：给输入输出样例，尤其复杂任务"),
+                            ],
+                        ),
+                    ],
+                ),
+                topic(
+                    "三、调优实战技法",
+                    children=[
+                        topic(
+                            "环境准备",
+                            children=[
+                                topic("pip install openai dashscope"),
+                                topic("用 OpenAI 兼容方式跑百炼/千问"),
+                                topic("Windows：此电脑→属性→高级系统设置→环境变量"),
+                                topic("用户变量名 DASHSCOPE_API_KEY，值为 sk- 开头的 Key"),
+                                topic("改完重启终端或 IDE"),
+                            ],
+                        ),
+                        topic(
+                            "零样本 Zero-Shot",
+                            children=[
+                                topic("直接给任务指令，不提供示例"),
+                                topic("适合简单明确、模型已具备相关知识的任务"),
+                            ],
+                        ),
+                        topic(
+                            "少样本 Few-Shot",
+                            children=[
+                                topic("提供少量输入输出示例，让模型模仿格式和模式"),
+                                topic("比只下指令效果更好"),
+                                topic("情感例子：拍照好看→正面；物流太慢→负面；菜难吃→负面"),
+                            ],
+                        ),
+                        topic(
+                            "思维链 COT",
+                            children=[
+                                topic("先展示推理过程再给最终答案"),
+                                topic("适合复杂逻辑、数学题"),
+                                topic("可在问题后加：请一步步思考"),
+                            ],
+                        ),
+                        topic(
+                            "自我一致性 Self-Consistency",
+                            children=[
+                                topic("生成多个答案，投票或自评选出最优"),
+                                topic("适合要高质量、多样化的输出，如选最佳口号"),
+                            ],
+                        ),
+                        topic(
+                            "思维树 ToT",
+                            children=[
+                                topic("多分支思考路径，探索不同方案"),
+                                topic("适合需要创造性解决的复杂任务"),
+                                topic("过程：发散分支 → 评估剪枝 → 再执行"),
+                            ],
+                        ),
+                    ],
+                ),
+                topic(
+                    "四、攻击防范",
+                    note="了解类型和防御思路即可，不要在生产里复现攻击细节",
+                    children=[
+                        topic(
+                            "4.1.1 提示注入",
+                            children=[
+                                topic("在输入里嵌恶意指令，诱导模型做非预期行为"),
+                                topic("直接注入：用户输入覆盖系统设定，如要求输出系统提示、绕过只答数学的限制"),
+                                topic("间接注入：恶意指令藏在网页、PDF、简历等外部内容里，模型处理时触发"),
+                                topic("其他手法：角色扮演劫持、编码混淆绕过关键词、把指令嵌进业务流程"),
+                                topic("防御：过滤高风险指令用语、外部输入一律不可信、关键词+意图识别+输出再审+上下文隔离"),
+                            ],
+                        ),
+                        topic(
+                            "4.1.2 越狱 Jailbreak",
+                            children=[
+                                topic("精心构造提示，绕过安全限制，诱导输出本该拦截的内容"),
+                                topic("常见方向：无约束角色扮演、多轮逐步诱导、用故事幽默包装、对抗后缀干扰检测、学术研究幌子、自动化生成越狱提示"),
+                                topic("防御：多层次内容审核、行为监控"),
+                            ],
+                        ),
+                        topic(
+                            "4.1.3 数据泄露",
+                            children=[
+                                topic("巧妙提问套取训练或系统中的敏感信息"),
+                                topic("相关风险还包括供应链工具、内部泄密、配置错误、社会工程、历史漏洞"),
+                                topic("防御：拆分隐私、数据脱敏"),
+                            ],
+                        ),
+                        topic(
+                            "4.2 防范策略落地",
+                            children=[
+                                topic("输入净化：content_sanitize.py"),
+                                topic("多层审核：content_moderation.py"),
+                                topic("安全沙箱：隔离执行高风险操作，限制系统权限和网络"),
+                            ],
+                        ),
+                    ],
+                ),
+                topic(
+                    "五、实战案例",
+                    children=[
+                        topic(
+                            "5.1 优化过程通法",
+                            children=[
+                                topic("先写清业务需求"),
+                                topic("初始版往往效果一般"),
+                                topic("再加角色和约束"),
+                                topic("再加少样本"),
+                            ],
+                        ),
+                        topic(
+                            "5.2 电商产品描述 ecprompt.py",
+                            children=[
+                                topic("输入：名称、核心卖点、目标人群"),
+                                topic("输出：吸睛标题、痛点正文、小红书标签"),
+                                topic("system 角色：电商金牌文案专家"),
+                                topic("examples：完整的输入-思考-输出范例，锁语气和格式"),
+                                topic("COT：先分析痛点再转化卖点，避免空洞废话"),
+                                topic("temperature=0.7：太低死板，太高乱跑，0.7 是创意和稳定的平衡"),
+                            ],
+                        ),
+                        topic(
+                            "5.3 社交媒体内容策划",
+                            children=[
+                                topic("需求：不是单篇文案，而是成体系选题和多角度发散"),
+                                topic("输入宽泛主题如夏季减肥，扮演资深新媒体运营"),
+                                topic("ToT 三步：构思3个截然不同切入角度 → 评估爆款潜力与可行性 → 选出最佳并生成5个周更选题"),
+                                topic("自我一致性：第二步回顾第一步并自我批判"),
+                                topic("结构化输出：要求 Markdown 表格，方便进 Excel 或 Notion"),
+                                topic("最后加自我反思 Self-Reflection"),
+                            ],
+                        ),
+                    ],
+                ),
+                topic(
+                    "六、最佳实践",
+                    children=[
+                        topic("设计原则：明确、完整、角色风格一致、考虑安全"),
+                        topic("调优策略：先零样本再加复杂度、按输出迭代、建立评估标准、记录有效模板"),
+                        topic("趋势：自动生成优化提示、多模态提示、按反馈动态调、按用户特征个性化"),
+                    ],
+                ),
+                topic(
+                    "课后作业",
+                    children=[
+                        topic("完成电商产品描述生成"),
+                        topic("完成社交媒体内容策划"),
                     ],
                 ),
             ],
         ),
         topic(
             "03 RAG整体认知",
-            note="飞书：01-RAG整体认知",
+            note="飞书文档：01-RAG整体认知。2020年 Facebook AI 提出，解决大模型答得快但不够准、不够新。",
             children=[
                 topic(
-                    "是什么",
+                    "1 RAG 介绍",
                     children=[
-                        topic("Retrieval-Augmented Generation 检索增强生成"),
-                        topic("生成前先从外部知识库检索相关文档，再当上下文"),
-                        topic("本质：检索器 Retriever + 生成器 Generator"),
-                        topic("比喻：开卷考试，先翻书再答题"),
-                        topic("不是替代大模型，是给它装实时可信可控的记忆外挂"),
+                        topic(
+                            "1.1 是什么",
+                            children=[
+                                topic("全称 Retrieval-Augmented Generation，检索增强生成"),
+                                topic("生成前先从外部知识库检索相关文档，作为附加上下文再生成"),
+                                topic("目标：更准确、更新、有据可查"),
+                                topic("核心思想：给 LLM 配外挂知识库"),
+                                topic("比喻：开卷考试。模型是闭卷考生，RAG 是可随时翻的参考书"),
+                                topic("技术本质：检索器 Retriever + 生成器 Generator"),
+                            ],
+                        ),
+                        topic("1.2 和纯大模型的区别：不是替代，而是装上实时、可信、可控的记忆外挂"),
+                        topic(
+                            "1.3 核心流程 Query → Embedding → Retrieval → Context → LLM → Answer",
+                            children=[
+                                topic("Query：自然语言问题，可能有错别字、口语、指代不明。如“上次那个产品的安全规范更新了吗”"),
+                                topic("Embedding：用与知识库相同的嵌入模型，把问题变成高维向量，如 768 或 1536 维，变成可运算的语义坐标"),
+                                topic("Retrieval：在向量库或倒排索引里算相似度，通常余弦相似度，召回 Top-K。这一步决定原材料质量，是成败瓶颈"),
+                                topic("Context：按相似度或时间等顺序拼接片段，加上“请仅根据以下资料回答”等约束；太多要裁剪以适配窗口"),
+                                topic("LLM：读完整 Prompt，当摘要者和解释者，而不是当记忆库"),
+                                topic("Answer：返回给用户，通常附来源片段便于人工核查"),
+                            ],
+                        ),
+                        topic(
+                            "1.4 三大痛点",
+                            children=[
+                                topic(
+                                    "幻觉 核心痛点",
+                                    children=[
+                                        topic("没有相关知识时编造看似合理的错误内容"),
+                                        topic("RAG：强制只基于检索内容答，没有就提示无法回答，再加答案约束"),
+                                    ],
+                                ),
+                                topic(
+                                    "知识时效性差",
+                                    children=[
+                                        topic("训练数据有截止日期，无法回答最新政策、新版语言特性"),
+                                        topic("RAG：更新外部知识库即可，不必重新训练，成本低"),
+                                    ],
+                                ),
+                                topic(
+                                    "私有内网知识难落地",
+                                    children=[
+                                        topic("闭源云模型要上传数据，处理不了涉密内部手册、校园内网通知"),
+                                        topic("RAG：开源 LLM + 开源 Embedding + 本地向量库，数据不出内网，可用 FastAPI 封装"),
+                                    ],
+                                ),
+                                topic("误区：RAG 不能 100% 消幻觉。检索错了或 Prompt 约束不到位仍会编"),
+                            ],
+                        ),
+                        topic(
+                            "1.5 主流场景",
+                            children=[
+                                topic("本地私有问答：笔记、公司手册，不联网"),
+                                topic("PDF 问答：论文、教材、说明书，提问后定位相关页再生成"),
+                                topic("智能客服：FAQ、售后流程，标准化回答，可内网部署"),
+                                topic("多知识库：PDF+Word+网页一次提问全检索，如校园通知+手册+FAQ"),
+                            ],
+                        ),
                     ],
                 ),
                 topic(
-                    "核心流程",
+                    "2 RAG 体系架构",
                     children=[
-                        topic("Query：用户问题，可能口语、指代不明"),
-                        topic("Embedding：同一套向量模型把问题变成高维坐标"),
-                        topic("Retrieval：余弦相似度召回 Top-K，这一步决定原材料质量"),
-                        topic("Context：拼接片段+约束提示，必要时裁剪适配窗口"),
-                        topic("LLM：当摘要者和解释者，不是当记忆库"),
-                        topic("Answer：返回答案，最好带来源便于核查"),
-                    ],
-                ),
-                topic(
-                    "三大痛点",
-                    children=[
-                        topic("幻觉：没知识就编。RAG 要求只基于检索内容，没有就说不知道"),
-                        topic("时效差：训练有截止日期。RAG 更新知识库即可，不必重训"),
-                        topic("私有数据：云端模型难接内网。RAG 可本地 LLM+嵌入+向量库"),
-                        topic("误区：RAG 不能 100% 消幻觉，取决于检索精度和 Prompt 约束"),
-                    ],
-                ),
-                topic(
-                    "落地场景",
-                    children=[
-                        topic("本地私有问答：笔记、公司手册，不联网"),
-                        topic("PDF 问答：论文教材说明书，先定位再生成"),
-                        topic("智能客服：FAQ 售后流程，FastAPI 封接口"),
-                        topic("多知识库：PDF+Word+网页一次提问全检索"),
-                    ],
-                ),
-                topic(
-                    "经典五步",
-                    children=[
-                        topic("1 文档加载：PDF/Word/TXT/网页变成文本"),
-                        topic("2 文本分割：chunk_size 与 chunk_overlap，适配窗口、提高检索精度"),
-                        topic("3 向量化 Embedding：文本变语义向量，常用 BGE/M3E"),
-                        topic("4 向量存储：FAISS/Chroma，毫秒级相似检索"),
-                        topic("5 检索+生成：问题向量化→召回→拼 Prompt→LLM 回答"),
-                    ],
-                ),
-                topic(
-                    "数据流三块",
-                    children=[
-                        topic("数据准备：解析、清洗页眉广告、切块重叠、提元数据"),
-                        topic("检索系统：向量检索 + BM25 稀疏 + 混合检索"),
-                        topic("生成系统：结构化注入检索结果、禁止编造、后处理加引用"),
-                    ],
-                ),
-                topic(
-                    "五大范式 学霸养成记",
-                    children=[
-                        topic("Naive RAG：小学生翻书。线性流程，原型快，检索粗、易幻觉"),
-                        topic("Advanced RAG：初中生找得更准。查询改写、重排序，工业主流"),
-                        topic("Modular RAG：高中生灵活用工具。模块路由调度，LangChain/LlamaIndex"),
-                        topic("Graph RAG：大学生理解关系。实体关系多跳推理，微软 GraphRAG"),
-                        topic("Agentic RAG：研究生自己规划。拆任务、调工具、不足再检索"),
-                    ],
-                ),
-                topic(
-                    "RAG vs 微调",
-                    children=[
-                        topic("知识常更新、要引用、要私有化 → RAG"),
-                        topic("知识固定、要低延迟、要改风格口吻 → 微调更合适"),
-                        topic("可结合：微调让模型更会用检索资料，RAG 注入新知识"),
-                        topic("思考：校园通知每月更新，该用 RAG"),
-                    ],
-                ),
-                topic(
-                    "局限",
-                    children=[
-                        topic("检索质量决定上限，没召回到生成再强也没用"),
-                        topic("上下文窗口：多处证据可能被截断"),
-                        topic("检索噪声会误导模型"),
-                        topic("多了检索环节，延迟变长，需缓存或异步"),
-                        topic("中文和术语对 Embedding 与切分策略很敏感"),
+                        topic(
+                            "2.1 经典五步 先记做什么和为什么",
+                            children=[
+                                topic(
+                                    "文档加载 Document Loading",
+                                    children=[
+                                        topic("做什么：PDF/Word/TXT/网页加载成程序可处理的文本"),
+                                        topic("为什么：模型不能直接读本地文件"),
+                                        topic("后续：LangChain/LlamaIndex，尤其 PDF 解析难点"),
+                                    ],
+                                ),
+                                topic(
+                                    "文本分割 Text Splitting",
+                                    children=[
+                                        topic("做什么：长文本切成 chunk"),
+                                        topic("为什么：有上下文窗口限制；小片段比整篇更好检索"),
+                                        topic("后续：chunk_size、chunk_overlap 调优"),
+                                    ],
+                                ),
+                                topic(
+                                    "向量化 Embedding",
+                                    children=[
+                                        topic("做什么：文本块变成高维数值向量"),
+                                        topic("为什么：计算机用向量表示语义，才能语义检索"),
+                                        topic("后续：开源 BGE/M3E 本地部署或调用"),
+                                    ],
+                                ),
+                                topic(
+                                    "向量存储 Vector Storage",
+                                    children=[
+                                        topic("做什么：向量写入向量数据库"),
+                                        topic("为什么：MySQL 等不擅长语义相似查询，向量库做了相似度优化，可达毫秒级"),
+                                        topic("后续：FAISS、Chroma 实操"),
+                                    ],
+                                ),
+                                topic(
+                                    "语义检索 + LLM 生成",
+                                    children=[
+                                        topic("问题向量化"),
+                                        topic("在库中检索语义相似文本块"),
+                                        topic("文本块+问题拼成 Prompt 交给 LLM"),
+                                        topic("既要素材准，又要语言流畅"),
+                                        topic("Prompt 要写：仅基于提供的检索内容回答，不要编造"),
+                                    ],
+                                ),
+                            ],
+                        ),
+                        topic(
+                            "2.2 数据流拆解",
+                            children=[
+                                topic(
+                                    "数据准备 Data Pipeline",
+                                    children=[
+                                        topic("文档解析：按格式提取纯文本和结构，标题、表格"),
+                                        topic("数据清洗：去页眉页脚、广告、水印、乱码，规范空白"),
+                                        topic("切分 Chunking：按语义或长度切，加 overlap 防止关键句被切断，质量直接影响检索"),
+                                        topic("元数据：来源、时间、章节、标签，用于过滤和引用"),
+                                    ],
+                                ),
+                                topic(
+                                    "检索系统 Retriever",
+                                    children=[
+                                        topic("向量检索：语义相似，鲁棒，主力"),
+                                        topic("稀疏检索 BM25：关键词，对专有名词、精确 ID 更好"),
+                                        topic("混合检索：两者互补"),
+                                        topic("输出：相关片段列表+相似度得分"),
+                                    ],
+                                ),
+                                topic(
+                                    "生成系统 Generator",
+                                    children=[
+                                        topic("载体：GPT、Llama、文心一言等"),
+                                        topic("提示词：结构化注入检索结果，设禁止编造等约束"),
+                                        topic("后处理：格式化，添加引用标记"),
+                                    ],
+                                ),
+                            ],
+                        ),
+                        topic(
+                            "2.3 五大范式 学霸养成记",
+                            children=[
+                                topic(
+                                    "Naive RAG 小学生会翻书",
+                                    children=[
+                                        topic("流程：提问 → 关键词或基础语义搜 → 填进上下文 → 生成"),
+                                        topic("优点：简单、开发成本低、适合原型"),
+                                        topic("缺点：同义不同词可能搜不到；无关片段导致幻觉；硬切会长文语义断裂"),
+                                        topic("定位：Hello World，原型验证首选"),
+                                    ],
+                                ),
+                                topic(
+                                    "Advanced RAG 初中生找得更准",
+                                    children=[
+                                        topic("检索前：查询改写、扩展，提高模糊问题命中率"),
+                                        topic("检索后：重排序 Re-ranking，精细模型二次打分，最相关的排前面"),
+                                        topic("定位：效果和成本的平衡点，工业界主流"),
+                                    ],
+                                ),
+                                topic(
+                                    "Modular RAG 高中生灵活用工具",
+                                    children=[
+                                        topic("把检索器、生成器、重排器拆成可替换模块，像乐高"),
+                                        topic("路由 Routing 和调度 Scheduling：判断走向量库、传统库还是互联网"),
+                                        topic("定位：灵活可定制，是 LangChain、LlamaIndex 等框架基石"),
+                                    ],
+                                ),
+                                topic(
+                                    "Graph RAG 大学生理解知识关系",
+                                    children=[
+                                        topic("把段落提炼成实体-关系-实体三元组，用知识图谱"),
+                                        topic("多跳推理：顺藤摸瓜回答要多步的问题"),
+                                        topic("全局理解：能归纳主题，不只罗列片段，如从评价里归纳屏幕、续航"),
+                                        topic("代表：微软开源 GraphRAG，适合大规模摘要和复杂关系"),
+                                        topic("定位：从找相似跨越到做推理"),
+                                    ],
+                                ),
+                                topic(
+                                    "Agentic RAG 研究生自己规划",
+                                    children=[
+                                        topic("引入一个或多个 Agent，从被动工具变主动系统"),
+                                        topic("主智能体拆子任务，分别调向量搜、网页搜、API"),
+                                        topic("信息不足会自我反思并再检索"),
+                                        topic("定位：当前最前沿，从执行者变成会规划的思考者"),
+                                    ],
+                                ),
+                            ],
+                        ),
+                        topic(
+                            "2.4 RAG vs 模型微调",
+                            children=[
+                                topic("领域知识增强时的第一选择：微调还是 RAG"),
+                                topic("知识固定、要低延迟：微调更合适"),
+                                topic("知识常变、要引用、要私有：RAG 更合适"),
+                                topic("可结合：微调让模型更会用检索资料，RAG 注入最新知识"),
+                                topic("思考题：校园通知每月更新，该用 RAG，因为知识常变且不必重训"),
+                            ],
+                        ),
+                        topic(
+                            "2.5 局限与挑战",
+                            children=[
+                                topic("检索质量决定上限：最相关文件没召回，生成再强也没用"),
+                                topic("上下文窗口：答案分散在多处时可能被截断"),
+                                topic("检索噪声：无关片段会误导模型"),
+                                topic("延迟增加：比纯 LLM 多一步检索，需要异步或缓存"),
+                                topic("依赖 Embedding 和切分策略，中文和专业术语很敏感"),
+                            ],
+                        ),
                     ],
                 ),
             ],
         ),
         topic(
             "04 Embedding 向量表示",
-            note="飞书：02-大模型应用基础--Embeddings",
+            note="飞书文档：02-大模型应用基础--Embeddings",
             children=[
                 topic(
-                    "向量是什么",
+                    "1 什么是 Embedding",
                     children=[
-                        topic("有大小和方向的量，如二维 (x,y)"),
-                        topic("Embedding：用数值向量表示一个对象"),
+                        topic(
+                            "1.1 什么是向量",
+                            children=[
+                                topic("有大小和方向的数学对象，可看成有向线段"),
+                                topic("二维可写成 (x, y)，从原点到该点"),
+                                topic("Embedding：用数值向量表示一个对象"),
+                            ],
+                        ),
+                        topic(
+                            "1.2 用词频向量算句子相似度 五步",
+                            children=[
+                                topic("Step1 分词"),
+                                topic("Step2 列出所有出现过的词，得到固定词表"),
+                                topic("Step3 统计每个词在各句中的词频"),
+                                topic("Step4 按同一词序得到等维向量。例：A=(1,1,2,1,1,1,0,0) B=(1,1,1,0,1,2,1,1)"),
+                                topic("二维直觉：你好吗你好吗你好=(3,2)，你好=(1,0)"),
+                                topic(
+                                    "Step5 余弦相似度",
+                                    children=[
+                                        topic("衡量方向像不像，范围约 -1 到 1，越接近 1 越像"),
+                                        topic("点积：对应维度相乘再全加。同一词两边都高则点积大"),
+                                        topic("模长：各分量平方和再开方，表示句子有多长、多丰富"),
+                                        topic("公式：点积 ÷ 两个模长的乘积"),
+                                        topic("例子点积=7，词频有差异但仍可能约 0.737 较像"),
+                                        topic("一句话：共同出现的词越多越频作分子，各自有多长作分母"),
+                                    ],
+                                ),
+                            ],
+                        ),
+                        topic(
+                            "1.3 一个好的语义向量",
+                            children=[
+                                topic("线性代数里的特征向量：被矩阵变换后方向不变只变长短"),
+                                topic("比喻：橡皮泥里的铁丝，怎么捏方向大致不变"),
+                                topic("词向量不是乱放的，语义关系编码成空间中跨词通用的方向"),
+                                topic("性别轴：queen - king ≈ woman - man，所以 king - man + woman ≈ queen"),
+                                topic("时态轴：walked - walking ≈ swam - swimming"),
+                                topic("总结：词向量把语义变成算术"),
+                            ],
+                        ),
                     ],
                 ),
                 topic(
-                    "余弦相似度",
+                    "2 LLM 如何算词间距离",
                     children=[
-                        topic("比的是方向像不像，范围约 -1 到 1，越近 1 越像"),
-                        topic("点积：对应维度相乘再相加，共同高频词越多越大"),
-                        topic("模长：句子有多长多丰富"),
-                        topic("公式：点积 / (A模长 × B模长)"),
-                        topic("词频例子：分词→词表→词频向量→算余弦"),
-                        topic("一句话：共同词又多又频，除以各自有多长"),
+                        topic("先把词变成上下文感知的高维向量"),
+                        topic("再用余弦相似度或余弦距离量化亲疏"),
+                        topic("距离越小含义越近，是语义搜索、聚类、情感分析的基础"),
+                        topic("2.1 文本向量化 Text Embedding"),
+                        topic("2.2 再算两个向量的余弦相似度"),
                     ],
                 ),
                 topic(
-                    "好的语义向量",
+                    "3 Embedding 的三大作用",
                     children=[
-                        topic("语义关系被编码成空间中的方向，且跨词通用"),
-                        topic("性别轴：king - man + woman ≈ queen"),
-                        topic("时态轴：walked - walking ≈ swam - swimming"),
-                        topic("词向量把语义变成算术"),
+                        topic(
+                            "输入端语义编码",
+                            children=[
+                                topic("模型不能直接处理原始文本"),
+                                topic("Embedding 层把 token 转为向量"),
+                                topic("才能区分我爱你和我恨你在语义空间里的对立位置"),
+                                topic("为后续注意力机制提供可计算表示"),
+                            ],
+                        ),
+                        topic(
+                            "语义检索与 RAG 应用层最常用",
+                            children=[
+                                topic("知识库检索：问题向量化，在文档向量库里定位相关片段"),
+                                topic("相似度匹配：判断两段是否在谈同一件事"),
+                                topic("去重与聚类：发现语义重复内容"),
+                            ],
+                        ),
+                        topic(
+                            "跨模态理解基础",
+                            children=[
+                                topic("文本和图像可共享同一 Embedding 空间"),
+                                topic("一只橙色的猫 的文本和对应图片会靠近"),
+                                topic("从而支持图文检索、零样本分类"),
+                            ],
+                        ),
                     ],
                 ),
                 topic(
-                    "LLM 里怎么用",
+                    "4 如何得到 Embedding 了解",
                     children=[
-                        topic("把词变成上下文感知的高维向量，再用余弦衡量亲疏"),
-                        topic("距离越小含义越近，是搜索聚类情感分析的基础"),
-                    ],
-                ),
-                topic(
-                    "三大作用",
-                    children=[
-                        topic("输入端语义编码：token→向量，注意力才能算"),
-                        topic("RAG 语义检索：问题向量对文档向量，相似度匹配、去重聚类"),
-                        topic("跨模态：图文可进同一空间，图文检索、零样本分类"),
-                    ],
-                ),
-                topic(
-                    "Word2Vec 了解",
-                    children=[
-                        topic("CBOW：用上下文猜中心词，众人推举一个代表"),
-                        topic("Skip-gram：用中心词猜上下文，一个代表辐射众人"),
-                        topic("结构：三层网络，One-hot / Multi-hot，隐藏层 N"),
-                        topic("词向量就在隐藏层权重矩阵里，相当于查找表"),
+                        topic(
+                            "Word2Vec 两种架构",
+                            children=[
+                                topic("CBOW：用上下文预测中心词。给你相邻词，猜中间是什么。众人推举一个代表"),
+                                topic("Skip-gram：用中心词预测上下文。给你一个词，猜周围可能出现什么。一个代表辐射众人"),
+                            ],
+                        ),
+                        topic("模型结构本质是三层神经网络"),
+                        topic("关键词：One-hot、Multi-hot、隐藏层维度 N"),
+                        topic("Embedding 位于隐藏层权重矩阵 W，相当于词向量查找表"),
                     ],
                 ),
             ],
         ),
         topic(
             "05 向量数据库",
-            note="飞书：03-大模型应用基础--向量数据库",
+            note="飞书文档：03-大模型应用基础--向量数据库",
             children=[
                 topic(
                     "第一部分 向量检索基础",
                     children=[
-                        topic("传统关键词搜：不懂笔记本≈电脑，跨语言差，缺语境"),
-                        topic("向量搜：文本图像变成高维向量，在空间里比远近"),
-                        topic("为何专用库：近似搜索换速度，HNSW/IVF 专用索引，可 GPU 批量"),
-                        topic("指标：延迟、召回精度、内存、索引磁盘占用"),
+                        topic(
+                            "从传统搜索到向量搜索",
+                            children=[
+                                topic("传统关键词/LIKE：不懂笔记本电脑和电脑相似"),
+                                topic("多语言障碍：难跨语言搜"),
+                                topic("语境缺失：不懂上下文"),
+                                topic("向量方案：文本图像等变成高维数值向量，在空间里算相似性，才是语义理解"),
+                            ],
+                        ),
+                        topic("向量：数学上有大小有方向；机器学习里是数据的数值化表示"),
+                        topic(
+                            "为什么要专门的向量数据库",
+                            children=[
+                                topic("近似搜索 ANN：牺牲少量精度换大幅速度"),
+                                topic("专用索引：HNSW、IVF 等高维结构"),
+                                topic("性能优化：GPU 加速、批量处理"),
+                            ],
+                        ),
+                        topic(
+                            "核心指标",
+                            children=[
+                                topic("性能：延迟、吞吐、召回精度"),
+                                topic("存储：内存占用、索引磁盘大小"),
+                            ],
+                        ),
                     ],
                 ),
                 topic(
                     "第二部分 FAISS",
                     children=[
-                        topic("Facebook 开源相似性搜索库，C++ 内核 + Python 接口"),
-                        topic("可上十亿级向量，被 Milvus、Qdrant 等采用"),
                         topic(
-                            "IndexFlat 精确搜",
+                            "简介",
                             children=[
-                                topic("FlatL2 欧氏距离、FlatIP 内积、余弦=IP+向量归一化"),
-                                topic("适合小于约10万、要极准、当精度基准"),
+                                topic("Facebook AI Similarity Search，2015 年起，解决高维向量快速检索"),
+                                topic("C++ 开发，提供 Python 接口"),
+                                topic("支持平面、哈希、树形等索引，余弦、欧氏等度量"),
+                                topic("场景：图像检索、文本匹配、视频推荐"),
+                                topic("特点：可 GPU、单机十亿级、算法多、MIT 许可、被 Milvus Qdrant 等采用"),
+                            ],
+                        ),
+                        topic("入门程序：生成随机向量 → 创建索引 → add 向量 → 相似度搜索 → 返回结果"),
+                        topic(
+                            "IndexFlat 精确索引",
+                            children=[
+                                topic("FlatL2：欧氏距离"),
+                                topic("FlatIP：内积/点积"),
+                                topic("余弦：IndexFlatIP + 向量先归一化"),
+                                topic("适用：数据量小于约 10 万、要极高精确、当其他索引的精度基准"),
                             ],
                         ),
                         topic(
-                            "IndexIVFFlat 倒排",
+                            "IndexIVFFlat 倒排文件索引",
                             children=[
-                                topic("先聚类成 Voronoi 区，查询只搜最近几个簇"),
-                                topic("nlist 聚类中心数，常取 sqrt(N)"),
-                                topic("nprobe 查几个簇：1最快最糙，等于 nlist 就变精确搜"),
+                                topic("把向量空间划成多个聚类中心 Voronoi 区域"),
+                                topic("每个向量分到最近中心"),
+                                topic("查询只搜最近几个中心，而不是全部向量"),
+                                topic("nlist：聚类中心数，通常取 sqrt(N)。太小每簇太大查询慢；太大要检查的簇变多"),
+                                topic("nprobe：查几个簇。1 最快最糙；等于 nlist 就等价精确搜"),
+                                topic("为什么像倒排：正向是文档找词要扫全部；倒排是词找文档，FAISS 用簇代替词"),
                             ],
                         ),
                         topic(
-                            "IndexHNSWFlat 图索引",
+                            "IndexHNSWFlat 分层可导航小世界",
                             children=[
-                                topic("分层可导航小世界，灵感来自六度分隔和高速公路"),
-                                topic("上层快速跳、下层精细搜"),
-                                topic("多数系统默认推荐，精度和速度较均衡"),
+                                topic("基于图的近似最近邻 ANN，灵感来自高速公路网和六度分隔"),
+                                topic("多层图：上层稀疏快速跳跃，下层密集精细搜索"),
+                                topic("被 Milvus、Pinecone、Qdrant、Weaviate 等广泛使用"),
+                                topic("当前多数系统默认推荐，精度和速度较均衡"),
                             ],
                         ),
-                        topic("选型：HNSW 通用；IVF 更适合超大规模且资源紧"),
+                        topic("选型补充：IVF 系列更适合超大规模且资源受限；还要看延迟敏感度和运维能力"),
                     ],
                 ),
                 topic(
                     "常见向量库对照",
                     children=[
-                        topic("Milvus：分布式，海量，HNSW/IVF/FLAT"),
-                        topic("Pinecone：全托管，内部偏 HNSW"),
-                        topic("Weaviate：HNSW，关键词+语义混合"),
-                        topic("Qdrant：Rust，过滤和地理查询"),
-                        topic("Chroma：轻量，LLM 应用友好，可嵌入式"),
-                        topic("Faiss：库不是完整数据库，研究与大规模实验"),
-                        topic("ES 向量插件、Deep Lake、Vearch 等"),
+                        topic("Milvus：HNSW、IVF_FLAT/PQ/SQ、FLAT；分布式，冲千亿级"),
+                        topic("Pinecone：托管，内部优化 HNSW，自动扩展"),
+                        topic("Weaviate：HNSW；关键词+语义混合，模块化嵌模型"),
+                        topic("Qdrant：HNSW、FLAT；Rust，高级过滤和地理查询"),
+                        topic("Chroma：默认 HNSW 类 ANN，也可设欧氏或余弦；轻量，偏 LLM，可嵌入式"),
+                        topic("Faiss：FLAT、IVF、HNSW、PQ、LSH；高性能库，可 GPU，偏研究与大规模实验"),
+                        topic("Elasticsearch 向量插件：HNSW，全文+向量企业混合搜"),
+                        topic("Deep Lake：多模态存储与流式检索"),
+                        topic("Vearch：云原生分布式，推理和推荐"),
                     ],
                 ),
                 topic(
                     "第三部分 Chroma",
                     children=[
-                        topic("AI 原生向量库，4 个核心 API，对接 LangChain/LlamaIndex"),
                         topic(
-                            "add 参数",
+                            "定位",
                             children=[
-                                topic("ids 必填，唯一，重复默认跳过"),
-                                topic("documents 原文，可自动嵌入"),
-                                topic("metadatas 附加信息，供 where 过滤"),
-                                topic("embeddings 也可直接塞预计算向量"),
+                                topic("开源 AI 原生向量库，为 LLM 应用设计，强调好写、快集成"),
+                                topic("4 个核心 API 覆盖主要操作"),
+                                topic("可接 OpenAI、HuggingFace 等嵌入"),
+                                topic("原生支持向量和元数据关联查询"),
+                                topic("与 LangChain、LlamaIndex 集成顺"),
                             ],
                         ),
                         topic(
-                            "query 参数",
+                            "集合 Collection",
                             children=[
-                                topic("query_texts 或 query_embeddings 二选一"),
-                                topic("n_results 返回条数，默认 10"),
-                                topic("where 按元数据过滤"),
-                                topic("where_document 按原文包含过滤"),
-                                topic("include 控制返回 documents/metadatas/embeddings/distances"),
+                                topic("存储向量数据的基本单位"),
+                                topic("把向量、文档内容、元数据三者绑在一起"),
                             ],
                         ),
-                        topic("距离函数创建集合时指定，之后不能改：L2 / IP / cosine"),
-                        topic("可换嵌入：OpenAI 或千问 DashScope"),
-                        topic("可当 HTTP 服务跑，像启动 MySQL 再远程连"),
-                        topic("支持 update / delete"),
+                        topic(
+                            "add 添加",
+                            children=[
+                                topic("ids 必填 List[str]：唯一标识，用于去重和更新删除；已存在默认跳过不覆盖"),
+                                topic("documents 可选：原文，会按集合配置的嵌入函数自动转向量"),
+                                topic("metadatas 可选 List[Dict]：附加信息，查询时 where 过滤。常见 key：source category author url page date"),
+                                topic("embeddings 可选：预计算向量，跳过自动嵌入，适合已用千问或 OpenAI 算好的场景"),
+                            ],
+                        ),
+                        topic(
+                            "query 查询",
+                            children=[
+                                topic("query_texts：查询文本，自动转向量，可一次多个查询"),
+                                topic("query_embeddings：直接给向量，与 query_texts 二选一"),
+                                topic("n_results：每个查询返回几条，默认 10"),
+                                topic("where：按 metadata 过滤，如 category=年假，或 page>=5，或 $and 组合"),
+                                topic("where_document：对原文做包含匹配，如包含年假"),
+                                topic("include：返回哪些字段 documents/metadatas/embeddings/distances，默认前三项中的文档、元数据、距离"),
+                            ],
+                        ),
+                        topic(
+                            "距离函数",
+                            children=[
+                                topic("默认 L2 欧氏距离"),
+                                topic("只能在 create_collection 时用 metadata 指定：L2、内积、余弦"),
+                                topic("一旦创建不能改，再改会 ValueError"),
+                            ],
+                        ),
+                        topic(
+                            "进阶",
+                            children=[
+                                topic("自定义嵌入函数：换 OpenAI 或千问向量模型"),
+                                topic("服务器模式：chroma 起 HTTP，相当于启动数据库服务，Python 再远程连"),
+                                topic("update 更新、delete 删除"),
+                            ],
+                        ),
                     ],
                 ),
                 topic(
-                    "第四部分 实战",
+                    "第四部分 实战项目",
                     children=[
-                        topic("目标：自然语言查询，返回最相关文档"),
-                        topic("技术栈：Chroma + 千问嵌入 + FastAPI"),
-                        topic("阶段1：分块→get_embedding→和原文一起放进索引"),
-                        topic("阶段2：问题向量化→索引得下标→从 documents 取回原文"),
-                        topic("文档：faiss.ai 、 docs.trychroma.com"),
+                        topic("目标：理解语义的搜索，用户自然语言查询，返回最相关文档"),
+                        topic("技术栈：Chroma 存和检、千问 DashScope 向量化、FastAPI 做 Web"),
+                        topic(
+                            "阶段一 建库",
+                            children=[
+                                topic("加载文档 → 分块 → get_embedding 向量化"),
+                                topic("向量和原文都放进索引对象"),
+                                topic("add_documents：原文进 self.documents，向量进索引"),
+                            ],
+                        ),
+                        topic(
+                            "阶段二 检索",
+                            children=[
+                                topic("用户问题向量化"),
+                                topic("用索引找相似向量，得到下标"),
+                                topic("用下标从 self.documents 取出原文"),
+                                topic("再把检索文档+用户问题交给大模型回答"),
+                            ],
+                        ),
+                        topic("参考：faiss.ai 、 docs.trychroma.com"),
                     ],
                 ),
-            ],
-        ),
-        topic(
-            "06 配套资料 百度网盘",
-            note="https://pan.baidu.com/s/1YA63Bo8A_saNsCGlF4nccQ  提取码 mcq7\n文件夹：918-向量数据库",
-            children=[
-                topic(
-                    "code / rag_pros0908 对着讲义敲",
-                    children=[
-                        topic("01_模型调用"),
-                        topic("02_Ollama"),
-                        topic("03_聊天机器人"),
-                        topic("04_LlamaIndex框架"),
-                        topic("05_提示词工程"),
-                        topic("06_提示词综合案例"),
-                        topic("07_聊天机器人安全校验"),
-                        topic("08_向量"),
-                        topic("09_向量数据库"),
-                    ],
-                ),
-                topic("video：5 个视频，对应向量库那一课"),
-                topic("另有 笔记 文件；.env 是密钥配置，不要提交公开仓库"),
-            ],
-        ),
-        topic(
-            "学习路径 从左到右",
-            children=[
-                topic("1 认知：搞懂 AI/LLM、百炼调用、Ollama、四种应用"),
-                topic("2 提示词：四要素 + COT/Few-Shot，先跑电商和社媒案例"),
-                topic("3 RAG认知：背下五步流程和检索决定上限"),
-                topic("4 Embedding：会算余弦，知道向量是语义坐标"),
-                topic("5 向量库：Flat/IVF/HNSW 选型，Chroma 增查改删"),
-                topic("6 用网盘 01→09 把知识库问答作业做出来"),
             ],
         ),
     ],
@@ -696,19 +1258,23 @@ def to_md(node, level=1) -> str:
     return "\n".join(lines)
 
 
-def to_opml_outline(node) -> str:
-    title = (
-        node["title"]
-        .replace("&", "&amp;")
+def escape_xml(s: str) -> str:
+    return (
+        s.replace("&", "&amp;")
         .replace("<", "&lt;")
         .replace(">", "&gt;")
         .replace('"', "&quot;")
     )
+
+
+def to_opml_outline(node, indent=4) -> str:
+    title = escape_xml(node["title"])
     kids = node.get("children", {}).get("attached", [])
+    pad = " " * indent
     if not kids:
-        return f'    <outline text="{title}"/>'
-    inner = "\n".join(to_opml_outline(c) for c in kids)
-    return f'    <outline text="{title}">\n{inner}\n    </outline>'
+        return f'{pad}<outline text="{title}"/>'
+    inner = "\n".join(to_opml_outline(c, indent + 2) for c in kids)
+    return f'{pad}<outline text="{title}">\n{inner}\n{pad}</outline>'
 
 
 def main():
@@ -751,12 +1317,9 @@ def main():
         "  </body>\n"
         "</opml>\n"
     )
-    opml_path = OUT_DIR / "RAG入门课-XMind导入.opml"
-    opml_path.write_text(opml, encoding="utf-8")
-
+    (OUT_DIR / "RAG入门课-XMind导入.opml").write_text(opml, encoding="utf-8")
     print(xmind_path)
     print(md_path)
-    print(opml_path)
 
 
 if __name__ == "__main__":
