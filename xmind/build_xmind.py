@@ -1027,19 +1027,22 @@ TREE = topic(
                         topic(
                             "1.2 用词频向量算句子相似度 五步",
                             children=[
-                                topic("Step1 分词"),
-                                topic("Step2 列出所有出现过的词，得到固定词表"),
-                                topic("Step3 统计每个词在各句中的词频"),
-                                topic("Step4 按同一词序得到等维向量。例：A=(1,1,2,1,1,1,0,0) B=(1,1,1,0,1,2,1,1)"),
+                                topic("句子A：这个程序代码太乱，那个代码规范"),
+                                topic("句子B：这个程序代码不规范，那个更规范"),
+                                topic("Step1 分词：A=这个/程序/代码/太乱，那个/代码/规范；B=这个/程序/代码/不/规范，那个/更/规范"),
+                                topic("Step2 词表固定顺序：这个、程序、代码、太乱、那个、规范、不、更"),
+                                topic("Step3 词频：A 代码2 其余多数字1、不和更是0；B 规范2、代码1、太乱0、不1、更1"),
+                                topic("Step4 八维向量：A=(1,1,2,1,1,1,0,0)  B=(1,1,1,0,1,2,1,1)"),
                                 topic("二维直觉：你好吗你好吗你好=(3,2)，你好=(1,0)"),
                                 topic(
                                     "Step5 余弦相似度",
                                     children=[
                                         topic("衡量方向像不像，范围约 -1 到 1，越接近 1 越像"),
                                         topic("点积：对应维度相乘再全加。同一词两边都高则点积大"),
-                                        topic("模长：各分量平方和再开方，表示句子有多长、多丰富"),
+                                        topic("本例点积=1+1+2+0+1+2+0+0=7"),
+                                        topic("模长：各分量平方和再开方，词频越高句子显得越长越丰富"),
                                         topic("公式：点积 ÷ 两个模长的乘积"),
-                                        topic("例子点积=7，词频有差异但仍可能约 0.737 较像"),
+                                        topic("结果约 0.737：代码/不/更 有差异，但这个、程序等多数词相同仍较像"),
                                         topic("一句话：共同出现的词越多越频作分子，各自有多长作分母"),
                                     ],
                                 ),
@@ -1061,11 +1064,24 @@ TREE = topic(
                 topic(
                     "2 LLM 如何算词间距离",
                     children=[
-                        topic("先把词变成上下文感知的高维向量"),
-                        topic("再用余弦相似度或余弦距离量化亲疏"),
+                        topic("先把词变成上下文感知的高维向量，再用余弦相似度量化亲疏"),
                         topic("距离越小含义越近，是语义搜索、聚类、情感分析的基础"),
-                        topic("2.1 文本向量化 Text Embedding"),
-                        topic("2.2 再算两个向量的余弦相似度"),
+                        topic(
+                            "2.1 调百炼做文本向量化",
+                            children=[
+                                topic("OpenAI 兼容客户端，base_url 用 dashscope compatible-mode v1"),
+                                topic("接口：client.embeddings.create，取出每条的 embedding"),
+                                topic("课上模型：text-embedding-v3，维度可设 128 或 1024"),
+                                topic("例子：查询“大模型应用真好”，去和一堆餐饮文档向量比"),
+                            ],
+                        ),
+                        topic(
+                            "2.2 用 numpy 算余弦",
+                            children=[
+                                topic("点积 np.dot，再除以两个 L2 范数的乘积"),
+                                topic("可对比：我爱你 vs 我恨你、vs 大模型有很多应用场景、vs python开发"),
+                            ],
+                        ),
                     ],
                 ),
                 topic(
@@ -1108,8 +1124,18 @@ TREE = topic(
                                 topic("Skip-gram：用中心词预测上下文。给你一个词，猜周围可能出现什么。一个代表辐射众人"),
                             ],
                         ),
-                        topic("模型结构本质是三层神经网络"),
-                        topic("关键词：One-hot、Multi-hot、隐藏层维度 N"),
+                        topic(
+                            "模型结构 三层网络",
+                            children=[
+                                topic("关键词：One-hot、Multi-hot、隐藏层维度 N"),
+                                topic("课上示意：词表大小 V=10，隐藏层 N=4"),
+                                topic("W 是 V×N：输入到隐藏，每一行就是一个词的词向量"),
+                                topic("W' 是 N×V：隐藏到输出"),
+                                topic("输入 one-hot 只有当前词位置为 1"),
+                                topic("h = x @ W，等价于直接取出 W 的那一行"),
+                                topic("u = h @ W'，再 softmax 得到词表上的概率分布"),
+                            ],
+                        ),
                         topic("Embedding 位于隐藏层权重矩阵 W，相当于词向量查找表"),
                     ],
                 ),
@@ -1135,6 +1161,9 @@ TREE = topic(
                         topic(
                             "为什么要专门的向量数据库",
                             children=[
+                                topic("课上问题：100 万个 128 维向量里找最像的 10 个"),
+                                topic("传统 SQL 按距离排序：要对全部向量算一遍，复杂度 O(N)"),
+                                topic("高维空间里普通索引几乎帮不上忙"),
                                 topic("近似搜索 ANN：牺牲少量精度换大幅速度"),
                                 topic("专用索引：HNSW、IVF 等高维结构"),
                                 topic("性能优化：GPU 加速、批量处理"),
@@ -1164,32 +1193,54 @@ TREE = topic(
                                 topic("特点：可 GPU、单机十亿级、算法多、MIT 许可、被 Milvus Qdrant 等采用"),
                             ],
                         ),
-                        topic("入门程序：生成随机向量 → 创建索引 → add 向量 → 相似度搜索 → 返回结果"),
+                        topic(
+                            "安装与第一个程序",
+                            children=[
+                                topic("初学者：pip install faiss-cpu，或 conda-forge"),
+                                topic("有 NVIDIA+CUDA 再装 faiss-gpu"),
+                                topic("流程：随机向量 → 创建索引 → add → search → 返回结果"),
+                                topic("课上示例：10000 条、每条 128 维 float32 矩阵"),
+                            ],
+                        ),
+                        topic(
+                            "索引选型决策树",
+                            children=[
+                                topic("不到 100 万：精度要极高用 IndexFlat，否则 IndexIVFFlat"),
+                                topic("100 万到 1 亿：要极速用 IndexHNSW，否则 IVFFlat 保精度"),
+                                topic("超过 1 亿：内存紧用 IndexIVFPQ 压缩，否则 IVFFlat 加 GPU"),
+                            ],
+                        ),
                         topic(
                             "IndexFlat 精确索引",
                             children=[
                                 topic("FlatL2：欧氏距离"),
                                 topic("FlatIP：内积/点积"),
-                                topic("余弦：IndexFlatIP + 向量先归一化"),
-                                topic("适用：数据量小于约 10 万、要极高精确、当其他索引的精度基准"),
+                                topic("余弦：先 faiss.normalize_L2，再用 IndexFlatIP"),
+                                topic("适用：小于约 10 万、要极高精确、当其他索引的精度基准"),
                             ],
                         ),
                         topic(
                             "IndexIVFFlat 倒排文件索引",
                             children=[
                                 topic("把向量空间划成多个聚类中心 Voronoi 区域"),
-                                topic("每个向量分到最近中心"),
-                                topic("查询只搜最近几个中心，而不是全部向量"),
-                                topic("nlist：聚类中心数，通常取 sqrt(N)。太小每簇太大查询慢；太大要检查的簇变多"),
-                                topic("nprobe：查几个簇。1 最快最糙；等于 nlist 就等价精确搜"),
-                                topic("为什么像倒排：正向是文档找词要扫全部；倒排是词找文档，FAISS 用簇代替词"),
+                                topic("每个向量分到最近中心，查询只搜最近几个中心"),
+                                topic("必须先 index.train，内部是 k-means；不训练不能搜"),
+                                topic("quantizer 常用底层 IndexFlatL2"),
+                                topic("nlist：聚类中心数，通常取 sqrt(N)。太小每簇太大；太大要查的簇变多"),
+                                topic("nprobe：查几个簇。1 最快最糙；等于 nlist 就变精确搜"),
+                                topic("正向索引：文档→词，搜“苹果”要扫 100 万篇，O(N)"),
+                                topic("倒排索引：词→文档，直接取倒排表，接近 O(1)，课上说可提速约 100 倍"),
+                                topic("FAISS 里用簇代替词，思想一样"),
                             ],
                         ),
                         topic(
                             "IndexHNSWFlat 分层可导航小世界",
                             children=[
-                                topic("基于图的近似最近邻 ANN，灵感来自高速公路网和六度分隔"),
+                                topic("基于图的 ANN，灵感来自高速公路和六度分隔"),
                                 topic("多层图：上层稀疏快速跳跃，下层密集精细搜索"),
+                                topic("课上参数：M=16 每个节点最大连接数"),
+                                topic("efConstruction=200：建索引时候选队列，越大质量越高、建得越慢"),
+                                topic("efSearch=50：查询时候选队列，越大越准、越慢"),
                                 topic("被 Milvus、Pinecone、Qdrant、Weaviate 等广泛使用"),
                                 topic("当前多数系统默认推荐，精度和速度较均衡"),
                             ],
