@@ -1046,13 +1046,17 @@ AI 和 GAI 都是提出目标，GAI 的目标更具体
 
 #### 1.2 用词频向量算句子相似度 五步
 
-##### Step1 分词
+##### 句子A：这个程序代码太乱，那个代码规范
 
-##### Step2 列出所有出现过的词，得到固定词表
+##### 句子B：这个程序代码不规范，那个更规范
 
-##### Step3 统计每个词在各句中的词频
+##### Step1 分词：A=这个/程序/代码/太乱，那个/代码/规范；B=这个/程序/代码/不/规范，那个/更/规范
 
-##### Step4 按同一词序得到等维向量。例：A=(1,1,2,1,1,1,0,0) B=(1,1,1,0,1,2,1,1)
+##### Step2 词表固定顺序：这个、程序、代码、太乱、那个、规范、不、更
+
+##### Step3 词频：A 代码2 其余多数字1、不和更是0；B 规范2、代码1、太乱0、不1、更1
+
+##### Step4 八维向量：A=(1,1,2,1,1,1,0,0)  B=(1,1,1,0,1,2,1,1)
 
 ##### 二维直觉：你好吗你好吗你好=(3,2)，你好=(1,0)
 
@@ -1062,11 +1066,13 @@ AI 和 GAI 都是提出目标，GAI 的目标更具体
 
 ###### 点积：对应维度相乘再全加。同一词两边都高则点积大
 
-###### 模长：各分量平方和再开方，表示句子有多长、多丰富
+###### 本例点积=1+1+2+0+1+2+0+0=7
+
+###### 模长：各分量平方和再开方，词频越高句子显得越长越丰富
 
 ###### 公式：点积 ÷ 两个模长的乘积
 
-###### 例子点积=7，词频有差异但仍可能约 0.737 较像
+###### 结果约 0.737：代码/不/更 有差异，但这个、程序等多数词相同仍较像
 
 ###### 一句话：共同出现的词越多越频作分子，各自有多长作分母
 
@@ -1086,15 +1092,25 @@ AI 和 GAI 都是提出目标，GAI 的目标更具体
 
 ### 2 LLM 如何算词间距离
 
-#### 先把词变成上下文感知的高维向量
-
-#### 再用余弦相似度或余弦距离量化亲疏
+#### 先把词变成上下文感知的高维向量，再用余弦相似度量化亲疏
 
 #### 距离越小含义越近，是语义搜索、聚类、情感分析的基础
 
-#### 2.1 文本向量化 Text Embedding
+#### 2.1 调百炼做文本向量化
 
-#### 2.2 再算两个向量的余弦相似度
+##### OpenAI 兼容客户端，base_url 用 dashscope compatible-mode v1
+
+##### 接口：client.embeddings.create，取出每条的 embedding
+
+##### 课上模型：text-embedding-v3，维度可设 128 或 1024
+
+##### 例子：查询“大模型应用真好”，去和一堆餐饮文档向量比
+
+#### 2.2 用 numpy 算余弦
+
+##### 点积 np.dot，再除以两个 L2 范数的乘积
+
+##### 可对比：我爱你 vs 我恨你、vs 大模型有很多应用场景、vs python开发
 
 ### 3 Embedding 的三大作用
 
@@ -1132,9 +1148,21 @@ AI 和 GAI 都是提出目标，GAI 的目标更具体
 
 ##### Skip-gram：用中心词预测上下文。给你一个词，猜周围可能出现什么。一个代表辐射众人
 
-#### 模型结构本质是三层神经网络
+#### 模型结构 三层网络
 
-#### 关键词：One-hot、Multi-hot、隐藏层维度 N
+##### 关键词：One-hot、Multi-hot、隐藏层维度 N
+
+##### 课上示意：词表大小 V=10，隐藏层 N=4
+
+##### W 是 V×N：输入到隐藏，每一行就是一个词的词向量
+
+##### W' 是 N×V：隐藏到输出
+
+##### 输入 one-hot 只有当前词位置为 1
+
+##### h = x @ W，等价于直接取出 W 的那一行
+
+##### u = h @ W'，再 softmax 得到词表上的概率分布
 
 #### Embedding 位于隐藏层权重矩阵 W，相当于词向量查找表
 
@@ -1156,6 +1184,12 @@ AI 和 GAI 都是提出目标，GAI 的目标更具体
 #### 向量：数学上有大小有方向；机器学习里是数据的数值化表示
 
 #### 为什么要专门的向量数据库
+
+##### 课上问题：100 万个 128 维向量里找最像的 10 个
+
+##### 传统 SQL 按距离排序：要对全部向量算一遍，复杂度 O(N)
+
+##### 高维空间里普通索引几乎帮不上忙
 
 ##### 近似搜索 ANN：牺牲少量精度换大幅速度
 
@@ -1187,7 +1221,23 @@ AI 和 GAI 都是提出目标，GAI 的目标更具体
 
 ##### 特点：可 GPU、单机十亿级、算法多、MIT 许可、被 Milvus Qdrant 等采用
 
-#### 入门程序：生成随机向量 → 创建索引 → add 向量 → 相似度搜索 → 返回结果
+#### 安装与第一个程序
+
+##### 初学者：pip install faiss-cpu，或 conda-forge
+
+##### 有 NVIDIA+CUDA 再装 faiss-gpu
+
+##### 流程：随机向量 → 创建索引 → add → search → 返回结果
+
+##### 课上示例：10000 条、每条 128 维 float32 矩阵
+
+#### 索引选型决策树
+
+##### 不到 100 万：精度要极高用 IndexFlat，否则 IndexIVFFlat
+
+##### 100 万到 1 亿：要极速用 IndexHNSW，否则 IVFFlat 保精度
+
+##### 超过 1 亿：内存紧用 IndexIVFPQ 压缩，否则 IVFFlat 加 GPU
 
 #### IndexFlat 精确索引
 
@@ -1195,29 +1245,41 @@ AI 和 GAI 都是提出目标，GAI 的目标更具体
 
 ##### FlatIP：内积/点积
 
-##### 余弦：IndexFlatIP + 向量先归一化
+##### 余弦：先 faiss.normalize_L2，再用 IndexFlatIP
 
-##### 适用：数据量小于约 10 万、要极高精确、当其他索引的精度基准
+##### 适用：小于约 10 万、要极高精确、当其他索引的精度基准
 
 #### IndexIVFFlat 倒排文件索引
 
 ##### 把向量空间划成多个聚类中心 Voronoi 区域
 
-##### 每个向量分到最近中心
+##### 每个向量分到最近中心，查询只搜最近几个中心
 
-##### 查询只搜最近几个中心，而不是全部向量
+##### 必须先 index.train，内部是 k-means；不训练不能搜
 
-##### nlist：聚类中心数，通常取 sqrt(N)。太小每簇太大查询慢；太大要检查的簇变多
+##### quantizer 常用底层 IndexFlatL2
 
-##### nprobe：查几个簇。1 最快最糙；等于 nlist 就等价精确搜
+##### nlist：聚类中心数，通常取 sqrt(N)。太小每簇太大；太大要查的簇变多
 
-##### 为什么像倒排：正向是文档找词要扫全部；倒排是词找文档，FAISS 用簇代替词
+##### nprobe：查几个簇。1 最快最糙；等于 nlist 就变精确搜
+
+##### 正向索引：文档→词，搜“苹果”要扫 100 万篇，O(N)
+
+##### 倒排索引：词→文档，直接取倒排表，接近 O(1)，课上说可提速约 100 倍
+
+##### FAISS 里用簇代替词，思想一样
 
 #### IndexHNSWFlat 分层可导航小世界
 
-##### 基于图的近似最近邻 ANN，灵感来自高速公路网和六度分隔
+##### 基于图的 ANN，灵感来自高速公路和六度分隔
 
 ##### 多层图：上层稀疏快速跳跃，下层密集精细搜索
+
+##### 课上参数：M=16 每个节点最大连接数
+
+##### efConstruction=200：建索引时候选队列，越大质量越高、建得越慢
+
+##### efSearch=50：查询时候选队列，越大越准、越慢
 
 ##### 被 Milvus、Pinecone、Qdrant、Weaviate 等广泛使用
 
@@ -1251,7 +1313,7 @@ AI 和 GAI 都是提出目标，GAI 的目标更具体
 
 ##### 开源 AI 原生向量库，为 LLM 应用设计，强调好写、快集成
 
-##### 4 个核心 API 覆盖主要操作
+##### 设计哲学：4 个核心 API 覆盖主要操作
 
 ##### 可接 OpenAI、HuggingFace 等嵌入
 
@@ -1259,11 +1321,29 @@ AI 和 GAI 都是提出目标，GAI 的目标更具体
 
 ##### 与 LangChain、LlamaIndex 集成顺
 
+##### 安装：pip install chromadb，或 conda-forge
+
+#### 四种操作串起来
+
+##### 1 创建客户端，相当于连上一个数据库实例
+
+##### 2 create_collection，类似关系库里的表
+
+##### 3 add：documents + metadatas + ids
+
+##### 4 query：用自然语言查最相似的几条
+
+#### 三种客户端
+
+##### Client()：内存临时库，进程结束数据就没了
+
+##### PersistentClient(path=./chroma_data)：落到磁盘
+
+##### HttpClient(host, port)：连远程 chroma run 服务
+
 #### 集合 Collection
 
-##### 存储向量数据的基本单位
-
-##### 把向量、文档内容、元数据三者绑在一起
+##### 基本结构：向量 Embeddings + 原文 Documents + 元数据 Metadata + id
 
 ##### create_collection：新建，已存在会报错
 
@@ -1271,15 +1351,21 @@ AI 和 GAI 都是提出目标，GAI 的目标更具体
 
 ##### get_or_create_collection：有则取、无则建，入门最常用
 
+##### list_collections 可看库里一共有多少集合
+
+##### 课上示例集合名：kaoqin 考勤、ruzhi 入职、liaofan 了凡四训
+
 #### add 添加
 
-##### ids 必填 List[str]：唯一标识，用于去重和更新删除；已存在默认跳过不覆盖
+##### ids 必填：唯一标识，去重和更新删除用；已存在默认跳过不覆盖
 
-##### documents 可选：原文，会按集合配置的嵌入函数自动转向量
+##### documents：原文，会按集合的嵌入函数自动转向量
 
-##### metadatas 可选 List[Dict]：附加信息，查询时 where 过滤。常见 key：source category author url page date
+##### 没自定义嵌入时，默认 all-MiniLM-L6-v2，约 384 维
 
-##### embeddings 可选：预计算向量，跳过自动嵌入，适合已用千问或 OpenAI 算好的场景
+##### metadatas：键值对，供 where 过滤。常见 key：source category author url page date
+
+##### embeddings：也可直接塞预计算向量，适合已用千问或 OpenAI 算好的场景
 
 #### query 查询
 
@@ -1289,50 +1375,70 @@ AI 和 GAI 都是提出目标，GAI 的目标更具体
 
 ##### n_results：每个查询返回几条，默认 10
 
-##### where：按 metadata 过滤，如 category=年假，或 page>=5，或 $and 组合
+##### where：按 metadata 过滤，如 category=年假，page>=5，$and 组合
 
-##### where_document：对原文做包含匹配，如包含年假
+##### where_document：$contains 对原文做包含匹配
 
-##### include：返回哪些字段 documents/metadatas/embeddings/distances，默认前三项中的文档、元数据、距离
+##### include：documents / metadatas / embeddings / distances，默认文档、元数据、距离
 
-#### 距离函数
+##### 课上流程：问句向量化 → 和库中算 L2 → 取 Top-K
+
+#### 距离函数 hnsw:space
 
 ##### 默认 L2 欧氏距离
 
-##### 只能在 create_collection 时用 metadata 指定：L2、内积、余弦
+##### 创建集合时 metadata 指定，三选一：l2、cosine、ip
+
+##### 写法：metadata={"hnsw:space": "cosine"}
 
 ##### 一旦创建不能改，再改会 ValueError
 
-#### 进阶
+#### 自定义嵌入
 
-##### 自定义嵌入函数：换 OpenAI 或千问向量模型
+##### OpenAIEmbeddingFunction，模型如 text-embedding-ada-002
 
-##### 服务器模式：chroma 起 HTTP，相当于启动数据库服务，Python 再远程连
+##### 千问：用 OpenAI 兼容接口桥接 DashScope，text-embedding-v3
 
-##### update 更新、delete 删除
+##### 查询必须和写入用同一套嵌入，否则向量不在同一空间，检索会乱
+
+#### 服务器模式
+
+##### chroma run --path 存储路径 --host ip --port 端口，相当于启动 MySQL
+
+##### 课上例子：chroma run --path .\chroma_data02\ --host 127.0.0.1 --port 8989
+
+##### Python 用 HttpClient 连上去，再 list、add、query
+
+#### 更新与删除
+
+##### update：可改文档内容和元数据
+
+##### delete：可按 id 列表删，也可先按元数据条件查出再删
 
 ### 第四部分 实战项目
 
-#### 目标：理解语义的搜索，用户自然语言查询，返回最相关文档
+#### 目标：自然语言查询，返回最相关文档
 
-#### 技术栈：Chroma 存和检、千问 DashScope 向量化、FastAPI 做 Web
+#### 技术栈：Chroma + 千问 DashScope 嵌入 + FastAPI
+
+#### 依赖：pip install chromadb fastapi uvicorn
 
 #### 阶段一 建库
 
-##### 加载文档 → 分块 → get_embedding 向量化
-
-##### 向量和原文都放进索引对象
+##### 加载 → 分块 → get_embedding 向量化
 
 ##### add_documents：原文进 self.documents，向量进索引
 
-#### 阶段二 检索
+#### 阶段二 检索 search
 
-##### 用户问题向量化
+##### 问题向量化
 
-##### 用索引找相似向量，得到下标
+##### 索引返回相似向量下标
 
-##### 用下标从 self.documents 取出原文
+##### 用下标从 self.documents 取原文
 
-##### 再把检索文档+用户问题交给大模型回答
+##### 原文+问题再交给大模型回答
+
+#### 课上测试：GET /search?q=向量搜索工具&k=3
 
 #### 参考：faiss.ai 、 docs.trychroma.com
