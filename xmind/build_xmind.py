@@ -167,12 +167,21 @@ TREE = topic(
                                     ],
                                 ),
                                 topic(
-                                    "区别与一句话总结",
+                                    "对比表：大模型 vs 大语言模型",
                                     children=[
-                                        topic("LLM 专注自然语言：理解、生成、翻译、推理文本"),
-                                        topic("LLM 是大模型家族里最成熟、应用最广的分支"),
-                                        topic("大模型已发展为多模态，不止语言"),
-                                        topic("所有大语言模型都是大模型，但并非所有大模型都是大语言模型"),
+                                        topic("范围：大模型更广、涵盖所有模态；LLM 更窄、专指文本语言"),
+                                        topic("输入输出：大模型可文本图像音频视频代码；LLM 主要处理文本"),
+                                        topic("关系：大模型是母集，LLM 是子集"),
+                                        topic("一句话：所有 LLM 都是大模型，但并非所有大模型都是 LLM"),
+                                    ],
+                                ),
+                                topic(
+                                    "大模型不止语言 多模态家族",
+                                    children=[
+                                        topic("大语言模型：GPT-4、Kimi、Claude → 文本理解与生成"),
+                                        topic("视觉大模型：SAM、CLIP、Stable Diffusion → 图像理解、分割、生成"),
+                                        topic("多模态大模型：GPT-4o、Gemini、Kimi-VL → 同时处理图文音视频"),
+                                        topic("科学大模型：AlphaFold、GraphCast → 蛋白质结构、天气预报"),
                                     ],
                                 ),
                             ],
@@ -206,7 +215,10 @@ TREE = topic(
                                         topic("如 unbelievable 可能拆成 un + believ + able"),
                                         topic("各模型分词方式不同"),
                                         topic("DeepSeek 约：1个英文字符≈0.3 token；1个中文字符≈0.6 token"),
-                                        topic("经验：1000 token ≈ 750 英文词，或 400-500 汉字"),
+                                        topic("讲义对照表：英文 1 token≈0.75 个单词，Hello world≈2 tokens"),
+                                        topic("讲义对照表：中文 1 token≈1 个汉字，你好世界≈4 tokens"),
+                                        topic("经验另说：1000 token ≈ 750 英文词，或 400-500 汉字"),
+                                        topic("不同模型切法不一样，以上比例不要混用"),
                                         topic("可视化：gpt-tokenizer.dev 可看 GPT 如何切 token"),
                                     ],
                                 ),
@@ -231,7 +243,25 @@ TREE = topic(
                                         topic("从百万、千万到数亿、数百亿甚至万亿，单位 B=10亿"),
                                         topic("参数即记忆单元，是存储和表达知识的载体"),
                                         topic("参数越多，能拟合的模式越复杂，语义关系和知识更精细"),
-                                        topic("比喻：参数=学生大脑里的解题套路，知识级别越高能解的题越多"),
+                                        topic(
+                                            "规模分级 讲义表",
+                                            children=[
+                                                topic("小型 <1B：Phi-3 Mini 3.8B、TinyLlama 1.1B"),
+                                                topic("中型 1B-10B：Gemma 2 9B、Qwen2.5 7B"),
+                                                topic("大型 10B-100B：Llama 3 70B、GPT-3 175B"),
+                                                topic("超大规模 >100B：GPT-4 约1.76T、Llama 3 405B、DeepSeek V3 671B"),
+                                            ],
+                                        ),
+                                        topic(
+                                            "学生做题比喻",
+                                            children=[
+                                                topic("参数 = 学生大脑里的解题套路"),
+                                                topic("小模型几百万：小学生，只会加减乘除，应用题读不懂"),
+                                                topic("中模型几亿：初中生，会解方程，复杂几何经常错"),
+                                                topic("大模型几百亿：高中生/大学生，微积分、物理建模都能做"),
+                                                topic("超大模型千亿：教授，能发论文、跨学科创新"),
+                                            ],
+                                        ),
                                     ],
                                 ),
                                 topic(
@@ -388,6 +418,16 @@ TREE = topic(
                                 topic("优点：可控版本路由限流、细粒度监控日志、要私有化又想用云算力"),
                                 topic("缺点：自己管下载、显存、扩容、监控，要 MLOps 能力"),
                                 topic("MLOps：把 DevOps 用到机器学习全生命周期自动化"),
+                                topic(
+                                    "云上自托管服务器类型",
+                                    children=[
+                                        topic("公有云 GPU 实例：AWS p3/p4/g4dn、阿里云 GN7/V100、腾讯云 GN10；按需或包年，完整控制权；适合生产、长期训练"),
+                                        topic("GPU 裸金属：阿里云神龙、AWS Nitro Enclaves；无虚拟化开销，性能极致；适合大规模分布式训练"),
+                                        topic("容器化 GPU：AWS EKS、阿里云 ACK、Google GKE；K8s 编排弹性伸缩；适合微服务推理集群"),
+                                        topic("Serverless GPU：SageMaker Serverless、Replicate；按调用付费零运维；适合轻量推理、突发流量"),
+                                        topic("算力租赁：AutoDL、恒源云、Featurize、vast.ai；按小时计费即开即用"),
+                                    ],
+                                ),
                             ],
                         ),
                         topic(
@@ -753,7 +793,18 @@ TREE = topic(
                                 topic("技术本质：检索器 Retriever + 生成器 Generator"),
                             ],
                         ),
-                        topic("1.2 和纯大模型的区别：不是替代，而是装上实时、可信、可控的记忆外挂"),
+                        topic(
+                            "1.2 RAG 与纯大模型 LLM-only 对比表",
+                            children=[
+                                topic("知识来源：纯模型只靠训练时记住的参数化知识；RAG=参数化知识+可随时更新的外部知识库"),
+                                topic("知识时效：纯模型卡在训练截止日期，更新要重新微调；RAG 只需更新知识库文档，不必重训"),
+                                topic("幻觉控制：纯模型容易对未知内容信口开河；RAG 有明确下文依据，可强制不知道就不答"),
+                                topic("可解释性：纯模型无法溯源、难验证事实；RAG 可返回引用、支持核查"),
+                                topic("领域适配：纯模型要大量微调数据和算力；RAG 只需准备领域文档，成本低"),
+                                topic("上下文长度：纯模型受窗口限制；RAG 先检索筛选，可间接处理海量文档"),
+                                topic("结论：RAG 不是替代大模型，而是给它装上实时、可信、可控的记忆外挂"),
+                            ],
+                        ),
                         topic(
                             "1.3 核心流程 Query → Embedding → Retrieval → Context → LLM → Answer",
                             children=[
@@ -934,11 +985,12 @@ TREE = topic(
                             ],
                         ),
                         topic(
-                            "2.4 RAG vs 模型微调",
+                            "2.4 RAG vs 模型微调 怎么选",
                             children=[
                                 topic("领域知识增强时的第一选择：微调还是 RAG"),
-                                topic("知识固定、要低延迟：微调更合适"),
-                                topic("知识常变、要引用、要私有：RAG 更合适"),
+                                topic("改知识：RAG 改文档即可；微调要重新训练，贵且慢"),
+                                topic("改口吻风格、固定知识、要极低延迟：微调更合适"),
+                                topic("要引用溯源、私有内网、知识常变：RAG 更合适"),
                                 topic("可结合：微调让模型更会用检索资料，RAG 注入最新知识"),
                                 topic("思考题：校园通知每月更新，该用 RAG，因为知识常变且不必重训"),
                             ],
@@ -1089,9 +1141,11 @@ TREE = topic(
                             ],
                         ),
                         topic(
-                            "核心指标",
+                            "核心指标 讲义表",
                             children=[
-                                topic("性能：延迟、吞吐、召回精度"),
+                                topic("查询延迟 Latency：单次响应时间。毫秒级适合实时，秒级适合离线批处理"),
+                                topic("吞吐量 Throughput：每秒查询数 QPS，衡量并发"),
+                                topic("准确率 Accuracy：近似搜和精确搜有多接近。Recall@K=前K个里包含真正近邻的比例"),
                                 topic("存储：内存占用、索引磁盘大小"),
                             ],
                         ),
@@ -1175,6 +1229,9 @@ TREE = topic(
                             children=[
                                 topic("存储向量数据的基本单位"),
                                 topic("把向量、文档内容、元数据三者绑在一起"),
+                                topic("create_collection：新建，已存在会报错"),
+                                topic("get_collection：取已有集合，不存在会报错"),
+                                topic("get_or_create_collection：有则取、无则建，入门最常用"),
                             ],
                         ),
                         topic(

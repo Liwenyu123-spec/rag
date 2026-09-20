@@ -89,11 +89,17 @@
               <outline text="通用能力：理解、推理、生成、分类"/>
               <outline text="涌现能力：规模到一定程度后出现意想不到的能力"/>
             </outline>
-            <outline text="区别与一句话总结">
-              <outline text="LLM 专注自然语言：理解、生成、翻译、推理文本"/>
-              <outline text="LLM 是大模型家族里最成熟、应用最广的分支"/>
-              <outline text="大模型已发展为多模态，不止语言"/>
-              <outline text="所有大语言模型都是大模型，但并非所有大模型都是大语言模型"/>
+            <outline text="对比表：大模型 vs 大语言模型">
+              <outline text="范围：大模型更广、涵盖所有模态；LLM 更窄、专指文本语言"/>
+              <outline text="输入输出：大模型可文本图像音频视频代码；LLM 主要处理文本"/>
+              <outline text="关系：大模型是母集，LLM 是子集"/>
+              <outline text="一句话：所有 LLM 都是大模型，但并非所有大模型都是 LLM"/>
+            </outline>
+            <outline text="大模型不止语言 多模态家族">
+              <outline text="大语言模型：GPT-4、Kimi、Claude → 文本理解与生成"/>
+              <outline text="视觉大模型：SAM、CLIP、Stable Diffusion → 图像理解、分割、生成"/>
+              <outline text="多模态大模型：GPT-4o、Gemini、Kimi-VL → 同时处理图文音视频"/>
+              <outline text="科学大模型：AlphaFold、GraphCast → 蛋白质结构、天气预报"/>
             </outline>
           </outline>
           <outline text="2.4 大模型的爆炸式发展">
@@ -115,7 +121,10 @@
               <outline text="如 unbelievable 可能拆成 un + believ + able"/>
               <outline text="各模型分词方式不同"/>
               <outline text="DeepSeek 约：1个英文字符≈0.3 token；1个中文字符≈0.6 token"/>
-              <outline text="经验：1000 token ≈ 750 英文词，或 400-500 汉字"/>
+              <outline text="讲义对照表：英文 1 token≈0.75 个单词，Hello world≈2 tokens"/>
+              <outline text="讲义对照表：中文 1 token≈1 个汉字，你好世界≈4 tokens"/>
+              <outline text="经验另说：1000 token ≈ 750 英文词，或 400-500 汉字"/>
+              <outline text="不同模型切法不一样，以上比例不要混用"/>
               <outline text="可视化：gpt-tokenizer.dev 可看 GPT 如何切 token"/>
             </outline>
             <outline text="为什么 token 重要">
@@ -131,7 +140,19 @@
               <outline text="从百万、千万到数亿、数百亿甚至万亿，单位 B=10亿"/>
               <outline text="参数即记忆单元，是存储和表达知识的载体"/>
               <outline text="参数越多，能拟合的模式越复杂，语义关系和知识更精细"/>
-              <outline text="比喻：参数=学生大脑里的解题套路，知识级别越高能解的题越多"/>
+              <outline text="规模分级 讲义表">
+                <outline text="小型 &lt;1B：Phi-3 Mini 3.8B、TinyLlama 1.1B"/>
+                <outline text="中型 1B-10B：Gemma 2 9B、Qwen2.5 7B"/>
+                <outline text="大型 10B-100B：Llama 3 70B、GPT-3 175B"/>
+                <outline text="超大规模 &gt;100B：GPT-4 约1.76T、Llama 3 405B、DeepSeek V3 671B"/>
+              </outline>
+              <outline text="学生做题比喻">
+                <outline text="参数 = 学生大脑里的解题套路"/>
+                <outline text="小模型几百万：小学生，只会加减乘除，应用题读不懂"/>
+                <outline text="中模型几亿：初中生，会解方程，复杂几何经常错"/>
+                <outline text="大模型几百亿：高中生/大学生，微积分、物理建模都能做"/>
+                <outline text="超大模型千亿：教授，能发论文、跨学科创新"/>
+              </outline>
             </outline>
             <outline text="训练数据量“大”">
               <outline text="支撑庞大参数需要海量数据"/>
@@ -234,6 +255,13 @@
             <outline text="优点：可控版本路由限流、细粒度监控日志、要私有化又想用云算力"/>
             <outline text="缺点：自己管下载、显存、扩容、监控，要 MLOps 能力"/>
             <outline text="MLOps：把 DevOps 用到机器学习全生命周期自动化"/>
+            <outline text="云上自托管服务器类型">
+              <outline text="公有云 GPU 实例：AWS p3/p4/g4dn、阿里云 GN7/V100、腾讯云 GN10；按需或包年，完整控制权；适合生产、长期训练"/>
+              <outline text="GPU 裸金属：阿里云神龙、AWS Nitro Enclaves；无虚拟化开销，性能极致；适合大规模分布式训练"/>
+              <outline text="容器化 GPU：AWS EKS、阿里云 ACK、Google GKE；K8s 编排弹性伸缩；适合微服务推理集群"/>
+              <outline text="Serverless GPU：SageMaker Serverless、Replicate；按调用付费零运维；适合轻量推理、突发流量"/>
+              <outline text="算力租赁：AutoDL、恒源云、Featurize、vast.ai；按小时计费即开即用"/>
+            </outline>
           </outline>
           <outline text="4 本地与边缘部署">
             <outline text="个人电脑、实验室、私有机房推理"/>
@@ -465,7 +493,15 @@
             <outline text="比喻：开卷考试。模型是闭卷考生，RAG 是可随时翻的参考书"/>
             <outline text="技术本质：检索器 Retriever + 生成器 Generator"/>
           </outline>
-          <outline text="1.2 和纯大模型的区别：不是替代，而是装上实时、可信、可控的记忆外挂"/>
+          <outline text="1.2 RAG 与纯大模型 LLM-only 对比表">
+            <outline text="知识来源：纯模型只靠训练时记住的参数化知识；RAG=参数化知识+可随时更新的外部知识库"/>
+            <outline text="知识时效：纯模型卡在训练截止日期，更新要重新微调；RAG 只需更新知识库文档，不必重训"/>
+            <outline text="幻觉控制：纯模型容易对未知内容信口开河；RAG 有明确下文依据，可强制不知道就不答"/>
+            <outline text="可解释性：纯模型无法溯源、难验证事实；RAG 可返回引用、支持核查"/>
+            <outline text="领域适配：纯模型要大量微调数据和算力；RAG 只需准备领域文档，成本低"/>
+            <outline text="上下文长度：纯模型受窗口限制；RAG 先检索筛选，可间接处理海量文档"/>
+            <outline text="结论：RAG 不是替代大模型，而是给它装上实时、可信、可控的记忆外挂"/>
+          </outline>
           <outline text="1.3 核心流程 Query → Embedding → Retrieval → Context → LLM → Answer">
             <outline text="Query：自然语言问题，可能有错别字、口语、指代不明。如“上次那个产品的安全规范更新了吗”"/>
             <outline text="Embedding：用与知识库相同的嵌入模型，把问题变成高维向量，如 768 或 1536 维，变成可运算的语义坐标"/>
@@ -576,10 +612,11 @@
               <outline text="定位：当前最前沿，从执行者变成会规划的思考者"/>
             </outline>
           </outline>
-          <outline text="2.4 RAG vs 模型微调">
+          <outline text="2.4 RAG vs 模型微调 怎么选">
             <outline text="领域知识增强时的第一选择：微调还是 RAG"/>
-            <outline text="知识固定、要低延迟：微调更合适"/>
-            <outline text="知识常变、要引用、要私有：RAG 更合适"/>
+            <outline text="改知识：RAG 改文档即可；微调要重新训练，贵且慢"/>
+            <outline text="改口吻风格、固定知识、要极低延迟：微调更合适"/>
+            <outline text="要引用溯源、私有内网、知识常变：RAG 更合适"/>
             <outline text="可结合：微调让模型更会用检索资料，RAG 注入最新知识"/>
             <outline text="思考题：校园通知每月更新，该用 RAG，因为知识常变且不必重训"/>
           </outline>
@@ -672,8 +709,10 @@
             <outline text="专用索引：HNSW、IVF 等高维结构"/>
             <outline text="性能优化：GPU 加速、批量处理"/>
           </outline>
-          <outline text="核心指标">
-            <outline text="性能：延迟、吞吐、召回精度"/>
+          <outline text="核心指标 讲义表">
+            <outline text="查询延迟 Latency：单次响应时间。毫秒级适合实时，秒级适合离线批处理"/>
+            <outline text="吞吐量 Throughput：每秒查询数 QPS，衡量并发"/>
+            <outline text="准确率 Accuracy：近似搜和精确搜有多接近。Recall@K=前K个里包含真正近邻的比例"/>
             <outline text="存储：内存占用、索引磁盘大小"/>
           </outline>
         </outline>
@@ -730,6 +769,9 @@
           <outline text="集合 Collection">
             <outline text="存储向量数据的基本单位"/>
             <outline text="把向量、文档内容、元数据三者绑在一起"/>
+            <outline text="create_collection：新建，已存在会报错"/>
+            <outline text="get_collection：取已有集合，不存在会报错"/>
+            <outline text="get_or_create_collection：有则取、无则建，入门最常用"/>
           </outline>
           <outline text="add 添加">
             <outline text="ids 必填 List[str]：唯一标识，用于去重和更新删除；已存在默认跳过不覆盖"/>
