@@ -1010,6 +1010,121 @@
           </outline>
         </outline>
       </outline>
+      <outline text="07 Advanced RAG（高级RAG）">
+        <outline text="核心定位">
+          <outline text="不是检索一次就完事，而是让检索链路每个环节都尽量优化"/>
+          <outline text="闭环：查什么（查询优化）→ 去哪查（混合检索）→ 查得准（重排序）→ 怎么用（上下文压缩）"/>
+        </outline>
+        <outline text="一、检索前优化（Pre-retrieval）">
+          <outline text="查询重写 Query Rewriting：把原问题改写成更适合检索的表达（扩展术语等）"/>
+          <outline text="查询扩展 Query Expansion：生成多个相关变体，并行检索再合并"/>
+          <outline text="HyDE：先让 LLM 生成「假设答案文档」，再用该文档去检索"/>
+          <outline text="子查询分解：复杂问题拆成多个简单子问题分别检索"/>
+          <outline text="文档分块优化：按语义 / 段落 / 固定长度+重叠切分"/>
+          <outline text="文档增强：为文档生成摘要、关键词、假设问题等元数据"/>
+        </outline>
+        <outline text="二、检索中优化（Retrieval）">
+          <outline text="混合检索 Hybrid：向量检索（语义）+ 关键词检索（BM25/TF-IDF）"/>
+          <outline text="多路召回：多种策略并行（不同 Embedding / 不同索引）"/>
+          <outline text="多向量表示 / ColBERT：token 级交互，而非单文档向量"/>
+          <outline text="稀疏向量检索 Sparse（如 SPLADE）：兼顾词匹配与语义"/>
+        </outline>
+        <outline text="三、检索后优化（Post-retrieval）">
+          <outline text="上下文压缩：去掉冗余，只保留与问题最相关的句段"/>
+          <outline text="去重与过滤：去掉重复或低相关文档，降噪声"/>
+          <outline text="重排序后再筛选 Top-K：按重排分数动态选送入生成的文档数"/>
+          <outline text="提示工程优化：更好的 Prompt 模板、引用格式、输出约束"/>
+          <outline text="引用溯源 Citation：让模型标注答案来源，提高可信度"/>
+        </outline>
+        <outline text="四、其他进阶技术">
+          <outline text="Self-RAG：生成过程中自行判断是否需要检索，避免过度依赖"/>
+          <outline text="Corrective RAG：评估检索质量；差则切换外部搜索（如网页）"/>
+          <outline text="RAG-Fusion：多查询并行 + RRF（倒数排名融合）合并结果"/>
+          <outline text="自适应检索 Adaptive：按问题难度动态决定检索深度与策略"/>
+        </outline>
+      </outline>
+      <outline text="08 检索前优化（Pre-retrieval）">
+        <outline text="一、检索前优化策略">
+          <outline text="1 查询改写与扩展">
+            <outline text="HyDE：用假设理想答案去检索；适合短/模糊、表述差异大"/>
+            <outline text="查询扩展：补关键词/同义词/上下位词；适合术语多、用词不专业"/>
+            <outline text="多视角改写：多种表达分别检索再合并；适合高召回"/>
+            <outline text="反事实/澄清：模糊时反问或分支意图；适合多轮客服"/>
+          </outline>
+          <outline text="2 查询分解 Query Decomposition">
+            <outline text="多跳问题拆成子查询，分别检索后再整合"/>
+            <outline text="示例：比较 A/B 公司 2023 营收增长 → 分别检索营收 → 算增长率 → LLM 综合"/>
+            <outline text="常用：Least-to-Most、CoT 分解"/>
+          </outline>
+          <outline text="3 文档预处理与分块">
+            <outline text="语义分块：按段落/主题边界，避免切断语义"/>
+            <outline text="重叠窗口 Overlap：相邻块保留重叠，防上下文丢失"/>
+            <outline text="父子块 Parent-Child / Small-to-Big：小块匹配，返回父级大上下文"/>
+            <outline text="元数据标注：标题、时间、来源、分类，供后续过滤"/>
+          </outline>
+          <outline text="4 结构化路由与过滤">
+            <outline text="意图路由：按问题类型选不同索引（技术文档 vs 客服 FAQ）"/>
+            <outline text="元数据预过滤：先按时间/作者/类别硬过滤，再向量检索"/>
+            <outline text="权限过滤：按用户身份排除无权文档空间"/>
+          </outline>
+          <outline text="5 查询向量化前的文本优化">
+            <outline text="去口语化冗余：提取核心实体与意图"/>
+            <outline text="术语标准化：俚语映射到标准术语表"/>
+            <outline text="实体识别与链接：人名/产品名辅助关键词混合检索"/>
+          </outline>
+          <outline text="6 索引层面的预优化（离线）">
+            <outline text="多表示索引：摘要向量 + 详细内容向量 + 关键词倒排"/>
+            <outline text="图索引 GraphRAG：实体关系图，检索前图遍历定位相关社区"/>
+          </outline>
+        </outline>
+        <outline text="二、LlamaIndex 案例">
+          <outline text="1 文档分块 Chunking">
+            <outline text="1.1 SentenceSplitter">
+              <outline text="按句子边界切分 + 重叠窗口"/>
+              <outline text="示例：chunk_size=512, chunk_overlap=100"/>
+              <outline text="可配中文 secondary_chunking_regex"/>
+              <outline text="思想：粗分隔符先拆，再细粒度句子边界拆"/>
+            </outline>
+            <outline text="1.2 SemanticSplitterNodeParser">
+              <outline text="按句子间语义相似度变化决定切分点"/>
+              <outline text="buffer_size：相似度比较的上下文缓冲窗口"/>
+              <outline text="breakpoint_percentile_threshold：越高越敏感、块越小"/>
+              <outline text="DashScope text-embedding-v3 需分批（每批≤10）"/>
+            </outline>
+          </outline>
+          <outline text="2 查询转换 Query Transformation">
+            <outline text="2.1 查询重写">
+              <outline text="HyDEQueryTransform + TransformQueryEngine（常更好）"/>
+              <outline text="自定义 Prompt 重写：继承 BaseQueryTransform"/>
+              <outline text="Prompt 要点：角色=改写助手；只输出改写文本；低温稳定"/>
+              <outline text="include_original=True 可同时保留原查询"/>
+            </outline>
+            <outline text="2.2 查询扩展">
+              <outline text="Step-Back：具体问题退一步成更宽泛问题，补背景"/>
+              <outline text="Multi-Query：生成 N 个变体 + QueryFusionRetriever"/>
+              <outline text="融合模式：reciprocal_rerank（RRF）合并多路结果"/>
+              <outline text="扩展 vs 分解：扩展=近义变体提召回；分解=不同侧面子问题"/>
+            </outline>
+            <outline text="2.3 子查询分解 SubQuestionQueryEngine">
+              <outline text="拆原子子问题 → QueryEngineTool 路由 → 并发答 → LLM 综合"/>
+              <outline text="适用：多部分组合、跨领域、比较类问题"/>
+              <outline text="tool description 要精准有区分度，避免路由乱"/>
+              <outline text="依赖：llama-index-question-gen-openai（注意版本）"/>
+            </outline>
+          </outline>
+          <outline text="3 完整改造流水线">
+            <outline text="分块三选一：Sentence / Semantic / Hierarchical 父子块"/>
+            <outline text="检索：VectorIndexRetriever；分层可用 AutoMergingRetriever"/>
+            <outline text="检索前：HyDE TransformQueryEngine"/>
+            <outline text="复杂题：SubQuestionQueryEngine 包 HyDE 引擎"/>
+            <outline text="父子块案例">
+              <outline text="HierarchicalNodeParser：父大块 + 子小块"/>
+              <outline text="叶子建向量索引，根块进 docstore"/>
+              <outline text="AutoMergingRetriever：小块命中后合并回父上下文"/>
+            </outline>
+          </outline>
+        </outline>
+      </outline>
     </outline>
   </body>
 </opml>

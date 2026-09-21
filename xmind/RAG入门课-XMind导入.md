@@ -1,5 +1,5 @@
 # RAG入门课
-根据6篇飞书讲义整理：认知阶段、提示词、RAG整体认知、Embedding、向量数据库、Native RAG（基础RAG）。
+根据8篇飞书讲义整理：认知阶段、提示词、RAG整体认知、Embedding、向量数据库、Native RAG、Advanced RAG、检索前优化（Pre-retrieval）。
 
 ## 01 认知阶段：大模型介绍、调用、RAG
 飞书文档：01-认知阶段（大模型介绍，调用，RAG）
@@ -1655,3 +1655,194 @@ AI 和 GAI 都是提出目标，GAI 的目标更具体
 ##### 持久化目录：semantic_search/chroma_db
 
 ##### 启动：在 rag 根目录 python -m semantic_search → http://127.0.0.1:8001/
+
+## 07 Advanced RAG（高级RAG）
+飞书文档：01-RAG（Advance RAG）https://ecnwvcdzorsp.feishu.cn/docx/F2wRdmBPNoI25vx3l8Pc3MvWnTe
+在朴素 RAG 上对检索前 / 检索中 / 检索后系统优化。
+
+### 核心定位
+
+#### 不是检索一次就完事，而是让检索链路每个环节都尽量优化
+
+#### 闭环：查什么（查询优化）→ 去哪查（混合检索）→ 查得准（重排序）→ 怎么用（上下文压缩）
+
+### 一、检索前优化（Pre-retrieval）
+目标：让查询更精准，让文档库更适合检索
+
+#### 查询重写 Query Rewriting：把原问题改写成更适合检索的表达（扩展术语等）
+
+#### 查询扩展 Query Expansion：生成多个相关变体，并行检索再合并
+
+#### HyDE：先让 LLM 生成「假设答案文档」，再用该文档去检索
+
+#### 子查询分解：复杂问题拆成多个简单子问题分别检索
+
+#### 文档分块优化：按语义 / 段落 / 固定长度+重叠切分
+
+#### 文档增强：为文档生成摘要、关键词、假设问题等元数据
+
+### 二、检索中优化（Retrieval）
+目标：提升召回率和相关性
+
+#### 混合检索 Hybrid：向量检索（语义）+ 关键词检索（BM25/TF-IDF）
+
+#### 多路召回：多种策略并行（不同 Embedding / 不同索引）
+
+#### 多向量表示 / ColBERT：token 级交互，而非单文档向量
+
+#### 稀疏向量检索 Sparse（如 SPLADE）：兼顾词匹配与语义
+
+### 三、检索后优化（Post-retrieval）
+目标：精简上下文，提升生成质量
+
+#### 上下文压缩：去掉冗余，只保留与问题最相关的句段
+
+#### 去重与过滤：去掉重复或低相关文档，降噪声
+
+#### 重排序后再筛选 Top-K：按重排分数动态选送入生成的文档数
+
+#### 提示工程优化：更好的 Prompt 模板、引用格式、输出约束
+
+#### 引用溯源 Citation：让模型标注答案来源，提高可信度
+
+### 四、其他进阶技术
+
+#### Self-RAG：生成过程中自行判断是否需要检索，避免过度依赖
+
+#### Corrective RAG：评估检索质量；差则切换外部搜索（如网页）
+
+#### RAG-Fusion：多查询并行 + RRF（倒数排名融合）合并结果
+
+#### 自适应检索 Adaptive：按问题难度动态决定检索深度与策略
+
+## 08 检索前优化（Pre-retrieval）
+飞书文档：02-检索前优化（Pre-retrieval）https://ecnwvcdzorsp.feishu.cn/docx/EId6d4FwjoCrA4x8LELcG8eyn3g
+核心目标：进入向量库前提升查询质量、缩小范围、降低噪声。
+
+### 一、检索前优化策略
+
+#### 1 查询改写与扩展
+
+##### HyDE：用假设理想答案去检索；适合短/模糊、表述差异大
+
+##### 查询扩展：补关键词/同义词/上下位词；适合术语多、用词不专业
+
+##### 多视角改写：多种表达分别检索再合并；适合高召回
+
+##### 反事实/澄清：模糊时反问或分支意图；适合多轮客服
+
+#### 2 查询分解 Query Decomposition
+
+##### 多跳问题拆成子查询，分别检索后再整合
+
+##### 示例：比较 A/B 公司 2023 营收增长 → 分别检索营收 → 算增长率 → LLM 综合
+
+##### 常用：Least-to-Most、CoT 分解
+
+#### 3 文档预处理与分块
+
+##### 语义分块：按段落/主题边界，避免切断语义
+
+##### 重叠窗口 Overlap：相邻块保留重叠，防上下文丢失
+
+##### 父子块 Parent-Child / Small-to-Big：小块匹配，返回父级大上下文
+
+##### 元数据标注：标题、时间、来源、分类，供后续过滤
+
+#### 4 结构化路由与过滤
+
+##### 意图路由：按问题类型选不同索引（技术文档 vs 客服 FAQ）
+
+##### 元数据预过滤：先按时间/作者/类别硬过滤，再向量检索
+
+##### 权限过滤：按用户身份排除无权文档空间
+
+#### 5 查询向量化前的文本优化
+
+##### 去口语化冗余：提取核心实体与意图
+
+##### 术语标准化：俚语映射到标准术语表
+
+##### 实体识别与链接：人名/产品名辅助关键词混合检索
+
+#### 6 索引层面的预优化（离线）
+
+##### 多表示索引：摘要向量 + 详细内容向量 + 关键词倒排
+
+##### 图索引 GraphRAG：实体关系图，检索前图遍历定位相关社区
+
+### 二、LlamaIndex 案例
+
+#### 1 文档分块 Chunking
+
+##### 1.1 SentenceSplitter
+chunk_size 按 token（tiktoken）；中文约 1 字≈1~1.5 token
+
+###### 按句子边界切分 + 重叠窗口
+
+###### 示例：chunk_size=512, chunk_overlap=100
+
+###### 可配中文 secondary_chunking_regex
+
+###### 思想：粗分隔符先拆，再细粒度句子边界拆
+
+##### 1.2 SemanticSplitterNodeParser
+
+###### 按句子间语义相似度变化决定切分点
+
+###### buffer_size：相似度比较的上下文缓冲窗口
+
+###### breakpoint_percentile_threshold：越高越敏感、块越小
+
+###### DashScope text-embedding-v3 需分批（每批≤10）
+
+#### 2 查询转换 Query Transformation
+
+##### 2.1 查询重写
+口语/信息不足的 query → 检索友好表达
+
+###### HyDEQueryTransform + TransformQueryEngine（常更好）
+
+###### 自定义 Prompt 重写：继承 BaseQueryTransform
+
+###### Prompt 要点：角色=改写助手；只输出改写文本；低温稳定
+
+###### include_original=True 可同时保留原查询
+
+##### 2.2 查询扩展
+
+###### Step-Back：具体问题退一步成更宽泛问题，补背景
+
+###### Multi-Query：生成 N 个变体 + QueryFusionRetriever
+
+###### 融合模式：reciprocal_rerank（RRF）合并多路结果
+
+###### 扩展 vs 分解：扩展=近义变体提召回；分解=不同侧面子问题
+
+##### 2.3 子查询分解 SubQuestionQueryEngine
+
+###### 拆原子子问题 → QueryEngineTool 路由 → 并发答 → LLM 综合
+
+###### 适用：多部分组合、跨领域、比较类问题
+
+###### tool description 要精准有区分度，避免路由乱
+
+###### 依赖：llama-index-question-gen-openai（注意版本）
+
+#### 3 完整改造流水线
+
+##### 分块三选一：Sentence / Semantic / Hierarchical 父子块
+
+##### 检索：VectorIndexRetriever；分层可用 AutoMergingRetriever
+
+##### 检索前：HyDE TransformQueryEngine
+
+##### 复杂题：SubQuestionQueryEngine 包 HyDE 引擎
+
+##### 父子块案例
+
+###### HierarchicalNodeParser：父大块 + 子小块
+
+###### 叶子建向量索引，根块进 docstore
+
+###### AutoMergingRetriever：小块命中后合并回父上下文
