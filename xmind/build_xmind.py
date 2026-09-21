@@ -1672,20 +1672,23 @@ def style_topic(fill: str, font_color: str, bold: bool = False, size: str = "12p
 
 
 def paint_calm(node: dict, depth: int = 0) -> None:
-    """统一灰蓝色层级，结构全部用向右逻辑图（单章内不会太乱）。"""
+    """统一灰蓝色层级；整章用放射布局，避免一长条。"""
     if depth == 0:
         fill, color = PALETTE["root"]
         node["style"] = style_topic(fill, color, bold=True, size="16pt")
+        node["structureClass"] = "org.xmind.ui.map.unbalanced"
     elif depth == 1:
         fill, color = PALETTE["l1"]
         node["style"] = style_topic(fill, color, bold=True, size="12pt")
+        # 一级小节也放射，继续摊开而不是往右拉长
+        node["structureClass"] = "org.xmind.ui.map.unbalanced"
     elif depth == 2:
         fill, color = PALETTE["l2"]
         node["style"] = style_topic(fill, color, bold=True, size="11pt")
+        node["structureClass"] = "org.xmind.ui.map.unbalanced"
     else:
         fill, color = PALETTE["l3"]
         node["style"] = style_topic(fill, color, bold=False, size="11pt")
-    node["structureClass"] = "org.xmind.ui.logic.right"
     for child in node.get("children", {}).get("attached", []):
         paint_calm(child, depth + 1)
 
@@ -1706,15 +1709,15 @@ def make_overview(chapters: list) -> dict:
             sn["style"] = style_topic("#FFFFFF", "#475569", size="11pt")
         node = topic(ch["title"], children=section_nodes or None)
         node["style"] = style_topic("#E2E8F0", "#0F172A", bold=True, size="12pt")
-        node["structureClass"] = "org.xmind.ui.logic.right"
+        node["structureClass"] = "org.xmind.ui.map.unbalanced"
         children.append(node)
 
     root = topic(
         "RAG入门课",
-        note="总览只看章节结构。底部切换画布查看各章完整细节。",
+        note="总览看章节结构。底部切换画布查看各章完整细节（放射布局）。",
         children=children,
     )
-    root["structureClass"] = "org.xmind.ui.org-chart.down"
+    root["structureClass"] = "org.xmind.ui.map.clockwise"
     root["style"] = style_topic("#1E293B", "#FFFFFF", bold=True, size="18pt")
     return root
 
@@ -1746,8 +1749,6 @@ def main():
     for ch in chapters:
         chapter = copy.deepcopy(ch)
         paint_calm(chapter, depth=0)
-        # 单章：从左到右清晰阅读；一章一页，不会整课拉成一条
-        chapter["structureClass"] = "org.xmind.ui.logic.right"
         sheets.append(make_sheet(shorten_sheet_title(chapter["title"]), chapter))
 
     content = sheets
@@ -1783,7 +1784,7 @@ def main():
     (OUT_DIR / "RAG入门课-XMind导入.opml").write_text(opml, encoding="utf-8")
     print(xmind_path)
     print(md_path)
-    print(f"sheets={len(sheets)}; overview=org-chart.down; chapters=logic.right; calm palette")
+    print(f"sheets={len(sheets)}; overview=map.clockwise; chapters=map.unbalanced")
 
 
 if __name__ == "__main__":
