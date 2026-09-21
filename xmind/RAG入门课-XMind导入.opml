@@ -877,6 +877,130 @@
           <outline text="参考：faiss.ai 、 docs.trychroma.com"/>
         </outline>
       </outline>
+      <outline text="06 Native RAG（基础RAG）">
+        <outline text="一、技术原理">
+          <outline text="1 为什么需要RAG">
+            <outline text="知识时效性：无法实时获取最新数据，如 GPT-3 知识停在 2021"/>
+            <outline text="幻觉问题：基于概率生成，Prompt 上限即回答有效性上限"/>
+            <outline text="垂直领域覆盖不足：医疗等行业资料多为机密，通用模型吃不到"/>
+          </outline>
+          <outline text="2 RAG原理（Native RAG 三步）">
+            <outline text="Indexing：文档向量化，写入向量库建索引"/>
+            <outline text="Search：问题 Embedding 后检索最相关文档片段"/>
+            <outline text="Generate：把片段塞进 Prompt，由 LLM 生成可读回答"/>
+          </outline>
+        </outline>
+        <outline text="二、RAG流程">
+          <outline text="大致分三个阶段：数据准备 → 检索 → 生成（讲义有总流程图）"/>
+        </outline>
+        <outline text="三、数据准备阶段">
+          <outline text="1 数据准备">
+            <outline text="原始数据常有：格式难识别、内容不一致、不完整、不合法"/>
+            <outline text="第一性原理：加上下文能提准确性，但数据质量差会负向影响"/>
+          </outline>
+          <outline text="2 向量化 Embedding">
+            <outline text="向量检索按语义相似度找内容，保障输出有效性"/>
+            <outline text="选型可参考 MTEB Leaderboard：huggingface.co/spaces/mteb/leaderboard"/>
+            <outline text="本地下载模型">
+              <outline text="HuggingFace：可设 HF_ENDPOINT=https://hf-mirror.com 镜像"/>
+              <outline text="hf download BAAI/bge-base-zh-v1.5 --local-dir ..."/>
+              <outline text="环境变量 HF_HOME / TRANSFORMERS_CACHE 统一缓存目录"/>
+              <outline text="国内更快：pip install modelscope 后 modelscope download"/>
+            </outline>
+          </outline>
+          <outline text="3 知识存储">
+            <outline text="向量化后写入向量库"/>
+            <outline text="建立 embedding 与文档切片 chunk 的映射"/>
+          </outline>
+        </outline>
+        <outline text="四、LlamaIndex 的 RAG">
+          <outline text="1 LlamaIndex 简介">
+            <outline text="1.1 介绍">
+              <outline text="原名 GPT Index，面向 LLM 的数据开发与编排框架"/>
+              <outline text="打通私有数据与通用大模型：加载→切分→向量化→检索→生成"/>
+              <outline text="可用极少代码接入文档、数据库、API，快速做生产级 RAG"/>
+            </outline>
+            <outline text="1.2 核心概念速览：Document / Node / Index / Retriever / QueryEngine / ChatEngine"/>
+          </outline>
+          <outline text="2 文档加载">
+            <outline text="2.1 SimpleDirectoryReader">
+              <outline text="核心包内置通用加载器"/>
+              <outline text="自动识别 .txt .pdf .docx .csv .md 等"/>
+              <outline text="可 input_dir + recursive + required_exts 加载整目录"/>
+              <outline text="可 input_files=[...] 加载指定文件列表"/>
+              <outline text="load_data() 得到 Document 列表，可看 metadata 与 text 预览"/>
+            </outline>
+            <outline text="2.2 专用加载器 llama-index-readers-file">
+              <outline text="pip install llama-index-readers-file，20+ 种精细解析"/>
+              <outline text="PDF">
+                <outline text="PDFReader：轻量，底层 pypdf，适合纯文本"/>
+                <outline text="PyMuPDFReader：高性能，特性更多"/>
+                <outline text="UnstructuredReader：擅长表格、标题等复杂结构"/>
+                <outline text="依赖可选：unstructured[pdf]、PyMuPDF"/>
+                <outline text="用 SimpleDirectoryReader 的 file_extractor={'.pdf': parser}"/>
+              </outline>
+              <outline text="Word / PPT / CSV">
+                <outline text="DocxReader、PptxReader、PandasCSVReader"/>
+                <outline text="Word 常需 pip install docx2txt"/>
+              </outline>
+              <outline text="Markdown / HTML / 代码 / 笔记">
+                <outline text="MarkdownReader：保留标题层级"/>
+                <outline text="HTMLTagReader、IPYNBReader、XMLReader"/>
+                <outline text="IPYNB 可装 nbconvert"/>
+              </outline>
+              <outline text="加载器选择：按格式选专用；通用杂糅文件先用 SimpleDirectoryReader"/>
+            </outline>
+          </outline>
+          <outline text="3 文档分块">
+            <outline text="3.1 基础切分器">
+              <outline text="TokenTextSplitter">
+                <outline text="按 Token 数切分，严格控制上下文窗口"/>
+                <outline text="先用 separator（如句号）切；超长再用 backup_separators"/>
+                <outline text="仍超长则硬截断；最后合并并加 overlap"/>
+              </outline>
+              <outline text="SentenceSplitter（默认推荐）">
+                <outline text="优先保证句子完整，同时控制 chunk_size"/>
+                <outline text="步骤1：paragraph_separator（默认\n\n\n）按段落切"/>
+                <outline text="步骤2：secondary_chunking_regex 切成完整句子"/>
+                <outline text="步骤3：累加句子直到接近 chunk_size 成一块"/>
+                <outline text="步骤4：下一块带上上块末尾 overlap 句子"/>
+                <outline text="单句本身 &gt; chunk_size 时可能报错，需预处理"/>
+              </outline>
+            </outline>
+            <outline text="3.2 语义切分 SemanticSplitterNodeParser">
+              <outline text="先分句 → 组合成组合句 → Embedding 算相似度 → 按阈值切"/>
+              <outline text="buffer_size=1：组合句约含前后各1句+当前句"/>
+              <outline text="breakpoint_percentile_threshold 越高，切得越粗"/>
+              <outline text="中文需自定义 chinese_sentence_splitter（。！？!?\n）"/>
+              <outline text="可配 DashScopeEmbedding(text-embedding-v3)"/>
+              <outline text="注意：需过滤空文本 clean_empty_text；参数要调优"/>
+            </outline>
+            <outline text="3.3 选择建议">
+              <outline text="常规 RAG：SentenceSplitter，平衡上下文与精度"/>
+              <outline text="长文要语义连贯：SemanticSplitterNodeParser"/>
+              <outline text="代码库：CodeSplitter，避免切断函数中间"/>
+              <outline text="句子级精确检索：SentenceWindowNodeParser + MetadataReplacementPostProcessor"/>
+            </outline>
+          </outline>
+          <outline text="4 文档向量化并存储 Embedding">
+            <outline text="pip install llama-index-vector-stores-chroma"/>
+            <outline text="Settings.embed_model = DashScopeEmbedding(model_name=text-embedding-v3, text_type=document)"/>
+            <outline text="SimpleDirectoryReader 加载 → SentenceSplitter 分块"/>
+            <outline text="Chroma PersistentClient + get_or_create_collection"/>
+            <outline text="ChromaVectorStore → StorageContext → VectorStoreIndex(nodes)"/>
+            <outline text="执行顺序：Index 遍历 node → embed_model 生成向量 → collection.add 写入"/>
+            <outline text="千问限制：单条 ≤8192 tokens；batch size ≤10"/>
+          </outline>
+          <outline text="5 检索与大模型回复">
+            <outline text="重新挂 Settings.embed_model（须与建库同一模型）"/>
+            <outline text="PersistentClient → get_collection → ChromaVectorStore"/>
+            <outline text="VectorStoreIndex.from_vector_store 恢复索引"/>
+            <outline text="as_query_engine：一次性检索+生成"/>
+            <outline text="as_chat_engine(chat_mode=condense_plus_context) + ChatMemoryBuffer：多轮"/>
+            <outline text="项目落地：semantic_search 的 /search /query /chat /ingest"/>
+          </outline>
+        </outline>
+      </outline>
     </outline>
   </body>
 </opml>

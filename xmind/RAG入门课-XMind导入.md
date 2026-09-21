@@ -1,5 +1,5 @@
 # RAG入门课
-根据5篇飞书讲义整理：认知阶段、提示词、RAG整体认知、Embedding、向量数据库。
+根据6篇飞书讲义整理：认知阶段、提示词、RAG整体认知、Embedding、向量数据库、Native RAG（基础RAG）。
 
 ## 01 认知阶段：大模型介绍、调用、RAG
 飞书文档：01-认知阶段（大模型介绍，调用，RAG）
@@ -1442,3 +1442,199 @@ AI 和 GAI 都是提出目标，GAI 的目标更具体
 #### 课上测试：GET /search?q=向量搜索工具&k=3
 
 #### 参考：faiss.ai 、 docs.trychroma.com
+
+## 06 Native RAG（基础RAG）
+飞书文档：01-Native_RAG（基础RAG）https://ecnwvcdzorsp.feishu.cn/docx/WAyydkEX2o81xAxFkn1cJRqqnnY
+
+### 一、技术原理
+
+#### 1 为什么需要RAG
+大模型的局限性
+
+##### 知识时效性：无法实时获取最新数据，如 GPT-3 知识停在 2021
+
+##### 幻觉问题：基于概率生成，Prompt 上限即回答有效性上限
+
+##### 垂直领域覆盖不足：医疗等行业资料多为机密，通用模型吃不到
+
+#### 2 RAG原理（Native RAG 三步）
+
+##### Indexing：文档向量化，写入向量库建索引
+
+##### Search：问题 Embedding 后检索最相关文档片段
+
+##### Generate：把片段塞进 Prompt，由 LLM 生成可读回答
+
+### 二、RAG流程
+
+#### 大致分三个阶段：数据准备 → 检索 → 生成（讲义有总流程图）
+
+### 三、数据准备阶段
+
+#### 1 数据准备
+
+##### 原始数据常有：格式难识别、内容不一致、不完整、不合法
+
+##### 第一性原理：加上下文能提准确性，但数据质量差会负向影响
+
+#### 2 向量化 Embedding
+
+##### 向量检索按语义相似度找内容，保障输出有效性
+
+##### 选型可参考 MTEB Leaderboard：huggingface.co/spaces/mteb/leaderboard
+
+##### 本地下载模型
+
+###### HuggingFace：可设 HF_ENDPOINT=https://hf-mirror.com 镜像
+
+###### hf download BAAI/bge-base-zh-v1.5 --local-dir ...
+
+###### 环境变量 HF_HOME / TRANSFORMERS_CACHE 统一缓存目录
+
+###### 国内更快：pip install modelscope 后 modelscope download
+
+#### 3 知识存储
+
+##### 向量化后写入向量库
+
+##### 建立 embedding 与文档切片 chunk 的映射
+
+### 四、LlamaIndex 的 RAG
+
+#### 1 LlamaIndex 简介
+
+##### 1.1 介绍
+
+###### 原名 GPT Index，面向 LLM 的数据开发与编排框架
+
+###### 打通私有数据与通用大模型：加载→切分→向量化→检索→生成
+
+###### 可用极少代码接入文档、数据库、API，快速做生产级 RAG
+
+##### 1.2 核心概念速览：Document / Node / Index / Retriever / QueryEngine / ChatEngine
+
+#### 2 文档加载
+
+##### 2.1 SimpleDirectoryReader
+
+###### 核心包内置通用加载器
+
+###### 自动识别 .txt .pdf .docx .csv .md 等
+
+###### 可 input_dir + recursive + required_exts 加载整目录
+
+###### 可 input_files=[...] 加载指定文件列表
+
+###### load_data() 得到 Document 列表，可看 metadata 与 text 预览
+
+##### 2.2 专用加载器 llama-index-readers-file
+
+###### pip install llama-index-readers-file，20+ 种精细解析
+
+###### PDF
+
+###### PDFReader：轻量，底层 pypdf，适合纯文本
+
+###### PyMuPDFReader：高性能，特性更多
+
+###### UnstructuredReader：擅长表格、标题等复杂结构
+
+###### 依赖可选：unstructured[pdf]、PyMuPDF
+
+###### 用 SimpleDirectoryReader 的 file_extractor={'.pdf': parser}
+
+###### Word / PPT / CSV
+
+###### DocxReader、PptxReader、PandasCSVReader
+
+###### Word 常需 pip install docx2txt
+
+###### Markdown / HTML / 代码 / 笔记
+
+###### MarkdownReader：保留标题层级
+
+###### HTMLTagReader、IPYNBReader、XMLReader
+
+###### IPYNB 可装 nbconvert
+
+###### 加载器选择：按格式选专用；通用杂糅文件先用 SimpleDirectoryReader
+
+#### 3 文档分块
+
+##### 3.1 基础切分器
+
+###### TokenTextSplitter
+
+###### 按 Token 数切分，严格控制上下文窗口
+
+###### 先用 separator（如句号）切；超长再用 backup_separators
+
+###### 仍超长则硬截断；最后合并并加 overlap
+
+###### SentenceSplitter（默认推荐）
+
+###### 优先保证句子完整，同时控制 chunk_size
+
+###### 步骤1：paragraph_separator（默认\n\n\n）按段落切
+
+###### 步骤2：secondary_chunking_regex 切成完整句子
+
+###### 步骤3：累加句子直到接近 chunk_size 成一块
+
+###### 步骤4：下一块带上上块末尾 overlap 句子
+
+###### 单句本身 > chunk_size 时可能报错，需预处理
+
+##### 3.2 语义切分 SemanticSplitterNodeParser
+
+###### 先分句 → 组合成组合句 → Embedding 算相似度 → 按阈值切
+
+###### buffer_size=1：组合句约含前后各1句+当前句
+
+###### breakpoint_percentile_threshold 越高，切得越粗
+
+###### 中文需自定义 chinese_sentence_splitter（。！？!?\n）
+
+###### 可配 DashScopeEmbedding(text-embedding-v3)
+
+###### 注意：需过滤空文本 clean_empty_text；参数要调优
+
+##### 3.3 选择建议
+
+###### 常规 RAG：SentenceSplitter，平衡上下文与精度
+
+###### 长文要语义连贯：SemanticSplitterNodeParser
+
+###### 代码库：CodeSplitter，避免切断函数中间
+
+###### 句子级精确检索：SentenceWindowNodeParser + MetadataReplacementPostProcessor
+
+#### 4 文档向量化并存储 Embedding
+
+##### pip install llama-index-vector-stores-chroma
+
+##### Settings.embed_model = DashScopeEmbedding(model_name=text-embedding-v3, text_type=document)
+
+##### SimpleDirectoryReader 加载 → SentenceSplitter 分块
+
+##### Chroma PersistentClient + get_or_create_collection
+
+##### ChromaVectorStore → StorageContext → VectorStoreIndex(nodes)
+
+##### 执行顺序：Index 遍历 node → embed_model 生成向量 → collection.add 写入
+
+##### 千问限制：单条 ≤8192 tokens；batch size ≤10
+
+#### 5 检索与大模型回复
+
+##### 重新挂 Settings.embed_model（须与建库同一模型）
+
+##### PersistentClient → get_collection → ChromaVectorStore
+
+##### VectorStoreIndex.from_vector_store 恢复索引
+
+##### as_query_engine：一次性检索+生成
+
+##### as_chat_engine(chat_mode=condense_plus_context) + ChatMemoryBuffer：多轮
+
+##### 项目落地：semantic_search 的 /search /query /chat /ingest
