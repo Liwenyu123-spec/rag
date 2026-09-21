@@ -1643,78 +1643,88 @@ def to_opml_outline(node, indent=4) -> str:
     return f'{pad}<outline text="{title}">\n{inner}\n{pad}</outline>'
 
 
-CHAPTER_COLORS = [
-    ("#2563EB", "#EFF6FF"),  # 01 蓝
-    ("#059669", "#ECFDF5"),  # 02 绿
-    ("#D97706", "#FFFBEB"),  # 03 橙
-    ("#0891B2", "#ECFEFF"),  # 04 青
-    ("#DC2626", "#FEF2F2"),  # 05 红
-    ("#0F766E", "#F0FDFA"),  # 06 青绿
-]
+# 统一冷静色：少彩色，靠深浅区分层级
+PALETTE = {
+    "root": ("#1E293B", "#FFFFFF"),
+    "l1": ("#E2E8F0", "#0F172A"),
+    "l2": ("#F8FAFC", "#1E293B"),
+    "l3": ("#FFFFFF", "#334155"),
+}
 
 
-def style_topic(fill: str, font_color: str = "#0F172A", bold: bool = False, size: str = "12pt") -> dict:
+def style_topic(fill: str, font_color: str, bold: bool = False, size: str = "12pt") -> dict:
     props = {
         "svg:fill": fill,
         "fo:color": font_color,
         "fo:font-family": "Microsoft YaHei",
         "fo:font-size": size,
         "shape-class": "org.xmind.topicShape.roundedRect",
-        "border-line-width": "1.5pt",
-        "border-line-color": fill,
+        "border-line-width": "1pt",
+        "border-line-color": "#CBD5E1",
         "line-class": "org.xmind.branchConnection.roundedElbow",
-        "line-color": "#94A3B8",
-        "line-width": "1.5pt",
+        "line-color": "#CBD5E1",
+        "line-width": "1pt",
+        "fo:font-style": "normal",
     }
     if bold:
         props["fo:font-weight"] = "bold"
     return {"id": nid(), "properties": props}
 
 
-def paint_branch(node: dict, accent: str, soft: str, depth: int = 0) -> None:
-    """给分支上色：章标题深色，下级浅底；一级小节向右展开，避免整图拧成一条。"""
+def paint_calm(node: dict, depth: int = 0) -> None:
+    """统一灰蓝色层级，结构全部用向右逻辑图（单章内不会太乱）。"""
     if depth == 0:
-        node["style"] = style_topic(accent, "#FFFFFF", bold=True, size="16pt")
-        node["structureClass"] = "org.xmind.ui.map.unbalanced"
+        fill, color = PALETTE["root"]
+        node["style"] = style_topic(fill, color, bold=True, size="16pt")
     elif depth == 1:
-        node["style"] = style_topic(soft, "#0F172A", bold=True, size="12pt")
-        node["structureClass"] = "org.xmind.ui.logic.right"
+        fill, color = PALETTE["l1"]
+        node["style"] = style_topic(fill, color, bold=True, size="12pt")
+    elif depth == 2:
+        fill, color = PALETTE["l2"]
+        node["style"] = style_topic(fill, color, bold=True, size="11pt")
     else:
-        node["style"] = style_topic("#FFFFFF", "#334155", bold=False, size="11pt")
-        node["style"]["properties"]["border-line-color"] = accent
+        fill, color = PALETTE["l3"]
+        node["style"] = style_topic(fill, color, bold=False, size="11pt")
+    node["structureClass"] = "org.xmind.ui.logic.right"
     for child in node.get("children", {}).get("attached", []):
-        paint_branch(child, accent, soft, depth + 1)
+        paint_calm(child, depth + 1)
 
 
 def make_overview(chapters: list) -> dict:
-    """总览页：只放六章标题 + 一句话摘要，放射布局。"""
-    overview_children = []
-    for i, ch in enumerate(chapters):
-        accent, soft = CHAPTER_COLORS[i % len(CHAPTER_COLORS)]
-        kids = ch.get("children", {}).get("attached", [])
-        summary = "；".join(c["title"] for c in kids[:4])
-        if len(kids) > 4:
-            summary += "…"
-        node = topic(
-            ch["title"],
-            note=(ch.get("notes", {}).get("plain", {}).get("content") or "")
-            + (f"\n\n本章要点：{summary}" if summary else "")
-            + "\n\n详细内容见同文件其他画布。",
-            children=[topic(c["title"]) for c in kids],
-        )
-        node["style"] = style_topic(accent, "#FFFFFF", bold=True, size="13pt")
-        for sub in node.get("children", {}).get("attached", []):
-            sub["style"] = style_topic(soft, "#0F172A", bold=False, size="11pt")
-        overview_children.append(node)
+    """总览：从上往下的大纲，一眼看到六章，不挤细节。"""
+    children = []
+    for ch in chapters:
+        sections = ch.get("children", {}).get("attached", [])
+        section_nodes = [
+            topic(
+                s["title"],
+                note="详见本文件对应章节画布",
+            )
+            for s in sections
+        ]
+        for sn in section_nodes:
+            sn["style"] = style_topic("#FFFFFF", "#475569", size="11pt")
+        node = topic(ch["title"], children=section_nodes or None)
+        node["style"] = style_topic("#E2E8F0", "#0F172A", bold=True, size="12pt")
+        node["structureClass"] = "org.xmind.ui.logic.right"
+        children.append(node)
 
     root = topic(
-        "RAG入门课 · 总览",
-        note="共 6 章。本页看结构；点底部画布切换到各章看完整细节。",
-        children=overview_children,
+        "RAG入门课",
+        note="总览只看章节结构。底部切换画布查看各章完整细节。",
+        children=children,
     )
-    root["structureClass"] = "org.xmind.ui.map.clockwise"
+    root["structureClass"] = "org.xmind.ui.org-chart.down"
     root["style"] = style_topic("#1E293B", "#FFFFFF", bold=True, size="18pt")
     return root
+
+
+def shorten_sheet_title(title: str) -> str:
+    # 画布标签短一点，底部切换更轻松
+    t = title.strip()
+    if t.startswith("0") and " " in t:
+        return t.split(" ", 1)[0] + " " + t.split(" ", 1)[1][:10]
+    return t[:14]
 
 
 def make_sheet(title: str, root: dict) -> dict:
@@ -1724,11 +1734,6 @@ def make_sheet(title: str, root: dict) -> dict:
         "title": title,
         "rootTopic": root,
         "topicPositioning": "fixed",
-        "theme": {
-            "centralTopic": style_topic("#1E293B", "#FFFFFF", bold=True, size="16pt"),
-            "mainTopic": style_topic("#DBEAFE", "#1E3A8A", bold=True, size="12pt"),
-            "subTopic": style_topic("#FFFFFF", "#334155", size="11pt"),
-        },
     }
 
 
@@ -1738,11 +1743,12 @@ def main():
     chapters = copy.deepcopy(TREE.get("children", {}).get("attached", []))
     sheets = [make_sheet("00 总览", make_overview(chapters))]
 
-    for i, ch in enumerate(chapters):
-        accent, soft = CHAPTER_COLORS[i % len(CHAPTER_COLORS)]
+    for ch in chapters:
         chapter = copy.deepcopy(ch)
-        paint_branch(chapter, accent, soft, depth=0)
-        sheets.append(make_sheet(chapter["title"][:18], chapter))
+        paint_calm(chapter, depth=0)
+        # 单章：从左到右清晰阅读；一章一页，不会整课拉成一条
+        chapter["structureClass"] = "org.xmind.ui.logic.right"
+        sheets.append(make_sheet(shorten_sheet_title(chapter["title"]), chapter))
 
     content = sheets
     manifest = {
@@ -1777,7 +1783,7 @@ def main():
     (OUT_DIR / "RAG入门课-XMind导入.opml").write_text(opml, encoding="utf-8")
     print(xmind_path)
     print(md_path)
-    print(f"sheets={len(sheets)} (1 overview + {len(chapters)} chapters), full_detail=True")
+    print(f"sheets={len(sheets)}; overview=org-chart.down; chapters=logic.right; calm palette")
 
 
 if __name__ == "__main__":
