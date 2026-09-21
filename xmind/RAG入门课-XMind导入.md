@@ -1638,3 +1638,20 @@ AI 和 GAI 都是提出目标，GAI 的目标更具体
 ##### as_chat_engine(chat_mode=condense_plus_context) + ChatMemoryBuffer：多轮
 
 ##### 项目落地：semantic_search 的 /search /query /chat /ingest
+
+#### 6 对照本仓库 semantic_search 怎么用
+讲义流程已接到 FastAPI + 前端
+
+##### Indexing：前端上传 /upload 或 POST /ingest → data 目录 → 分块入库
+
+##### 分块可选：sentence（推荐）/ token / semantic
+
+##### Embedding：默认本地 bge-small-zh；有千问 Key 可改 dashscope
+
+##### Search：前端「语义搜索」或 GET/POST /search
+
+##### Generate：前端「一次性问答」/query、「多轮问答」/chat
+
+##### 持久化目录：semantic_search/chroma_db
+
+##### 启动：在 rag 根目录 python -m semantic_search → http://127.0.0.1:8001/

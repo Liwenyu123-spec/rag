@@ -1591,6 +1591,19 @@ TREE = topic(
                                 topic("项目落地：semantic_search 的 /search /query /chat /ingest"),
                             ],
                         ),
+                        topic(
+                            "6 对照本仓库 semantic_search 怎么用",
+                            note="讲义流程已接到 FastAPI + 前端",
+                            children=[
+                                topic("Indexing：前端上传 /upload 或 POST /ingest → data 目录 → 分块入库"),
+                                topic("分块可选：sentence（推荐）/ token / semantic"),
+                                topic("Embedding：默认本地 bge-small-zh；有千问 Key 可改 dashscope"),
+                                topic("Search：前端「语义搜索」或 GET/POST /search"),
+                                topic("Generate：前端「一次性问答」/query、「多轮问答」/chat"),
+                                topic("持久化目录：semantic_search/chroma_db"),
+                                topic("启动：在 rag 根目录 python -m semantic_search → http://127.0.0.1:8001/"),
+                            ],
+                        ),
                     ],
                 ),
             ],
@@ -1630,52 +1643,108 @@ def to_opml_outline(node, indent=4) -> str:
     return f'{pad}<outline text="{title}">\n{inner}\n{pad}</outline>'
 
 
-def _collect_titles(node, prefix="") -> list[str]:
-    """把子树标题展平成文本行，塞进备注用。"""
-    lines = [f"{prefix}{node['title']}"]
-    for child in node.get("children", {}).get("attached", []):
-        lines.extend(_collect_titles(child, prefix + "· "))
-    return lines
+CHAPTER_COLORS = [
+    ("#2563EB", "#EFF6FF"),  # 01 蓝
+    ("#059669", "#ECFDF5"),  # 02 绿
+    ("#D97706", "#FFFBEB"),  # 03 橙
+    ("#0891B2", "#ECFEFF"),  # 04 青
+    ("#DC2626", "#FEF2F2"),  # 05 红
+    ("#0F766E", "#F0FDFA"),  # 06 青绿
+]
 
 
-def compact_tree(node, max_depth=3, depth=0):
-    """限制展开深度：更深层的内容收到备注，导图不会拉得很长。"""
-    import copy
-
-    node = copy.deepcopy(node)
-    kids = node.get("children", {}).get("attached", [])
-    if not kids:
-        return node
-
-    if depth >= max_depth:
-        detail_lines = []
-        for child in kids:
-            detail_lines.extend(_collect_titles(child))
-        old_note = node.get("notes", {}).get("plain", {}).get("content", "")
-        merged = (old_note + "\n\n" if old_note else "") + "\n".join(detail_lines)
-        node["notes"] = {"plain": {"content": merged.strip()}}
-        node.pop("children", None)
-        return node
-
-    node["children"] = {
-        "attached": [compact_tree(child, max_depth, depth + 1) for child in kids]
+def style_topic(fill: str, font_color: str = "#0F172A", bold: bool = False, size: str = "12pt") -> dict:
+    props = {
+        "svg:fill": fill,
+        "fo:color": font_color,
+        "fo:font-family": "Microsoft YaHei",
+        "fo:font-size": size,
+        "shape-class": "org.xmind.topicShape.roundedRect",
+        "border-line-width": "1.5pt",
+        "border-line-color": fill,
+        "line-class": "org.xmind.branchConnection.roundedElbow",
+        "line-color": "#94A3B8",
+        "line-width": "1.5pt",
     }
-    return node
+    if bold:
+        props["fo:font-weight"] = "bold"
+    return {"id": nid(), "properties": props}
+
+
+def paint_branch(node: dict, accent: str, soft: str, depth: int = 0) -> None:
+    """给分支上色：章标题深色，下级浅底；一级小节向右展开，避免整图拧成一条。"""
+    if depth == 0:
+        node["style"] = style_topic(accent, "#FFFFFF", bold=True, size="16pt")
+        node["structureClass"] = "org.xmind.ui.map.unbalanced"
+    elif depth == 1:
+        node["style"] = style_topic(soft, "#0F172A", bold=True, size="12pt")
+        node["structureClass"] = "org.xmind.ui.logic.right"
+    else:
+        node["style"] = style_topic("#FFFFFF", "#334155", bold=False, size="11pt")
+        node["style"]["properties"]["border-line-color"] = accent
+    for child in node.get("children", {}).get("attached", []):
+        paint_branch(child, accent, soft, depth + 1)
+
+
+def make_overview(chapters: list) -> dict:
+    """总览页：只放六章标题 + 一句话摘要，放射布局。"""
+    overview_children = []
+    for i, ch in enumerate(chapters):
+        accent, soft = CHAPTER_COLORS[i % len(CHAPTER_COLORS)]
+        kids = ch.get("children", {}).get("attached", [])
+        summary = "；".join(c["title"] for c in kids[:4])
+        if len(kids) > 4:
+            summary += "…"
+        node = topic(
+            ch["title"],
+            note=(ch.get("notes", {}).get("plain", {}).get("content") or "")
+            + (f"\n\n本章要点：{summary}" if summary else "")
+            + "\n\n详细内容见同文件其他画布。",
+            children=[topic(c["title"]) for c in kids],
+        )
+        node["style"] = style_topic(accent, "#FFFFFF", bold=True, size="13pt")
+        for sub in node.get("children", {}).get("attached", []):
+            sub["style"] = style_topic(soft, "#0F172A", bold=False, size="11pt")
+        overview_children.append(node)
+
+    root = topic(
+        "RAG入门课 · 总览",
+        note="共 6 章。本页看结构；点底部画布切换到各章看完整细节。",
+        children=overview_children,
+    )
+    root["structureClass"] = "org.xmind.ui.map.clockwise"
+    root["style"] = style_topic("#1E293B", "#FFFFFF", bold=True, size="18pt")
+    return root
+
+
+def make_sheet(title: str, root: dict) -> dict:
+    return {
+        "id": nid(),
+        "class": "sheet",
+        "title": title,
+        "rootTopic": root,
+        "topicPositioning": "fixed",
+        "theme": {
+            "centralTopic": style_topic("#1E293B", "#FFFFFF", bold=True, size="16pt"),
+            "mainTopic": style_topic("#DBEAFE", "#1E3A8A", bold=True, size="12pt"),
+            "subTopic": style_topic("#FFFFFF", "#334155", size="11pt"),
+        },
+    }
 
 
 def main():
-    # 完整展开细节；用放射状地图布局，避免左右/上下拉成一条长条
-    full = __import__("copy").deepcopy(TREE)
-    full["structureClass"] = "org.xmind.ui.map.unbalanced"
-    content = [
-        {
-            "id": nid(),
-            "class": "sheet",
-            "title": "RAG入门课",
-            "rootTopic": full,
-            "topicPositioning": "fixed",
-        }
-    ]
+    import copy
+
+    chapters = copy.deepcopy(TREE.get("children", {}).get("attached", []))
+    sheets = [make_sheet("00 总览", make_overview(chapters))]
+
+    for i, ch in enumerate(chapters):
+        accent, soft = CHAPTER_COLORS[i % len(CHAPTER_COLORS)]
+        chapter = copy.deepcopy(ch)
+        paint_branch(chapter, accent, soft, depth=0)
+        sheets.append(make_sheet(chapter["title"][:18], chapter))
+
+    content = sheets
     manifest = {
         "file-entries": {
             "content.json": {},
@@ -1708,7 +1777,7 @@ def main():
     (OUT_DIR / "RAG入门课-XMind导入.opml").write_text(opml, encoding="utf-8")
     print(xmind_path)
     print(md_path)
-    print("layout=map.unbalanced, full_detail=True")
+    print(f"sheets={len(sheets)} (1 overview + {len(chapters)} chapters), full_detail=True")
 
 
 if __name__ == "__main__":

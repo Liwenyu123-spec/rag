@@ -999,6 +999,15 @@
             <outline text="as_chat_engine(chat_mode=condense_plus_context) + ChatMemoryBuffer：多轮"/>
             <outline text="项目落地：semantic_search 的 /search /query /chat /ingest"/>
           </outline>
+          <outline text="6 对照本仓库 semantic_search 怎么用">
+            <outline text="Indexing：前端上传 /upload 或 POST /ingest → data 目录 → 分块入库"/>
+            <outline text="分块可选：sentence（推荐）/ token / semantic"/>
+            <outline text="Embedding：默认本地 bge-small-zh；有千问 Key 可改 dashscope"/>
+            <outline text="Search：前端「语义搜索」或 GET/POST /search"/>
+            <outline text="Generate：前端「一次性问答」/query、「多轮问答」/chat"/>
+            <outline text="持久化目录：semantic_search/chroma_db"/>
+            <outline text="启动：在 rag 根目录 python -m semantic_search → http://127.0.0.1:8001/"/>
+          </outline>
         </outline>
       </outline>
     </outline>
