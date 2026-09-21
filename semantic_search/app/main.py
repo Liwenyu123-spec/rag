@@ -1,7 +1,15 @@
 """Native RAG FastAPI 应用：生命周期、路由与启动入口。"""
 
+from __future__ import annotations
+
+import sys
 from contextlib import asynccontextmanager
 from pathlib import Path
+
+# 支持 IDE 直接运行本文件：python semantic_search/app/main.py
+_PROJECT_ROOT = Path(__file__).resolve().parents[2]
+if str(_PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(_PROJECT_ROOT))
 
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.responses import FileResponse
