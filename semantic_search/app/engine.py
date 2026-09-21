@@ -107,7 +107,7 @@ class SemanticSearchEngine:
 
         from llama_index.llms.dashscope import DashScope
 
-        return DashScope(model_name=LLM_MODEL, api_key=self.api_key)
+        return DashScope(model_name=LLM_MODEL, api_key=self.api_key, max_tokens=2048)
 
     def _sentence_splitter(self) -> SentenceSplitter:
         return SentenceSplitter(
