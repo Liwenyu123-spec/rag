@@ -11,11 +11,12 @@ _PROJECT_ROOT = Path(__file__).resolve().parents[2]  # 从 app/main.py 往上两
 if str(_PROJECT_ROOT) not in sys.path:  # 如果根目录还没进模块搜索路径
     sys.path.insert(0, str(_PROJECT_ROOT))  # 插到最前面，才能 import semantic_search
 
-from fastapi import FastAPI, HTTPException, Query  # FastAPI 应用、HTTP 错误、查询参数校验
+from fastapi import FastAPI, File, Form, HTTPException, Query, UploadFile  # FastAPI 应用、上传、查询参数
 from fastapi.responses import FileResponse  # 直接把本地文件（前端 HTML）作为响应返回
 
 from semantic_search.app.config import (  # 从配置模块导入密钥、模型、主机端口等常量
     DASHSCOPE_API_KEY,  # 阿里云百炼 / 千问 API Key
+    DATA_DIR,  # 知识库文件落盘目录
     DEEPSEEK_API_KEY,  # DeepSeek API Key（优先读 Windows 环境变量）
     EMBEDDING_MODEL,  # 向量化模型名，如 BAAI/bge-small-zh-v1.5
     EMBEDDING_PROVIDER,  # 向量化提供方：huggingface 或 dashscope
@@ -24,7 +25,7 @@ from semantic_search.app.config import (  # 从配置模块导入密钥、模型
     LLM_PROVIDER,  # 大模型提供方：deepseek 或 dashscope
     PORT,  # 服务端口，默认 8001
 )
-from semantic_search.app.engine import SemanticSearchEngine  # 核心引擎：加载、检索、问答、对话
+from semantic_search.app.engine import SUPPORTED_EXTS, SemanticSearchEngine  # 引擎 + 允许的文件扩展名
 from semantic_search.app.schemas import (  # Pydantic 请求/响应模型，给接口做校验和文档
     AddDocumentsRequest,  # 追加纯文本文档的请求体
     ChatRequest,  # 多轮对话请求体
@@ -198,6 +199,50 @@ async def ingest_documents(request: IngestRequest):  # 可传 input_files 或 in
         splitter=request.splitter,  # sentence / token / semantic
     )
     return {"message": "文档加载并索引完成", **result}  # 合并 loaded_documents、nodes 等统计
+
+
+@app.post("/upload")  # 前端上传文件：保存到 data 目录后自动分块入库
+async def upload_documents(
+    files: list[UploadFile] = File(..., description="要导入的文件，可多选"),
+    splitter: str = Form("sentence", description="切分方式: sentence / token / semantic"),
+):
+    """浏览器上传文件 → 落盘到 DATA_DIR → SimpleDirectoryReader 分块索引。"""
+    if not files:  # 一个文件都没选
+        raise HTTPException(status_code=400, detail="请至少选择一个文件")
+    if splitter not in {"sentence", "token", "semantic"}:  # 限制合法分块模式
+        raise HTTPException(status_code=400, detail="splitter 只能是 sentence / token / semantic")
+
+    upload_dir = Path(DATA_DIR)  # 与讲义 data 目录一致
+    upload_dir.mkdir(parents=True, exist_ok=True)  # 确保目录存在
+
+    saved_paths: list[str] = []  # 本次成功保存的绝对路径
+    skipped: list[str] = []  # 扩展名不支持而跳过的文件名
+    for item in files:
+        name = Path(item.filename or "upload.bin").name  # 只用文件名，防止路径穿越
+        suffix = Path(name).suffix.lower()  # 扩展名小写
+        if suffix not in SUPPORTED_EXTS:  # 不在白名单则跳过
+            skipped.append(name)
+            continue
+        target = upload_dir / name  # 落盘路径：semantic_search/data/xxx
+        content = await item.read()  # 读上传内容
+        target.write_bytes(content)  # 写入磁盘
+        saved_paths.append(str(target.resolve()))  # 记录绝对路径给 ingest
+
+    if not saved_paths:  # 全都跳过了
+        raise HTTPException(
+            status_code=400,
+            detail=f"没有可导入的文件。支持扩展名: {', '.join(SUPPORTED_EXTS)}；已跳过: {skipped}",
+        )
+
+    engine = _require_engine(app)  # 拿到引擎
+    result = engine.ingest_files(input_files=saved_paths, splitter=splitter)  # 加载→分块→向量化
+    return {
+        "message": "上传并索引完成",
+        "saved_files": [Path(p).name for p in saved_paths],
+        "skipped_files": skipped,
+        "splitter": splitter,
+        **result,
+    }
 
 
 @app.get("/stats")  # 查看知识库与模型配置统计

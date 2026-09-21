@@ -101,6 +101,27 @@
     }
     .side-tip strong { display: block; margin-bottom: 3px; color: #c2cada; }
     .side-tip a { color: #9bb8ff; text-decoration: none; }
+    .upload-card {
+      padding: 14px;
+      border: 1px solid rgba(255,255,255,.09);
+      border-radius: 14px;
+      background: rgba(255,255,255,.055);
+      display: grid; gap: 10px;
+    }
+    .upload-card select, .upload-card input[type="file"] {
+      width: 100%; color: #dce3ef; font-size: 12px;
+      border: 1px solid rgba(255,255,255,.12); border-radius: 10px;
+      background: rgba(0,0,0,.2); padding: 8px 10px;
+    }
+    .upload-card input[type="file"] { padding: 7px; }
+    .upload-btn {
+      height: 36px; border: 0; border-radius: 10px; cursor: pointer;
+      color: #fff; font-size: 13px; font-weight: 600;
+      background: var(--blue); box-shadow: 0 6px 14px rgba(36,107,253,.25);
+    }
+    .upload-btn:disabled { opacity: .45; cursor: not-allowed; box-shadow: none; }
+    .upload-msg { color: #9bb8ff; font-size: 11px; line-height: 1.55; min-height: 16px; }
+    .upload-msg.err { color: #ff9aa6; }
     .chat-shell {
       min-width: 0; min-height: 0;
       display: flex; flex-direction: column; overflow: hidden;
@@ -313,9 +334,31 @@
         </button>
       </div>
 
+      <div class="side-label">导入文档</div>
+      <div class="upload-card">
+        <input
+          type="file"
+          multiple
+          accept=".pdf,.txt,.md,.csv,.docx,.html,.ipynb"
+          @change="onPickFiles"
+        />
+        <select v-model="uploadSplitter">
+          <option value="sentence">分块：按句子 Sentence</option>
+          <option value="token">分块：按 Token</option>
+          <option value="semantic">分块：语义 Semantic</option>
+        </select>
+        <button
+          class="upload-btn"
+          :disabled="uploading || !pickedFiles.length"
+          @click="uploadFiles"
+        >{{ uploading ? '上传分块中...' : '上传并写入知识库' }}</button>
+        <div class="upload-msg" :class="{ err: uploadError }">{{ uploadMessage }}</div>
+      </div>
+
       <div class="side-tip">
         <strong>快捷提示</strong>
         Enter 发送 · Shift+Enter 换行<br>
+        支持 pdf / txt / md / csv / docx<br>
         <a href="/docs" target="_blank">打开 API 文档</a>
       </div>
     </aside>
@@ -418,6 +461,11 @@
         const health = ref(null);
         const messagesEl = ref(null);
         const sessionId = ref('web-' + Math.random().toString(36).slice(2, 10));
+        const pickedFiles = ref([]);
+        const uploadSplitter = ref('sentence');
+        const uploading = ref(false);
+        const uploadMessage = ref('可选多个文件，上传后自动分块入库');
+        const uploadError = ref(false);
 
         const modeMeta = {
           chat: {
@@ -506,6 +554,45 @@
             health.value = await res.json();
           } catch (err) {
             health.value = { status: 'error', message: '无法连接后端' };
+          }
+        };
+
+        const onPickFiles = (e) => {
+          pickedFiles.value = Array.from(e.target.files || []);
+          uploadError.value = false;
+          uploadMessage.value = pickedFiles.value.length
+            ? `已选择 ${pickedFiles.value.length} 个文件`
+            : '可选多个文件，上传后自动分块入库';
+        };
+
+        const uploadFiles = async () => {
+          if (!pickedFiles.value.length || uploading.value) return;
+          uploading.value = true;
+          uploadError.value = false;
+          uploadMessage.value = '正在上传并分块索引...';
+
+          const form = new FormData();
+          pickedFiles.value.forEach((f) => form.append('files', f));
+          form.append('splitter', uploadSplitter.value);
+
+          try {
+            const res = await fetch('/upload', { method: 'POST', body: form });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok) {
+              uploadError.value = true;
+              uploadMessage.value = data.detail || ('上传失败：HTTP ' + res.status);
+            } else {
+              uploadMessage.value =
+                `${data.message}：写入 ${data.nodes || 0} 个分块，知识库共 ${data.total_documents || 0} 条` +
+                (data.skipped_files?.length ? `；跳过 ${data.skipped_files.join(', ')}` : '');
+              pickedFiles.value = [];
+              refreshHealth();
+            }
+          } catch (err) {
+            uploadError.value = true;
+            uploadMessage.value = '上传失败：' + (err.message || String(err));
+          } finally {
+            uploading.value = false;
           }
         };
 
@@ -600,6 +687,13 @@
           setMode,
           useSuggestion,
           sendMessage,
+          pickedFiles,
+          uploadSplitter,
+          uploading,
+          uploadMessage,
+          uploadError,
+          onPickFiles,
+          uploadFiles,
         };
       },
     }).mount('#app');
