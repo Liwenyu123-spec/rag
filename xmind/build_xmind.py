@@ -1664,15 +1664,15 @@ def compact_tree(node, max_depth=3, depth=0):
 
 
 def main():
-    # 放射状地图布局（比「从左到右」短很多）；细节压到第 3 层备注里
-    visual = compact_tree(TREE, max_depth=3)
-    visual["structureClass"] = "org.xmind.ui.map.unbalanced"
+    # 完整展开细节；用放射状地图布局，避免左右/上下拉成一条长条
+    full = __import__("copy").deepcopy(TREE)
+    full["structureClass"] = "org.xmind.ui.map.unbalanced"
     content = [
         {
             "id": nid(),
             "class": "sheet",
             "title": "RAG入门课",
-            "rootTopic": visual,
+            "rootTopic": full,
             "topicPositioning": "fixed",
         }
     ]
@@ -1693,7 +1693,6 @@ def main():
         zf.writestr("manifest.json", json.dumps(manifest, ensure_ascii=False, indent=2))
         zf.writestr("metadata.json", json.dumps(metadata, ensure_ascii=False, indent=2))
 
-    # Markdown / OPML 仍保留完整细节，方便搜索阅读
     md_path = OUT_DIR / "RAG入门课-XMind导入.md"
     md_path.write_text(to_md(TREE), encoding="utf-8")
 
@@ -1709,7 +1708,7 @@ def main():
     (OUT_DIR / "RAG入门课-XMind导入.opml").write_text(opml, encoding="utf-8")
     print(xmind_path)
     print(md_path)
-    print("layout=map.unbalanced, visual_depth<=3 (details in notes)")
+    print("layout=map.unbalanced, full_detail=True")
 
 
 if __name__ == "__main__":
