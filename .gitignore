@@ -16,3 +16,4 @@ Thumbs.db
 !.env.example
 
 semantic_search/chroma_data/
+semantic_search/chroma_db/

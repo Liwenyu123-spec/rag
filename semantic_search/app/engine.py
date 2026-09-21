@@ -197,19 +197,20 @@ class SemanticSearchEngine:
         }
 
     def seed_if_empty(self, texts: List[str] | None = None) -> int:
-        """集合为空时：优先灌入 data 目录，否则写入示例文档。"""
+        """集合为空时写入示例文档，并加载 data 目录中的本地文件。"""
         if self.collection.count() > 0:
-            return self.collection.count()
-
-        data_dir = Path(DATA_DIR)
-        if data_dir.is_dir() and any(data_dir.rglob("*")):
-            print(f"正在从数据目录加载: {data_dir}")
-            self.ingest_files(input_dir=str(data_dir))
             return self.collection.count()
 
         docs = texts if texts is not None else SAMPLE_DOCUMENTS
         print("正在加载示例文档...")
-        return self.add_documents(docs)
+        self.add_documents(docs)
+
+        data_dir = Path(DATA_DIR)
+        has_files = data_dir.is_dir() and any(p.is_file() for p in data_dir.rglob("*"))
+        if has_files:
+            print(f"正在从数据目录加载: {data_dir}")
+            self.ingest_files(input_dir=str(data_dir))
+        return self.collection.count()
 
     def search(self, query: str, k: int = SIMILARITY_TOP_K) -> List[dict]:
         """只检索，不调用大模型。"""

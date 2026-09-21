@@ -1,4 +1,4 @@
-"""调用本地语义搜索接口，对应讲义中的 simple_test.py。"""
+"""调用本地语义搜索 / Native RAG 接口。"""
 
 import json
 import os
@@ -25,6 +25,17 @@ def main() -> None:
     print("搜索结果:")
     print(json.dumps(response.json(), indent=2, ensure_ascii=False))
     if not response.ok:
+        sys.exit(1)
+
+    query = requests.get(
+        f"{BASE_URL}/query",
+        params={"q": "迟到怎么扣钱", "k": 3},
+        timeout=120,
+    )
+    print()
+    print("RAG 问答:")
+    print(json.dumps(query.json(), indent=2, ensure_ascii=False))
+    if not query.ok:
         sys.exit(1)
 
 
