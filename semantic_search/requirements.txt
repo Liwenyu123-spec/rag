@@ -8,6 +8,7 @@ requests
 llama-index-core
 llama-index-embeddings-dashscope
 llama-index-llms-dashscope
+llama-index-embeddings-huggingface
 llama-index-llms-deepseek
 llama-index-vector-stores-chroma
 llama-index-readers-file

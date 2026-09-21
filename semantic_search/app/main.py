@@ -6,9 +6,12 @@ from fastapi import FastAPI, HTTPException, Query
 
 from semantic_search.app.config import (
     DASHSCOPE_API_KEY,
+    DEEPSEEK_API_KEY,
     EMBEDDING_MODEL,
+    EMBEDDING_PROVIDER,
     HOST,
     LLM_MODEL,
+    LLM_PROVIDER,
     PORT,
 )
 from semantic_search.app.engine import SemanticSearchEngine
@@ -30,7 +33,7 @@ def _require_engine(app: FastAPI) -> SemanticSearchEngine:
     if engine is None:
         raise HTTPException(
             status_code=503,
-            detail="搜索引擎未初始化，请检查 API Key 配置",
+            detail="搜索引擎未初始化，请检查 Windows 环境变量 DEEPSEEK_API_KEY",
         )
     return engine
 
@@ -40,16 +43,20 @@ async def lifespan(app: FastAPI):
     print("=" * 50)
     print("正在启动 Native RAG 语义搜索引擎...")
 
-    if DASHSCOPE_API_KEY:
-        app.state.search_engine = SemanticSearchEngine(
-            api_key=DASHSCOPE_API_KEY,
-            model_name=EMBEDDING_MODEL,
-        )
+    llm_ready = (
+        (LLM_PROVIDER == "deepseek" and bool(DEEPSEEK_API_KEY))
+        or (LLM_PROVIDER == "dashscope" and bool(DASHSCOPE_API_KEY))
+    )
+    if llm_ready:
+        app.state.search_engine = SemanticSearchEngine()
         total = app.state.search_engine.seed_if_empty()
         print(f"服务启动完成，当前文档数: {total}")
     else:
         app.state.search_engine = None
-        print("错误: 搜索引擎初始化失败，请设置 DASHSCOPE_API_KEY")
+        if LLM_PROVIDER == "deepseek":
+            print("错误: 未找到 DEEPSEEK_API_KEY（进程 / .env / Windows 用户环境变量）")
+        else:
+            print("错误: 未找到 DASHSCOPE_API_KEY")
 
     print("=" * 50)
     yield
@@ -58,7 +65,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title="Native RAG 语义搜索引擎",
-    description="LlamaIndex + 千问 Embedding + Chroma：加载、分块、向量化、检索生成",
+    description="LlamaIndex + DeepSeek + Chroma：加载、分块、向量化、检索生成",
     version="2.0.0",
     lifespan=lifespan,
 )
@@ -184,7 +191,7 @@ async def health_check():
     if engine is None:
         return {
             "status": "error",
-            "message": "搜索引擎未初始化，请配置 DASHSCOPE_API_KEY 环境变量",
+            "message": "搜索引擎未初始化，请在 Windows 用户环境变量中配置 DEEPSEEK_API_KEY",
         }
 
     stats = engine.get_stats()
@@ -192,6 +199,7 @@ async def health_check():
         "status": "ok",
         "service": "native-rag-search-engine",
         "model": stats["model_name"],
+        "llm_provider": stats["llm_provider"],
         "llm_model": stats["llm_model"],
         "total_documents": stats["total_documents"],
         "index_type": stats["index_type"],
@@ -209,14 +217,14 @@ if __name__ == "__main__":
     import uvicorn
 
     print("=" * 50)
-    print("Native RAG 语义搜索引擎 - LlamaIndex + 千问 + Chroma")
+    print("Native RAG 语义搜索引擎 - LlamaIndex + DeepSeek + Chroma")
     print("=" * 50)
-    if DASHSCOPE_API_KEY:
-        print("API Key 已配置")
+    if DEEPSEEK_API_KEY:
+        print("DeepSeek API Key 已从 Windows 环境读取")
     else:
-        print("警告: 未设置 DASHSCOPE_API_KEY 环境变量")
-    print(f"Embedding: {EMBEDDING_MODEL}")
-    print(f"LLM: {LLM_MODEL}")
+        print("警告: 未找到 DEEPSEEK_API_KEY（进程 / .env / Windows 用户变量）")
+    print(f"Embedding: {EMBEDDING_PROVIDER} / {EMBEDDING_MODEL}")
+    print(f"LLM: {LLM_PROVIDER} / {LLM_MODEL}")
     print(f"API文档: http://{HOST}:{PORT}/docs")
     print(f"搜索示例: http://{HOST}:{PORT}/search?q=向量数据库")
     print(f"问答示例: http://{HOST}:{PORT}/query?q=迟到怎么扣钱")

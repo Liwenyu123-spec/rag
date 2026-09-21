@@ -1,7 +1,7 @@
 """基于 LlamaIndex Native RAG 的语义搜索引擎。
 
 流程对应飞书讲义「01-Native_RAG」：
-加载文档 → SentenceSplitter 分块 → 千问 Embedding → Chroma 存储 → 检索 / 大模型生成。
+加载文档 → SentenceSplitter 分块 → Embedding → Chroma 存储 → DeepSeek 检索生成。
 """
 
 import re
@@ -12,7 +12,6 @@ import chromadb
 from llama_index.core import Document, Settings, SimpleDirectoryReader, StorageContext, VectorStoreIndex
 from llama_index.core.memory import ChatMemoryBuffer
 from llama_index.core.node_parser import SemanticSplitterNodeParser, SentenceSplitter, TokenTextSplitter
-from llama_index.embeddings.dashscope import DashScopeEmbedding
 from llama_index.vector_stores.chroma import ChromaVectorStore
 
 from semantic_search.app.config import (
@@ -20,9 +19,12 @@ from semantic_search.app.config import (
     CHUNK_OVERLAP,
     CHUNK_SIZE,
     COLLECTION_NAME,
+    DASHSCOPE_API_KEY,
     DATA_DIR,
     DEEPSEEK_API_KEY,
+    DEEPSEEK_BASE_URL,
     EMBEDDING_MODEL,
+    EMBEDDING_PROVIDER,
     LLM_MODEL,
     LLM_PROVIDER,
     RAG_SYSTEM_PROMPT,
@@ -59,16 +61,14 @@ def chinese_sentence_splitter(text: str) -> List[str]:
 
 
 class SemanticSearchEngine:
-    """LlamaIndex + Chroma + 千问 Embedding 的 Native RAG 引擎。"""
+    """LlamaIndex + Chroma 的 Native RAG 引擎，默认用 Windows 环境里的 DeepSeek。"""
 
     def __init__(
         self,
-        api_key: str,
-        model_name: str = EMBEDDING_MODEL,
         persist_dir: str = CHROMA_PERSIST_DIR,
         collection_name: str = COLLECTION_NAME,
+        model_name: str = EMBEDDING_MODEL,
     ):
-        self.api_key = api_key
         self.model_name = model_name
         self.persist_dir = persist_dir
         self.collection_name = collection_name
@@ -76,11 +76,7 @@ class SemanticSearchEngine:
         self._memories: dict[str, ChatMemoryBuffer] = {}
         self._chat_engines: dict[str, object] = {}
 
-        Settings.embed_model = DashScopeEmbedding(
-            model_name=model_name,
-            api_key=api_key,
-            text_type="document",
-        )
+        Settings.embed_model = self._init_embed_model()
         Settings.llm = self._init_llm()
         Settings.node_parser = self._sentence_splitter()
 
@@ -91,23 +87,49 @@ class SemanticSearchEngine:
         self.storage_context = StorageContext.from_defaults(vector_store=self.vector_store)
         self.index = self._load_or_create_index()
         print(
-            f"搜索引擎已初始化，Embedding: {model_name}，"
-            f"LLM: {self.llm_model}，持久化目录: {persist_dir}"
+            f"搜索引擎已初始化，Embedding: {EMBEDDING_PROVIDER}/{model_name}，"
+            f"LLM: {LLM_PROVIDER}/{self.llm_model}，持久化目录: {persist_dir}"
         )
 
+    def _init_embed_model(self):
+        """DeepSeek 不做向量化；优先本地 HuggingFace，有千问 Key 时仍可用千问。"""
+        if EMBEDDING_PROVIDER == "dashscope":
+            from llama_index.embeddings.dashscope import DashScopeEmbedding
+
+            if not DASHSCOPE_API_KEY:
+                raise RuntimeError("EMBEDDING_PROVIDER=dashscope 但未找到 DASHSCOPE_API_KEY")
+            return DashScopeEmbedding(
+                model_name=self.model_name,
+                api_key=DASHSCOPE_API_KEY,
+                text_type="document",
+            )
+
+        from llama_index.embeddings.huggingface import HuggingFaceEmbedding
+
+        print(f"使用本地 Embedding 模型: {self.model_name}")
+        return HuggingFaceEmbedding(model_name=self.model_name)
+
     def _init_llm(self):
-        """讲义默认千问 qwen-plus；也可切到项目里已有的 DeepSeek。"""
-        if LLM_PROVIDER == "deepseek":
-            from llama_index.llms.deepseek import DeepSeek
+        """默认使用 Windows 环境变量里的 DEEPSEEK_API_KEY。"""
+        if LLM_PROVIDER == "dashscope":
+            from llama_index.llms.dashscope import DashScope
 
-            if not DEEPSEEK_API_KEY:
-                print("警告: 未设置 DEEPSEEK_API_KEY，/query 和 /chat 将不可用")
+            if not DASHSCOPE_API_KEY:
+                print("警告: 未设置 DASHSCOPE_API_KEY，/query 和 /chat 将不可用")
                 return None
-            return DeepSeek(model=LLM_MODEL, api_key=DEEPSEEK_API_KEY, timeout=120.0)
+            return DashScope(model_name=LLM_MODEL, api_key=DASHSCOPE_API_KEY, max_tokens=2048)
 
-        from llama_index.llms.dashscope import DashScope
+        from llama_index.llms.deepseek import DeepSeek
 
-        return DashScope(model_name=LLM_MODEL, api_key=self.api_key, max_tokens=2048)
+        if not DEEPSEEK_API_KEY:
+            print("警告: 未找到 DEEPSEEK_API_KEY（进程/.env/Windows 用户变量），/query 和 /chat 将不可用")
+            return None
+        return DeepSeek(
+            model=LLM_MODEL,
+            api_key=DEEPSEEK_API_KEY,
+            api_base=DEEPSEEK_BASE_URL,
+            timeout=120.0,
+        )
 
     def _sentence_splitter(self) -> SentenceSplitter:
         return SentenceSplitter(
@@ -287,6 +309,7 @@ class SemanticSearchEngine:
             "total_documents": self.collection.count(),
             "dimension": "auto",
             "model_name": self.model_name,
+            "embedding_provider": EMBEDDING_PROVIDER,
             "llm_provider": LLM_PROVIDER,
             "llm_model": self.llm_model,
             "persist_dir": self.persist_dir,
