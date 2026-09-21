@@ -1630,14 +1630,49 @@ def to_opml_outline(node, indent=4) -> str:
     return f'{pad}<outline text="{title}">\n{inner}\n{pad}</outline>'
 
 
+def _collect_titles(node, prefix="") -> list[str]:
+    """把子树标题展平成文本行，塞进备注用。"""
+    lines = [f"{prefix}{node['title']}"]
+    for child in node.get("children", {}).get("attached", []):
+        lines.extend(_collect_titles(child, prefix + "· "))
+    return lines
+
+
+def compact_tree(node, max_depth=3, depth=0):
+    """限制展开深度：更深层的内容收到备注，导图不会拉得很长。"""
+    import copy
+
+    node = copy.deepcopy(node)
+    kids = node.get("children", {}).get("attached", [])
+    if not kids:
+        return node
+
+    if depth >= max_depth:
+        detail_lines = []
+        for child in kids:
+            detail_lines.extend(_collect_titles(child))
+        old_note = node.get("notes", {}).get("plain", {}).get("content", "")
+        merged = (old_note + "\n\n" if old_note else "") + "\n".join(detail_lines)
+        node["notes"] = {"plain": {"content": merged.strip()}}
+        node.pop("children", None)
+        return node
+
+    node["children"] = {
+        "attached": [compact_tree(child, max_depth, depth + 1) for child in kids]
+    }
+    return node
+
+
 def main():
-    TREE["structureClass"] = "org.xmind.ui.logic.right"
+    # 放射状地图布局（比「从左到右」短很多）；细节压到第 3 层备注里
+    visual = compact_tree(TREE, max_depth=3)
+    visual["structureClass"] = "org.xmind.ui.map.unbalanced"
     content = [
         {
             "id": nid(),
             "class": "sheet",
             "title": "RAG入门课",
-            "rootTopic": TREE,
+            "rootTopic": visual,
             "topicPositioning": "fixed",
         }
     ]
@@ -1652,12 +1687,13 @@ def main():
         "creator": {"name": "Cursor", "version": "1.0"},
     }
 
-    xmind_path = OUT_DIR / "RAG入门课-从左到右.xmind"
+    xmind_path = OUT_DIR / "RAG入门课.xmind"
     with zipfile.ZipFile(xmind_path, "w", zipfile.ZIP_DEFLATED) as zf:
         zf.writestr("content.json", json.dumps(content, ensure_ascii=False, indent=2))
         zf.writestr("manifest.json", json.dumps(manifest, ensure_ascii=False, indent=2))
         zf.writestr("metadata.json", json.dumps(metadata, ensure_ascii=False, indent=2))
 
+    # Markdown / OPML 仍保留完整细节，方便搜索阅读
     md_path = OUT_DIR / "RAG入门课-XMind导入.md"
     md_path.write_text(to_md(TREE), encoding="utf-8")
 
@@ -1673,6 +1709,7 @@ def main():
     (OUT_DIR / "RAG入门课-XMind导入.opml").write_text(opml, encoding="utf-8")
     print(xmind_path)
     print(md_path)
+    print("layout=map.unbalanced, visual_depth<=3 (details in notes)")
 
 
 if __name__ == "__main__":
