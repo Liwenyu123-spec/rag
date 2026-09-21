@@ -1,0 +1,608 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Native RAG 语义搜索</title>
+  <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+  <style>
+    :root {
+      --ink: #18212f;
+      --muted: #738095;
+      --line: #e6eaf0;
+      --blue: #246bfd;
+      --blue-dark: #1552d8;
+      --navy: #101827;
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      min-height: 100vh;
+      padding: 28px;
+      font-family: Inter, "PingFang SC", "Microsoft YaHei", sans-serif;
+      color: var(--ink);
+      background:
+        radial-gradient(circle at 10% 10%, rgba(53, 112, 255, .24), transparent 32%),
+        radial-gradient(circle at 90% 90%, rgba(36, 107, 253, .14), transparent 30%),
+        #edf2f9;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
+    button, textarea, select { font: inherit; }
+    #app {
+      width: min(1180px, 100%);
+      height: min(860px, calc(100vh - 56px));
+      min-height: 600px;
+      display: grid;
+      grid-template-columns: 260px minmax(0, 1fr);
+      background: rgba(255,255,255,.95);
+      border: 1px solid rgba(255,255,255,.8);
+      border-radius: 24px;
+      box-shadow: 0 30px 80px rgba(35,49,78,.18);
+      overflow: hidden;
+      backdrop-filter: blur(16px);
+    }
+    .sidebar {
+      padding: 28px 22px;
+      color: #fff;
+      background: linear-gradient(180deg, rgba(36,107,253,.16), transparent 45%), var(--navy);
+      display: flex;
+      flex-direction: column;
+    }
+    .brand { display: flex; align-items: center; gap: 12px; }
+    .brand-mark {
+      width: 42px; height: 42px; border-radius: 13px;
+      background: linear-gradient(135deg, #5d91ff, #3d6dff);
+      display: grid; place-items: center; font-size: 21px;
+      box-shadow: 0 10px 24px rgba(72,108,255,.32);
+    }
+    .brand h1 { font-size: 17px; letter-spacing: .3px; }
+    .brand p { margin-top: 3px; color: #8e9ab0; font-size: 11px; }
+    .side-label {
+      margin: 28px 4px 12px;
+      color: #718097; font-size: 11px; font-weight: 700; letter-spacing: 1.2px;
+    }
+    .model-card, .stat-card {
+      padding: 15px;
+      border: 1px solid rgba(255,255,255,.09);
+      border-radius: 14px;
+      background: rgba(255,255,255,.055);
+    }
+    .model-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+    .model-name { font-size: 13px; font-weight: 600; word-break: break-all; }
+    .status-dot {
+      width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0;
+      background: #3ee49a; box-shadow: 0 0 0 4px rgba(62,228,154,.12);
+    }
+    .status-dot.off { background: #ff6b7a; box-shadow: 0 0 0 4px rgba(255,107,122,.12); }
+    .model-detail { margin-top: 8px; color: #8190a8; font-size: 11px; line-height: 1.6; }
+    .stat-grid { display: grid; gap: 8px; }
+    .stat-item {
+      display: flex; justify-content: space-between; gap: 8px;
+      font-size: 12px; color: #9aa8bd;
+    }
+    .stat-item strong { color: #dce3ef; font-weight: 600; }
+    .mode-list { display: grid; gap: 8px; }
+    .mode-btn {
+      padding: 12px 14px; text-align: left; color: #c5cede;
+      border: 1px solid rgba(255,255,255,.08); border-radius: 12px;
+      background: rgba(255,255,255,.04); cursor: pointer; transition: .2s;
+    }
+    .mode-btn:hover { background: rgba(255,255,255,.08); }
+    .mode-btn.active {
+      color: #fff; border-color: rgba(93,145,255,.45);
+      background: rgba(36,107,253,.28);
+    }
+    .mode-btn small { display: block; margin-top: 4px; color: #8090a8; font-size: 11px; }
+    .side-tip {
+      margin-top: auto; padding: 15px;
+      color: #8b98ac; font-size: 12px; line-height: 1.7;
+      border-radius: 14px; background: rgba(255,255,255,.04);
+    }
+    .side-tip strong { display: block; margin-bottom: 3px; color: #c2cada; }
+    .side-tip a { color: #9bb8ff; text-decoration: none; }
+    .chat-shell {
+      min-width: 0; min-height: 0;
+      display: flex; flex-direction: column; overflow: hidden;
+    }
+    .header {
+      height: 76px; padding: 0 28px;
+      border-bottom: 1px solid var(--line);
+      background: rgba(255,255,255,.82);
+      display: flex; justify-content: space-between; align-items: center;
+      flex-shrink: 0; gap: 16px;
+    }
+    .header h2 { font-size: 17px; font-weight: 650; }
+    .header-subtitle { margin-top: 4px; color: var(--muted); font-size: 12px; }
+    .k-control {
+      display: flex; align-items: center; gap: 8px;
+      padding: 6px 12px; color: #5c697b; font-size: 12px;
+      border: 1px solid var(--line); border-radius: 99px; background: #f7f9fc;
+    }
+    .k-control select {
+      border: 0; outline: 0; background: transparent; color: var(--ink); cursor: pointer;
+    }
+    .messages {
+      flex: 1; min-height: 0;
+      overflow-y: auto; overflow-x: hidden;
+      padding: 30px 34px 18px; background: #f8fafc;
+    }
+    .messages::-webkit-scrollbar { width: 6px; }
+    .messages::-webkit-scrollbar-thumb { background: #cdd5e1; border-radius: 8px; }
+    .empty-tip {
+      min-height: 100%; padding: 40px 0;
+      display: flex; flex-direction: column; justify-content: center; align-items: center;
+      text-align: center;
+    }
+    .empty-icon {
+      width: 68px; height: 68px; margin-bottom: 20px;
+      border-radius: 21px; color: #fff;
+      background: linear-gradient(135deg, #397bff, #246bfd);
+      box-shadow: 0 18px 35px rgba(68,94,226,.25);
+      display: grid; place-items: center; font-size: 30px;
+    }
+    .empty-tip h3 { font-size: 23px; font-weight: 650; }
+    .empty-tip > p { margin: 9px 0 24px; color: var(--muted); font-size: 14px; }
+    .suggestions {
+      width: min(620px, 100%); display: grid;
+      grid-template-columns: repeat(2, 1fr); gap: 10px;
+    }
+    .suggestion {
+      padding: 14px 16px; color: #4f5c6e; text-align: left;
+      border: 1px solid var(--line); border-radius: 12px;
+      background: #fff; cursor: pointer; transition: .2s ease;
+    }
+    .suggestion:hover {
+      color: var(--blue); border-color: #aac1ff; transform: translateY(-2px);
+      box-shadow: 0 8px 20px rgba(58,83,136,.08);
+    }
+    .message {
+      width: min(780px, 100%); margin: 0 auto 22px;
+      display: flex; align-items: flex-start; animation: fadeIn .25s ease;
+    }
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(8px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .message.user { flex-direction: row-reverse; }
+    .avatar {
+      width: 36px; height: 36px; border-radius: 11px;
+      display: grid; place-items: center; flex-shrink: 0; font-size: 16px;
+    }
+    .message.bot .avatar {
+      margin-right: 11px; color: #fff;
+      background: linear-gradient(135deg, #397bff, #246bfd);
+    }
+    .message.user .avatar { margin-left: 11px; color: #344053; background: #e7ebf1; }
+    .bubble-wrap { max-width: min(82%, 680px); min-width: 0; }
+    .bubble {
+      padding: 12px 16px;
+      border-radius: 6px 16px 16px 16px;
+      font-size: 14px; line-height: 1.75;
+      white-space: pre-wrap; word-break: break-word; overflow-wrap: anywhere;
+    }
+    .message.bot .bubble {
+      color: #303b4a; background: #fff; border: 1px solid #edf0f4;
+      box-shadow: 0 5px 16px rgba(42,55,80,.055);
+    }
+    .message.user .bubble {
+      color: #fff; border-radius: 16px 6px 16px 16px;
+      background: linear-gradient(135deg, var(--blue), var(--blue-dark));
+      box-shadow: 0 8px 18px rgba(36,107,253,.18);
+    }
+    .sources {
+      margin-top: 10px; display: grid; gap: 8px;
+    }
+    .source-card {
+      padding: 12px 14px; border-radius: 12px;
+      border: 1px solid #e7ecf3; background: #fff;
+    }
+    .source-meta {
+      display: flex; justify-content: space-between; gap: 10px;
+      margin-bottom: 6px; color: var(--muted); font-size: 11px;
+    }
+    .source-meta strong { color: var(--blue); }
+    .source-text {
+      color: #445062; font-size: 13px; line-height: 1.65;
+      display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+    .source-card.expanded .source-text {
+      display: block; -webkit-line-clamp: unset;
+    }
+    .source-toggle {
+      margin-top: 8px; border: 0; background: none;
+      color: var(--blue); font-size: 12px; cursor: pointer;
+    }
+    .input-area {
+      padding: 16px 28px 22px; border-top: 1px solid var(--line); background: #fff;
+      flex-shrink: 0;
+    }
+    .composer {
+      max-width: 780px; margin: 0 auto; padding: 7px 7px 7px 17px;
+      display: flex; gap: 8px; align-items: flex-end;
+      border: 1px solid #dce2eb; border-radius: 16px; background: #fbfcfe;
+      box-shadow: 0 7px 24px rgba(38,54,83,.06); transition: .2s;
+    }
+    .composer:focus-within {
+      border-color: #8eb0ff; box-shadow: 0 0 0 4px rgba(36,107,253,.08);
+    }
+    .composer textarea {
+      width: 100%; min-height: 42px; max-height: 120px;
+      padding: 10px 0 7px; border: 0; outline: 0; resize: none;
+      color: var(--ink); background: transparent; font-size: 14px; line-height: 1.5;
+    }
+    .composer textarea::placeholder { color: #98a3b2; }
+    .send-btn {
+      min-width: 76px; height: 42px; padding: 0 17px;
+      color: #fff; border: 0; border-radius: 11px; cursor: pointer; transition: .2s;
+      background: var(--blue); box-shadow: 0 7px 15px rgba(36,107,253,.22);
+    }
+    .send-btn:hover:not(:disabled) { background: var(--blue-dark); transform: translateY(-1px); }
+    .send-btn:disabled { opacity: .42; cursor: not-allowed; box-shadow: none; }
+    .input-hint { margin-top: 9px; color: #a0a9b7; text-align: center; font-size: 11px; }
+    @media (max-width: 760px) {
+      body { padding: 0; }
+      #app { height: 100vh; min-height: 0; grid-template-columns: 1fr; border-radius: 0; }
+      .sidebar { display: none; }
+      .header { height: 68px; padding: 0 17px; }
+      .header-subtitle { display: none; }
+      .messages { padding: 22px 14px 12px; }
+      .suggestions { grid-template-columns: 1fr; }
+      .suggestion:nth-child(n+3) { display: none; }
+      .bubble-wrap { max-width: 86%; }
+      .input-area { padding: 12px 12px 16px; }
+    }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="brand-mark">⌕</div>
+        <div>
+          <h1>Native RAG</h1>
+          <p>SEMANTIC SEARCH</p>
+        </div>
+      </div>
+
+      <div class="side-label">服务状态</div>
+      <div class="model-card">
+        <div class="model-row">
+          <span class="model-name">{{ health?.llm_model || '加载中...' }}</span>
+          <span class="status-dot" :class="{ off: health?.status !== 'ok' }"></span>
+        </div>
+        <div class="model-detail">
+          {{ health?.status === 'ok' ? '引擎已就绪' : (health?.message || '等待连接') }}
+          <br v-if="health?.llm_provider">LLM · {{ health.llm_provider }}
+        </div>
+      </div>
+
+      <div class="side-label">知识库</div>
+      <div class="stat-card stat-grid">
+        <div class="stat-item"><span>文档数</span><strong>{{ health?.total_documents ?? '-' }}</strong></div>
+        <div class="stat-item"><span>Embedding</span><strong>{{ shortModel }}</strong></div>
+        <div class="stat-item"><span>索引</span><strong>{{ health?.index_type ? 'Chroma' : '-' }}</strong></div>
+      </div>
+
+      <div class="side-label">工作模式</div>
+      <div class="mode-list">
+        <button
+          class="mode-btn"
+          :class="{ active: mode === 'chat' }"
+          @click="setMode('chat')"
+        >
+          多轮问答
+          <small>检索 + DeepSeek，保留会话记忆</small>
+        </button>
+        <button
+          class="mode-btn"
+          :class="{ active: mode === 'query' }"
+          @click="setMode('query')"
+        >
+          一次性问答
+          <small>检索后生成，并展示来源片段</small>
+        </button>
+        <button
+          class="mode-btn"
+          :class="{ active: mode === 'search' }"
+          @click="setMode('search')"
+        >
+          语义搜索
+          <small>只检索相似文档，不调用大模型</small>
+        </button>
+      </div>
+
+      <div class="side-tip">
+        <strong>快捷提示</strong>
+        Enter 发送 · Shift+Enter 换行<br>
+        <a href="/docs" target="_blank">打开 API 文档</a>
+      </div>
+    </aside>
+
+    <main class="chat-shell">
+      <header class="header">
+        <div>
+          <h2>{{ modeTitle }}</h2>
+          <div class="header-subtitle">{{ modeSubtitle }}</div>
+        </div>
+        <div class="k-control">
+          <span>Top-K</span>
+          <select v-model.number="topK">
+            <option :value="3">3</option>
+            <option :value="5">5</option>
+            <option :value="8">8</option>
+            <option :value="10">10</option>
+          </select>
+        </div>
+      </header>
+
+      <div class="messages" ref="messagesEl">
+        <div class="empty-tip" v-if="messages.length === 0">
+          <div class="empty-icon">⌕</div>
+          <h3>{{ emptyTitle }}</h3>
+          <p>{{ emptyDesc }}</p>
+          <div class="suggestions">
+            <button
+              class="suggestion"
+              v-for="item in suggestions"
+              :key="item"
+              @click="useSuggestion(item)"
+            >{{ item }}</button>
+          </div>
+        </div>
+
+        <div
+          v-for="(msg, index) in messages"
+          :key="index"
+          class="message"
+          :class="msg.role"
+        >
+          <div class="avatar">{{ msg.role === 'user' ? '你' : '⌕' }}</div>
+          <div class="bubble-wrap">
+            <div class="bubble">{{ msg.content || (msg.role === 'bot' ? '正在检索与生成...' : '') }}</div>
+            <div class="sources" v-if="msg.sources && msg.sources.length">
+              <div
+                class="source-card"
+                :class="{ expanded: msg.expanded?.[i] }"
+                v-for="(src, i) in msg.sources"
+                :key="i"
+              >
+                <div class="source-meta">
+                  <strong>来源 #{{ src.rank }}</strong>
+                  <span>相似度 {{ formatScore(src.similarity) }}</span>
+                </div>
+                <div class="source-text">{{ src.document }}</div>
+                <button
+                  class="source-toggle"
+                  v-if="src.document && src.document.length > 120"
+                  @click="toggleSource(msg, i)"
+                >{{ msg.expanded?.[i] ? '收起' : '展开全文' }}</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="input-area">
+        <div class="composer">
+          <textarea
+            v-model="inputText"
+            @keydown.enter.exact.prevent="sendMessage"
+            @input="autoResize"
+            :placeholder="placeholder"
+            :disabled="loading"
+            rows="1"
+          ></textarea>
+          <button
+            class="send-btn"
+            :disabled="loading || !inputText.trim()"
+            @click="sendMessage"
+          >{{ loading ? '...' : '发送 ↑' }}</button>
+        </div>
+        <div class="input-hint">答案基于知识库检索，重要信息请再核对原文</div>
+      </div>
+    </main>
+  </div>
+
+  <script>
+    const { createApp, ref, computed, nextTick, onMounted } = Vue;
+
+    createApp({
+      setup() {
+        const mode = ref('chat');
+        const inputText = ref('');
+        const messages = ref([]);
+        const loading = ref(false);
+        const topK = ref(5);
+        const health = ref(null);
+        const messagesEl = ref(null);
+        const sessionId = ref('web-' + Math.random().toString(36).slice(2, 10));
+
+        const modeMeta = {
+          chat: {
+            title: '多轮知识库问答',
+            subtitle: '结合向量检索与大模型，同一会话会记住上下文',
+            emptyTitle: '从知识库开始提问',
+            emptyDesc: '适合连续追问政策、概念或文档内容。',
+            placeholder: '基于知识库提问，例如：迟到怎么扣钱？',
+          },
+          query: {
+            title: '一次性 RAG 问答',
+            subtitle: '单次检索生成，并展示命中的来源片段',
+            emptyTitle: '提出一个完整问题',
+            emptyDesc: '系统会检索相关段落，再让大模型整理回答。',
+            placeholder: '输入问题，查看答案与引用来源...',
+          },
+          search: {
+            title: '语义搜索',
+            subtitle: '只返回相似文档，不调用大模型',
+            emptyTitle: '搜索知识库片段',
+            emptyDesc: '用自然语言找最相关的文档内容。',
+            placeholder: '输入关键词或一句话，例如：向量数据库',
+          },
+        };
+
+        const suggestions = [
+          '迟到怎么扣钱',
+          '什么是向量数据库',
+          'FAISS 有什么特点',
+          'Chroma 适合做什么',
+        ];
+
+        const modeTitle = computed(() => modeMeta[mode.value].title);
+        const modeSubtitle = computed(() => modeMeta[mode.value].subtitle);
+        const emptyTitle = computed(() => modeMeta[mode.value].emptyTitle);
+        const emptyDesc = computed(() => modeMeta[mode.value].emptyDesc);
+        const placeholder = computed(() => modeMeta[mode.value].placeholder);
+        const shortModel = computed(() => {
+          const name = health.value?.model || '';
+          if (!name) return '-';
+          const parts = name.split('/');
+          return parts[parts.length - 1];
+        });
+
+        const autoResize = (e) => {
+          e.target.style.height = 'auto';
+          e.target.style.height = Math.min(e.target.scrollHeight, 120) + 'px';
+        };
+
+        const scrollToBottom = () => {
+          nextTick(() => {
+            requestAnimationFrame(() => {
+              if (messagesEl.value) {
+                messagesEl.value.scrollTop = messagesEl.value.scrollHeight;
+              }
+            });
+          });
+        };
+
+        const formatScore = (score) => {
+          const n = Number(score);
+          if (Number.isNaN(n)) return '-';
+          return (n * 100).toFixed(1) + '%';
+        };
+
+        const toggleSource = (msg, index) => {
+          if (!msg.expanded) msg.expanded = {};
+          msg.expanded[index] = !msg.expanded[index];
+        };
+
+        const setMode = (next) => {
+          if (mode.value === next) return;
+          mode.value = next;
+          messages.value = [];
+          inputText.value = '';
+        };
+
+        const useSuggestion = (text) => {
+          inputText.value = text;
+          sendMessage();
+        };
+
+        const refreshHealth = async () => {
+          try {
+            const res = await fetch('/health');
+            health.value = await res.json();
+          } catch (err) {
+            health.value = { status: 'error', message: '无法连接后端' };
+          }
+        };
+
+        const sendMessage = async () => {
+          const question = inputText.value.trim();
+          if (!question || loading.value) return;
+
+          messages.value.push({ role: 'user', content: question });
+          messages.value.push({
+            role: 'bot',
+            content: '',
+            sources: [],
+            expanded: {},
+          });
+          inputText.value = '';
+          loading.value = true;
+          scrollToBottom();
+
+          const botMsg = messages.value[messages.value.length - 1];
+
+          try {
+            let res;
+            if (mode.value === 'search') {
+              res = await fetch('/search', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ query: question, k: topK.value }),
+              });
+            } else if (mode.value === 'query') {
+              res = await fetch('/query', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ question, k: topK.value }),
+              });
+            } else {
+              res = await fetch('/chat', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  question,
+                  session_id: sessionId.value,
+                  k: topK.value,
+                }),
+              });
+            }
+
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok) {
+              botMsg.content = data.detail || ('请求失败：HTTP ' + res.status);
+            } else if (mode.value === 'search') {
+              const list = data.results || [];
+              botMsg.content = list.length
+                ? `找到 ${data.total} 条相关结果：`
+                : '没有找到相关文档。';
+              botMsg.sources = list;
+            } else {
+              botMsg.content = data.answer || '没有生成回答。';
+              botMsg.sources = data.sources || [];
+            }
+          } catch (err) {
+            botMsg.content = '请求失败：' + (err.message || String(err));
+          } finally {
+            loading.value = false;
+            scrollToBottom();
+            refreshHealth();
+          }
+        };
+
+        onMounted(() => {
+          refreshHealth();
+          setInterval(refreshHealth, 15000);
+        });
+
+        return {
+          mode,
+          inputText,
+          messages,
+          loading,
+          topK,
+          health,
+          messagesEl,
+          suggestions,
+          modeTitle,
+          modeSubtitle,
+          emptyTitle,
+          emptyDesc,
+          placeholder,
+          shortModel,
+          autoResize,
+          formatScore,
+          toggleSource,
+          setMode,
+          useSuggestion,
+          sendMessage,
+        };
+      },
+    }).mount('#app');
+  </script>
+</body>
+</html>

@@ -1,8 +1,10 @@
 """Native RAG FastAPI 应用：生命周期、路由与启动入口。"""
 
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Query
+from fastapi.responses import FileResponse
 
 from semantic_search.app.config import (
     DASHSCOPE_API_KEY,
@@ -26,6 +28,9 @@ from semantic_search.app.schemas import (
     SearchRequest,
     SearchResponse,
 )
+
+STATIC_DIR = Path(__file__).resolve().parent.parent / "static"
+INDEX_HTML = STATIC_DIR / "index.html"
 
 
 def _require_engine(app: FastAPI) -> SemanticSearchEngine:
@@ -73,9 +78,18 @@ app = FastAPI(
 
 @app.get("/")
 async def root():
+    """返回前端问答 / 搜索页面。"""
+    if not INDEX_HTML.is_file():
+        raise HTTPException(status_code=404, detail="前端页面缺失：semantic_search/static/index.html")
+    return FileResponse(INDEX_HTML)
+
+
+@app.get("/api")
+async def api_info():
     """返回 API 基本信息和使用入口。"""
     return {
         "message": "Native RAG 语义搜索引擎 API",
+        "ui": "/",
         "docs": "/docs",
         "health": "/health",
         "search": "/search?q=你的查询内容",
@@ -225,6 +239,7 @@ if __name__ == "__main__":
         print("警告: 未找到 DEEPSEEK_API_KEY（进程 / .env / Windows 用户变量）")
     print(f"Embedding: {EMBEDDING_PROVIDER} / {EMBEDDING_MODEL}")
     print(f"LLM: {LLM_PROVIDER} / {LLM_MODEL}")
+    print(f"前端页面: http://{HOST}:{PORT}/")
     print(f"API文档: http://{HOST}:{PORT}/docs")
     print(f"搜索示例: http://{HOST}:{PORT}/search?q=向量数据库")
     print(f"问答示例: http://{HOST}:{PORT}/query?q=迟到怎么扣钱")
