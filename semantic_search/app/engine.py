@@ -269,6 +269,7 @@ class SemanticSearchEngine:
                 ChatMemoryBuffer.from_defaults(token_limit=10000),
             )
             self._chat_engines[key] = self.index.as_chat_engine(
+                chat_mode="condense_plus_context",
                 memory=memory,
                 similarity_top_k=k,
                 system_prompt=RAG_SYSTEM_PROMPT,
