@@ -6,10 +6,10 @@ import sys  # 操作系统相关：用来改 Python 模块搜索路径
 from contextlib import asynccontextmanager  # 提供异步上下文管理器装饰器，给 lifespan 用
 from pathlib import Path  # 用面向对象方式拼接文件路径
 
-# 支持 IDE 直接运行本文件：python semantic_search/app/main.py
-_PROJECT_ROOT = Path(__file__).resolve().parents[2]  # 从 app/main.py 往上两级到项目根目录 rag/
-if str(_PROJECT_ROOT) not in sys.path:  # 如果根目录还没进模块搜索路径
-    sys.path.insert(0, str(_PROJECT_ROOT))  # 插到最前面，才能 import semantic_search
+# 支持 IDE 直接运行本文件。包在 chroma文档管理/semantic_search/，需把「chroma文档管理」加入 path
+_PACKAGE_PARENT = Path(__file__).resolve().parents[2]  # .../chroma文档管理
+if str(_PACKAGE_PARENT) not in sys.path:
+    sys.path.insert(0, str(_PACKAGE_PARENT))
 
 from fastapi import FastAPI, File, Form, HTTPException, Query, UploadFile  # FastAPI 应用、上传、查询参数
 from fastapi.responses import FileResponse  # 直接把本地文件（前端 HTML）作为响应返回

@@ -6,12 +6,14 @@ from pathlib import Path  # 拼接项目内路径
 
 from dotenv import load_dotenv  # 从 .env 文件加载键值到环境变量
 
-APP_DIR = Path(__file__).resolve().parent  # 当前文件所在目录：semantic_search/app
+APP_DIR = Path(__file__).resolve().parent  # 当前文件所在目录：.../semantic_search/app
 PACKAGE_DIR = APP_DIR.parent  # 上一级：semantic_search 包目录
-PROJECT_ROOT = PACKAGE_DIR.parent  # 再上一级：rag 项目根目录
+# 包现在在 rag/chroma文档管理/semantic_search/，再上一级才是仓库根目录
+PROJECT_ROOT = PACKAGE_DIR.parent.parent  # rag 项目根目录（放 .env）
 
-load_dotenv(PROJECT_ROOT / ".env")  # 优先加载项目根目录 .env
-load_dotenv(PACKAGE_DIR / ".env")  # 再加载包目录 .env（可覆盖同名项，取决于 dotenv 行为）
+load_dotenv(PROJECT_ROOT / ".env")  # 优先加载仓库根目录 .env
+load_dotenv(PACKAGE_DIR.parent / ".env")  # 项目目录 .env
+load_dotenv(PACKAGE_DIR / ".env")  # 包目录 .env
 
 
 def _reg_get(root, path: str, name: str) -> str | None:  # 从 Windows 注册表读单个环境变量
