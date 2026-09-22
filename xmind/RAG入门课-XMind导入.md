@@ -548,6 +548,8 @@ AI 和 GAI 都是提出目标，GAI 的目标更具体
 
 ##### stream_complete 是生成器，delta 是本段新增文本
 
+##### 对照代码：见本章「五、代码详解」909.py 的 memory.put + stream_chat
+
 ##### 对话系统 Chatbot
 
 ###### 无记忆：每轮独立
@@ -585,6 +587,73 @@ AI 和 GAI 都是提出目标，GAI 的目标更具体
 ##### 页面上传文档，向量化后存向量库
 
 ##### 简易对话窗口能聊天
+
+### 五、代码详解（仓库对照）
+对照根目录 908.py（OpenAI 兼容流式）和 909.py（LlamaIndex 多轮记忆）
+
+#### 1 读密钥：进程 → .env → Windows 用户变量
+
+##### load_dotenv(Path(__file__).resolve().parent / '.env')
+
+##### 必须用脚本所在目录，不能依赖 IDE 当前工作目录
+
+##### api_key=os.getenv('DEEPSEEK_API_KEY')，不要写成字符串 'DEEPSEEK_API_KEY'
+
+##### 908.py 还用 winreg 读用户/系统环境变量做兜底
+
+#### 2 创建兼容客户端 908.py
+
+##### from openai import OpenAI
+
+##### client = OpenAI(api_key=key, base_url='https://api.deepseek.com')
+
+##### 换百炼只改 base_url 和 model：dashscope compatible-mode/v1
+
+##### 这一步只是连上服务，还没有真正发请求
+
+#### 3 发对话请求
+
+##### client.chat.completions.create(model=..., messages=..., stream=True)
+
+##### 必填只有 model 和 messages；stream 决定一次返回还是一块块返回
+
+##### messages 是 list[dict]，每条至少有 role 和 content
+
+##### 非流式：response.choices[0].message.content 就是整段回复
+
+#### 4 流式怎么拼字
+
+##### for chunk in stream: content = chunk.choices[0].delta.content
+
+##### delta.content 经常是 None（空包），必须 if content 再拼
+
+##### 自己累加 ai_result += content，才拿得到完整回复
+
+##### 前端用 SSE：yield data: {json} 空行，最后 data: [DONE]
+
+##### FastAPI 用 StreamingResponse(..., media_type='text/event-stream')
+
+#### 5 LlamaIndex 多轮 909.py
+
+##### llm = DeepSeek(model='deepseek-v4-flash', api_key=..., timeout=120)
+
+##### memory = ChatMemoryBuffer.from_defaults(token_limit=10000)
+
+##### 先 memory.put(ChatMessage(role='system', content='...')) 设人设
+
+##### 每轮：put(user) → llm.stream_chat(memory.get()) → put(assistant)
+
+##### stream_chat 返回生成器，r.delta 是本块新增字
+
+##### 不把 assistant 写回 memory，下一轮模型会忘掉自己刚说的话
+
+#### 6 complete vs chat vs stream_chat
+
+##### llm.complete(字符串)：单轮、无角色，适合内部小任务
+
+##### llm.chat(messages)：带 system/user/assistant，正式对话首选
+
+##### llm.stream_chat(messages)：同上但是流式，终端/网页打字机效果
 
 ## 02 提示词工程
 飞书文档：01-提示词。Prompt 是指令，Prompt Engineering 是优化指令的技术。
@@ -823,6 +892,75 @@ AI 和 GAI 都是提出目标，GAI 的目标更具体
 #### 完成社交媒体内容策划：ToT 选题 + 表格输出
 
 #### 对照：能说清自己加了角色、少样本还是思维链
+
+### 七、代码详解（910.py）
+课堂四个 demo：策略模式、自我一致性、输入净化、电商/社交文案
+
+#### 启动时做了什么
+
+##### llm = DeepSeek(...) 只初始化一次，后面所有接口共用
+
+##### rebuild_memory()：新建 ChatMemoryBuffer，写入安全 system
+
+##### BASE_SYSTEM_PROMPT：禁止透露指令、拒绝越权，老师案例 07 的核心
+
+#### 零样本/少样本/COT/ToT 怎么接进代码
+
+##### PROMPT_MODES 字典：每种模式一段策略提示词
+
+##### build_user_content(question, mode) 把策略拼到用户任务前面
+
+##### 真正发给模型的是：system（安全人设）+ 历史 + 带策略的 user
+
+##### 换模式不用换模型，只换拼到 user 前面的那段字
+
+#### 输入净化链路 gate_user_input
+
+##### moderation_input：正则拦截 ignore previous / jailbreak 等
+
+##### 再清控制字符、过长重复字符
+
+##### 拦截成功返回固定话术，不把拦截原因回给用户
+
+##### chat / stream_chat 都先走这一层，再决定调不调模型
+
+#### safe_messages：净化 + 强化 system + 写入记忆
+
+##### 失败：返回拒绝字符串，调用方直接给前端
+
+##### 成功：确认 memory 里有 system → put(user) → return memory.get()
+
+##### 然后 llm.chat(messages) 或 llm.stream_chat(messages)
+
+#### 电商文案 /product_copy 对照 ecprompt.py
+
+##### system：金牌文案 + 思维链四步（痛点→卖点→标题正文→标签）
+
+##### user 里先塞两个完整示例，再拼本轮 name/features/audience
+
+##### llm.chat(messages)，不写入普通聊天 memory，避免串台
+
+##### 三个字段分别 gate_user_input，防止注入藏在卖点里
+
+#### 自我一致性 /self_consistency
+
+##### 同一任务换 N 个角度，循环 llm.complete 得到候选
+
+##### 再拼评选 Prompt：从下列方案选最佳，只输出最终口号
+
+##### num 默认 2、上限 5，避免一次打太多次 API
+
+#### 社交媒体 /social_plan ToT 四阶段
+
+##### 第1次 complete：发散多个截然不同切入角度
+
+##### 第2次：评估爆款和可行性，选出最佳
+
+##### 第3次：生成一周选题日历
+
+##### 第4次：自我反思再优化
+
+##### _complete_text 内部就是 llm.complete(prompt).text
 
 ## 03 RAG整体认知
 飞书文档：01-RAG整体认知。2020年 Facebook AI 提出，解决大模型答得快但不够准、不够新。
@@ -1160,9 +1298,25 @@ AI 和 GAI 都是提出目标，GAI 的目标更具体
 
 #### 2.2 用 numpy 算余弦
 
-##### 点积 np.dot，再除以两个 L2 范数的乘积
+##### 公式：cos = np.dot(a, b) / (np.linalg.norm(a) * np.linalg.norm(b))
+
+##### a、b 必须是一维向量，且维度相同，否则点积会报错
 
 ##### 可对比：我爱你 vs 我恨你、vs 大模型有很多应用场景、vs python开发
+
+##### 结果接近 1 更像，接近 0 不太像，接近 -1 语义相反
+
+#### 2.3 代码详解：调百炼拿向量再算相似度
+
+##### client = OpenAI(api_key=key, base_url='https://dashscope.aliyuncs.com/compatible-mode/v1')
+
+##### resp = client.embeddings.create(model='text-embedding-v3', input=texts, dimensions=1024)
+
+##### 向量在 resp.data[i].embedding，和 texts 下标一一对应
+
+##### 查询也必须同一模型、同一 dimensions，再和文档向量算余弦
+
+##### input 可以一次传多句，比 for 循环逐条调更省
 
 ### 3 Embedding 的三大作用
 
@@ -1258,6 +1412,24 @@ AI 和 GAI 都是提出目标，GAI 的目标更具体
 
 ##### 选型可看 MTEB Leaderboard，中文优先看 C-MTEB
 
+### 6 代码详解：项目里怎么挂 Embedding
+
+#### semantic_search/app/engine.py _init_embed_model
+
+##### DashScope：DashScopeEmbedding(model_name=..., api_key=..., text_type='document')
+
+##### 本地：HuggingFaceEmbedding(model_name='BAAI/bge-small-zh-v1.5')
+
+##### Settings.embed_model = ... 设成全局，后面分块/检索都会用它
+
+#### 写入和查询不要混 text_type
+
+##### 建库用 text_type='document'，查询侧有的模型要改成 query
+
+##### BGE 系列查询前常加指令：为这个句子生成表示以用于检索
+
+##### 本仓库默认本地 bge，query 和 document 走同一 HuggingFaceEmbedding
+
 ## 05 向量数据库
 飞书文档：03-大模型应用基础--向量数据库
 
@@ -1319,9 +1491,25 @@ AI 和 GAI 都是提出目标，GAI 的目标更具体
 
 ##### 有 NVIDIA+CUDA 再装 faiss-gpu
 
-##### 流程：随机向量 → 创建索引 → add → search → 返回结果
-
 ##### 课上示例：10000 条、每条 128 维 float32 矩阵
+
+##### 代码详解 对照 918.py IndexFlat
+
+###### vectors = np.random.random((10000, 128)).astype('float32')
+
+###### 必须 float32，FAISS 不吃 float64
+
+###### index = faiss.IndexFlatL2(128)  # 维度要和向量列数一致
+
+###### index.add(vectors)  # 写入后 index.ntotal 应等于 10000
+
+###### query 也要形状 (1, 128) 的 float32，不能传一维 (128,)
+
+###### D, I = index.search(query, k=5)  # D=距离，I=下标
+
+###### 用 I[0][i] 回查原向量或原文；距离越小（L2）越像
+
+###### Flat 不能单独改某一条，要更新通常重建索引
 
 #### 索引选型决策树
 
@@ -1347,15 +1535,25 @@ AI 和 GAI 都是提出目标，GAI 的目标更具体
 
 ##### 每个向量分到最近中心，查询只搜最近几个中心
 
-##### 必须先 index.train，内部是 k-means；不训练不能搜
+##### 代码详解 对照 918.py IVF
 
-##### quantizer 常用底层 IndexFlatL2
+###### quantizer = faiss.IndexFlatL2(dimension)
+
+###### index = faiss.IndexIVFFlat(quantizer, dimension, nlist=100)
+
+###### index.train(vectors) 必须先做，内部 k-means；不训练会报错
+
+###### index.add(vectors) 训练完才能 add
+
+###### index.nprobe = 10  # 查最近 10 个簇，越大越准越慢
+
+###### D, I = index.search(query, k=5)
 
 ##### nlist：聚类中心数，通常取 sqrt(N)。太小每簇太大；太大要查的簇变多
 
 ##### nprobe：查几个簇。1 最快最糙；等于 nlist 就变精确搜
 
-##### 正向索引：文档→词，搜“苹果”要扫 100 万篇，O(N)
+##### 正向索引：文档→词，搜苹果要扫 100 万篇，O(N)
 
 ##### 倒排索引：词→文档，直接取倒排表，接近 O(1)，课上说可提速约 100 倍
 
@@ -1424,6 +1622,26 @@ AI 和 GAI 都是提出目标，GAI 的目标更具体
 ##### 3 add：documents + metadatas + ids
 
 ##### 4 query：用自然语言查最相似的几条
+
+##### 代码详解 对照 918.py
+
+###### client = chromadb.PersistentClient(path='./chroma_data')
+
+###### collection = client.get_or_create_collection('kaoqin')
+
+###### add 时 ids、documents、metadatas 三个 list 等长
+
+###### 只传 documents：库用默认 all-MiniLM-L6-v2 自动向量化
+
+###### 只传 embeddings：跳过嵌入，适合已经用千问算好的向量
+
+###### 重复运行同一 id 会 DuplicateID，先 collection.delete(ids=...)
+
+###### res = collection.query(query_texts=['年假几天'], n_results=3)
+
+###### 看 res['documents'][0]、res['metadatas'][0]、res['distances'][0]
+
+###### where={'category': '年假'} 是先过滤再向量搜
 
 #### 三种客户端
 
@@ -1534,6 +1752,14 @@ AI 和 GAI 都是提出目标，GAI 的目标更具体
 #### 课上测试：GET /search?q=向量搜索工具&k=3
 
 #### 参考：faiss.ai 、 docs.trychroma.com
+
+#### 完整落地已迁到 semantic_search，代码详解见第 06 章
+
+##### 启动：python -m semantic_search → http://127.0.0.1:8001/
+
+##### 只检索：GET /search?q=...&k=3
+
+##### 检索+生成：GET /query?q=...
 
 ## 06 Native RAG（基础RAG）
 飞书文档：01-Native_RAG（基础RAG）https://ecnwvcdzorsp.feishu.cn/docx/WAyydkEX2o81xAxFkn1cJRqqnnY
@@ -1763,6 +1989,76 @@ AI 和 GAI 都是提出目标，GAI 的目标更具体
 ##### 持久化目录：semantic_search/chroma_db
 
 ##### 启动：在 rag 根目录 python -m semantic_search → http://127.0.0.1:8001/
+
+#### 7 代码详解 engine.py / main.py
+
+##### 启动 lifespan（main.py）
+
+###### 缺 DEEPSEEK_API_KEY 时引擎为 None，接口会 503，页面仍能打开
+
+###### SemanticSearchEngine()：挂 Embedding、LLM、Chroma、索引
+
+###### seed_if_empty()：库空则写入示例，并加载 data 目录文件
+
+##### 入库 ingest_files / add_documents
+
+###### SimpleDirectoryReader(input_files=... 或 input_dir=...)
+
+###### load_data() → clean_empty_text 去掉空文档
+
+###### splitter.get_nodes_from_documents(documents) 切成 Node
+
+###### index.insert_nodes(nodes) 内部：embed + collection.add
+
+###### 知识库变了要 _reset_chat_engines()，否则多轮还用旧上下文
+
+##### 三种分块器构造
+
+###### SentenceSplitter(chunk_size, chunk_overlap, paragraph_separator, secondary_chunking_regex)
+
+###### TokenTextSplitter(chunk_size, chunk_overlap)
+
+###### SemanticSplitterNodeParser(buffer_size=1, breakpoint_percentile_threshold=95, sentence_splitter=中文分句)
+
+###### _splitter(mode) 按 'sentence'/'token'/'semantic' 选一个
+
+##### 只检索 search
+
+###### retriever = self.index.as_retriever(similarity_top_k=k)
+
+###### results = retriever.retrieve(query)  # 不调大模型
+
+###### item.node.get_content() 是原文，item.score 是相似度
+
+###### 对应路由：GET/POST /search
+
+##### 一次性问答 query
+
+###### engine = self.index.as_query_engine(similarity_top_k=k)
+
+###### response = engine.query(question)
+
+###### str(response) 是答案，response.source_nodes 是引用片段
+
+###### 对应路由：GET/POST /query
+
+##### 多轮问答 chat
+
+###### as_chat_engine(chat_mode='condense_plus_context', memory=..., similarity_top_k=k, system_prompt=...)
+
+###### condense_plus_context：先把多轮问题改写成独立问句，再检索
+
+###### memory 按 session_id 复用，同一会话才能记住上文
+
+###### 对应路由：POST /chat，body 带 session_id
+
+##### 从向量库恢复索引
+
+###### collection.count() > 0 时：VectorStoreIndex.from_vector_store(...)
+
+###### 空库：VectorStoreIndex(nodes=[], storage_context=...) 以后再 insert
+
+###### Settings.embed_model 必须和建库时同一个，否则检索会乱
 
 ## 07 Advanced RAG（高级RAG）
 飞书文档：01-RAG（Advance RAG）https://ecnwvcdzorsp.feishu.cn/docx/F2wRdmBPNoI25vx3l8Pc3MvWnTe
@@ -2021,6 +2317,16 @@ AI 和 GAI 都是提出目标，GAI 的目标更具体
 
 ##### 下一步最值得加：查询改写 或 bge-reranker
 
+##### 若给 /query 加 HyDE，骨架是
+
+###### base = index.as_query_engine(similarity_top_k=k)
+
+###### hyde = HyDEQueryTransform(include_original=True)
+
+###### engine = TransformQueryEngine(base, hyde)
+
+###### return engine.query(question)
+
 ## 08 检索前优化（Pre-retrieval）
 飞书文档：02-检索前优化（Pre-retrieval）https://ecnwvcdzorsp.feishu.cn/docx/EId6d4FwjoCrA4x8LELcG8eyn3g
 核心目标：进入向量库前提升查询质量、缩小范围、降低噪声。对应 07 章第一节的专训。
@@ -2254,3 +2560,47 @@ chunk_size 按 token（tiktoken）；中文约 1 字≈1~1.5 token
 ###### 未接：HyDE、Multi-Query、SubQuestion、父子块、RRF
 
 ###### 可作为下一阶段作业：先给 /query 加一层查询改写
+
+#### 4 代码详解：讲义里的 LlamaIndex 写法
+
+##### 分块
+
+###### splitter = SentenceSplitter(chunk_size=512, chunk_overlap=100)
+
+###### nodes = splitter.get_nodes_from_documents(docs)
+
+###### 语义切：SemanticSplitterNodeParser(..., embed_model=Settings.embed_model)
+
+###### 中文分句：re.split(r'(?<=[。！？!?\n])\s*', text)
+
+##### HyDE 包装查询引擎
+
+###### hyde = HyDEQueryTransform(include_original=True)
+
+###### engine = TransformQueryEngine(query_engine, hyde)
+
+###### engine.query(question) 会先生成假设文档再检索
+
+###### include_original=True：假设文档和原问题一起搜，降低写偏风险
+
+##### Multi-Query + RRF
+
+###### fusion = QueryFusionRetriever(retrievers=[...], mode='reciprocal_rerank')
+
+###### 多路 retrieve 后按 1/(k+排名) 合并，不依赖原始分数是否可比
+
+##### 子查询分解
+
+###### tools = [QueryEngineTool.from_defaults(query_engine=..., description='...')]
+
+###### engine = SubQuestionQueryEngine.from_defaults(query_engine_tools=tools)
+
+###### description 要写清这个工具查哪类资料，否则路由会乱
+
+##### 父子块
+
+###### parser = HierarchicalNodeParser.from_defaults(chunk_sizes=[2048, 512])
+
+###### 叶子建 VectorStoreIndex，父块放 docstore
+
+###### retriever = AutoMergingRetriever(leaf_retriever, storage_context)

@@ -527,6 +527,7 @@ TREE = topic(
                                 topic("llm.complete：单轮纯字符串，无角色、无状态"),
                                 topic("llm.chat：消息列表可分 system/user/assistant，内置多轮，实际开发首选"),
                                 topic("stream_complete 是生成器，delta 是本段新增文本"),
+                                topic("对照代码：见本章「五、代码详解」909.py 的 memory.put + stream_chat"),
                                 topic(
                                     "对话系统 Chatbot",
                                     children=[
@@ -2261,6 +2262,15 @@ TREE = topic(
                                 topic("仍是 Native RAG：三种分块 + Chroma + /search /query /chat"),
                                 topic("还没接 HyDE、Multi-Query、BM25、重排序"),
                                 topic("下一步最值得加：查询改写 或 bge-reranker"),
+                                topic(
+                                    "若给 /query 加 HyDE，骨架是",
+                                    children=[
+                                        topic("base = index.as_query_engine(similarity_top_k=k)"),
+                                        topic("hyde = HyDEQueryTransform(include_original=True)"),
+                                        topic("engine = TransformQueryEngine(base, hyde)"),
+                                        topic("return engine.query(question)"),
+                                    ],
+                                ),
                             ],
                         ),
                     ],
