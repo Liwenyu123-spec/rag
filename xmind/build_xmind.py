@@ -971,68 +971,137 @@ TREE = topic(
                     ],
                 ),
                 topic(
-                    "七、代码详解（910.py）",
-                    note="课堂四个 demo：策略模式、自我一致性、输入净化、电商/社交文案",
+                    "七、代码详解（带安全校验 / 文案项目）",
+                    note="对应「带安全校验的聊天机器人」与「社交媒体文案和电商内容生成」（原 910.py）。每条：代码 → 意思 → 为什么。",
                     children=[
                         topic(
                             "启动时做了什么",
                             children=[
-                                topic("llm = DeepSeek(...) 只初始化一次，后面所有接口共用"),
-                                topic("rebuild_memory()：新建 ChatMemoryBuffer，写入安全 system"),
-                                topic("BASE_SYSTEM_PROMPT：禁止透露指令、拒绝越权，老师案例 07 的核心"),
+                                topic(
+                                    "llm = DeepSeek(...) 只建一次",
+                                    children=[
+                                        topic("意思：整个服务共用一个模型客户端"),
+                                        topic("为什么：每个请求都新建会又慢又浪费连接"),
+                                    ],
+                                ),
+                                topic(
+                                    "rebuild_memory() → 新建 ChatMemoryBuffer + 写入安全 system",
+                                    children=[
+                                        topic("意思：清空旧对话，并放入 BASE_SYSTEM_PROMPT"),
+                                        topic("BASE_SYSTEM_PROMPT 作用：禁止透露系统指令、拒绝越权，这是安全底线"),
+                                    ],
+                                ),
                             ],
                         ),
                         topic(
                             "零样本/少样本/COT/ToT 怎么接进代码",
                             children=[
-                                topic("PROMPT_MODES 字典：每种模式一段策略提示词"),
-                                topic("build_user_content(question, mode) 把策略拼到用户任务前面"),
-                                topic("真正发给模型的是：system（安全人设）+ 历史 + 带策略的 user"),
-                                topic("换模式不用换模型，只换拼到 user 前面的那段字"),
+                                topic(
+                                    "PROMPT_MODES = {'zero_shot': '...', 'cot': '...', ...}",
+                                    children=[
+                                        topic("意思：四种策略各自是一段「前置说明文字」"),
+                                        topic("换模式 = 换这段文字，不换模型、不改接口"),
+                                    ],
+                                ),
+                                topic(
+                                    "build_user_content(question, mode) → 策略 + '\\n用户任务：' + 问题",
+                                    children=[
+                                        topic("意思：把策略提示粘到用户问题前面，组成一条 user 消息"),
+                                        topic("真正发给模型的顺序：system（安全）→ 历史 → 这条带策略的 user"),
+                                    ],
+                                ),
                             ],
                         ),
                         topic(
-                            "输入净化链路 gate_user_input",
+                            "输入净化 gate_user_input(text)",
                             children=[
-                                topic("moderation_input：正则拦截 ignore previous / jailbreak 等"),
-                                topic("再清控制字符、过长重复字符"),
-                                topic("拦截成功返回固定话术，不把拦截原因回给用户"),
-                                topic("chat / stream_chat 都先走这一层，再决定调不调模型"),
+                                topic(
+                                    "moderation_input：一堆正则扫 ignore previous / jailbreak 等",
+                                    children=[
+                                        topic("意思：发现像「覆盖系统提示」的攻击句，直接判危险"),
+                                        topic("返回 None 表示拦截；返回清洗后的字符串表示通过"),
+                                    ],
+                                ),
+                                topic(
+                                    "拦截后返回固定话术，不解释原因",
+                                    children=[
+                                        topic("意思：对外只说「无法回答」，不教对方怎么绕过"),
+                                        topic("chat/stream_chat 都先过这一关，过不了就不调模型（省钱也更安全）"),
+                                    ],
+                                ),
                             ],
                         ),
                         topic(
-                            "safe_messages：净化 + 强化 system + 写入记忆",
+                            "safe_messages(question, mode)",
                             children=[
-                                topic("失败：返回拒绝字符串，调用方直接给前端"),
-                                topic("成功：确认 memory 里有 system → put(user) → return memory.get()"),
-                                topic("然后 llm.chat(messages) 或 llm.stream_chat(messages)"),
+                                topic(
+                                    "失败返回 str（拒绝话术）",
+                                    children=[
+                                        topic("意思：调用方看到是字符串就直接给前端，不再 llm.chat"),
+                                    ],
+                                ),
+                                topic(
+                                    "成功：确保有 system → put(user) → return memory.get()",
+                                    children=[
+                                        topic("意思：返回「当前完整消息列表」，已经包含历史和本轮用户话"),
+                                        topic("接着：response = llm.chat(prepared)，再 put(assistant)"),
+                                    ],
+                                ),
                             ],
                         ),
                         topic(
-                            "电商文案 /product_copy 对照 ecprompt.py",
+                            "电商文案 /product_copy",
                             children=[
-                                topic("system：金牌文案 + 思维链四步（痛点→卖点→标题正文→标签）"),
-                                topic("user 里先塞两个完整示例，再拼本轮 name/features/audience"),
-                                topic("llm.chat(messages)，不写入普通聊天 memory，避免串台"),
-                                topic("三个字段分别 gate_user_input，防止注入藏在卖点里"),
+                                topic(
+                                    "build_product_messages(product)",
+                                    children=[
+                                        topic("system：金牌文案 + 四步思维链（痛点→卖点→标题正文→标签）"),
+                                        topic("user：先放两个完整示例（Few-Shot），再放本轮 name/features/audience"),
+                                        topic("为什么示例要完整：锁住语气和输出格式，少写废话"),
+                                    ],
+                                ),
+                                topic(
+                                    "llm.chat(messages)，且不写入普通聊天 memory",
+                                    children=[
+                                        topic("意思：文案是一次性任务，别污染客服多轮记忆"),
+                                        topic("三个字段分别 gate_user_input：防止注入藏在「卖点」里"),
+                                    ],
+                                ),
                             ],
                         ),
                         topic(
                             "自我一致性 /self_consistency",
                             children=[
-                                topic("同一任务换 N 个角度，循环 llm.complete 得到候选"),
-                                topic("再拼评选 Prompt：从下列方案选最佳，只输出最终口号"),
-                                topic("num 默认 2、上限 5，避免一次打太多次 API"),
+                                topic(
+                                    "循环 N 次 llm.complete(不同角度 Prompt)",
+                                    children=[
+                                        topic("意思：同一任务换说法各生成一个候选口号"),
+                                        topic("得到 candidates 列表"),
+                                    ],
+                                ),
+                                topic(
+                                    "再 llm.complete(评选 Prompt)",
+                                    children=[
+                                        topic("意思：让模型从候选里挑一个，只输出最终口号"),
+                                        topic("num 默认 2：少打几次 API，省时间省钱"),
+                                    ],
+                                ),
                             ],
                         ),
                         topic(
-                            "社交媒体 /social_plan ToT 四阶段",
+                            "社交媒体 /social_plan（ToT 四次 complete）",
                             children=[
-                                topic("第1次 complete：发散多个截然不同切入角度"),
-                                topic("第2次：评估爆款和可行性，选出最佳"),
-                                topic("第3次：生成一周选题日历"),
-                                topic("第4次：自我反思再优化"),
-                                topic("_complete_text 内部就是 llm.complete(prompt).text"),
+                                topic("第1次：发散 3 个截然不同切入角度（干货/情感/争议）"),
+                                topic("第2次：评估爆款与难度，选出最佳方向"),
+                                topic("第3次：按选定方向生成一周选题表"),
+                                topic("第4次：自我批判再润色"),
+                                topic(
+                                    "_complete_text(prompt) = llm.complete(prompt).text",
+                                    children=[
+                                        topic("意思：小工具函数，专门拿完整字符串结果"),
+                                        topic("四阶段就是四次独立 complete，不是一次长对话"),
+                                    ],
+                                ),
                             ],
                         ),
                     ],
@@ -1383,11 +1452,36 @@ TREE = topic(
                         topic(
                             "2.3 代码详解：调百炼拿向量再算相似度",
                             children=[
-                                topic("client = OpenAI(api_key=key, base_url='https://dashscope.aliyuncs.com/compatible-mode/v1')"),
-                                topic("resp = client.embeddings.create(model='text-embedding-v3', input=texts, dimensions=1024)"),
-                                topic("向量在 resp.data[i].embedding，和 texts 下标一一对应"),
-                                topic("查询也必须同一模型、同一 dimensions，再和文档向量算余弦"),
-                                topic("input 可以一次传多句，比 for 循环逐条调更省"),
+                                topic(
+                                    "client = OpenAI(..., base_url='...dashscope.../compatible-mode/v1')",
+                                    children=[
+                                        topic("意思：假装在调 OpenAI，实际打到阿里云百炼"),
+                                        topic("好处：代码和 DeepSeek/OpenAI 几乎一样，只改 base_url 和 model"),
+                                    ],
+                                ),
+                                topic(
+                                    "resp = client.embeddings.create(model='text-embedding-v3', input=texts, dimensions=1024)",
+                                    children=[
+                                        topic("意思：把多段文本一次性变成向量"),
+                                        topic("input 可以是字符串列表：一次多句比 for 循环逐条调更省延迟"),
+                                        topic("dimensions：向量长度，写入和查询必须相同"),
+                                    ],
+                                ),
+                                topic(
+                                    "vec = resp.data[i].embedding",
+                                    children=[
+                                        topic("意思：第 i 段文本对应的浮点数列表（如 1024 个数）"),
+                                        topic("和 texts[i] 一一对应，不要搞乱下标"),
+                                    ],
+                                ),
+                                topic(
+                                    "余弦：np.dot(a,b) / (norm(a)*norm(b))",
+                                    children=[
+                                        topic("意思：比两个向量「方向」有多像，不比长短"),
+                                        topic("≈1 很像；≈0 没关系；≈-1 语义相反"),
+                                        topic("查询向量必须和文档用同一模型、同一维度，否则空间对不上"),
+                                    ],
+                                ),
                             ],
                         ),
                     ],
@@ -1495,19 +1589,20 @@ TREE = topic(
                     "6 代码详解：项目里怎么挂 Embedding",
                     children=[
                         topic(
-                            "semantic_search/app/engine.py _init_embed_model",
+                            "Settings.embed_model = DashScopeEmbedding(...) 或 HuggingFaceEmbedding(...)",
                             children=[
-                                topic("DashScope：DashScopeEmbedding(model_name=..., api_key=..., text_type='document')"),
-                                topic("本地：HuggingFaceEmbedding(model_name='BAAI/bge-small-zh-v1.5')"),
-                                topic("Settings.embed_model = ... 设成全局，后面分块/检索都会用它"),
+                                topic("意思：告诉 LlamaIndex「以后所有向量化都用这个模型」"),
+                                topic("DashScope：云端千问，要 api_key；text_type='document' 表示按文档侧编码"),
+                                topic("HuggingFace：本地下载 BAAI/bge-small-zh-v1.5，首次会拉权重"),
+                                topic("为什么设全局：分块语义切分、写入、检索都会自动用同一模型，避免空间不一致"),
                             ],
                         ),
                         topic(
-                            "写入和查询不要混 text_type",
+                            "写入 vs 查询",
                             children=[
-                                topic("建库用 text_type='document'，查询侧有的模型要改成 query"),
-                                topic("BGE 系列查询前常加指令：为这个句子生成表示以用于检索"),
-                                topic("本仓库默认本地 bge，query 和 document 走同一 HuggingFaceEmbedding"),
+                                topic("有的云端模型区分 document / query 两种编码，别混用"),
+                                topic("本仓库默认本地 bge：读写都走同一个 HuggingFaceEmbedding，简单不容易错"),
+                                topic("换模型必须重建向量库，旧向量和新模型不在同一空间"),
                             ],
                         ),
                     ],
@@ -1575,14 +1670,43 @@ TREE = topic(
                                 topic(
                                     "代码详解 对照 918.py IndexFlat",
                                     children=[
-                                        topic("vectors = np.random.random((10000, 128)).astype('float32')"),
-                                        topic("必须 float32，FAISS 不吃 float64"),
-                                        topic("index = faiss.IndexFlatL2(128)  # 维度要和向量列数一致"),
-                                        topic("index.add(vectors)  # 写入后 index.ntotal 应等于 10000"),
-                                        topic("query 也要形状 (1, 128) 的 float32，不能传一维 (128,)"),
-                                        topic("D, I = index.search(query, k=5)  # D=距离，I=下标"),
-                                        topic("用 I[0][i] 回查原向量或原文；距离越小（L2）越像"),
-                                        topic("Flat 不能单独改某一条，要更新通常重建索引"),
+                                        topic(
+                                            "vectors = np.random.random((10000, 128)).astype('float32')",
+                                            children=[
+                                                topic("意思：造 10000 条假向量，每条 128 维，当作「库里的文档向量」"),
+                                                topic("astype('float32')：FAISS 只吃 float32，float64 会报错或行为怪异"),
+                                            ],
+                                        ),
+                                        topic(
+                                            "index = faiss.IndexFlatL2(128)",
+                                            children=[
+                                                topic("意思：建一个「暴力精确搜」索引，距离用欧氏距离 L2"),
+                                                topic("128 必须等于向量列数，对不上会直接报错"),
+                                            ],
+                                        ),
+                                        topic(
+                                            "index.add(vectors)",
+                                            children=[
+                                                topic("意思：把全部向量装进索引"),
+                                                topic("装完看 index.ntotal，应等于 10000"),
+                                            ],
+                                        ),
+                                        topic(
+                                            "query 形状必须是 (1, 128)",
+                                            children=[
+                                                topic("意思：一次查询也可以多条，所以第一维是「几条查询」"),
+                                                topic("传一维 (128,) 会维度错误；要用 query.reshape(1, -1)"),
+                                            ],
+                                        ),
+                                        topic(
+                                            "D, I = index.search(query, k=5)",
+                                            children=[
+                                                topic("D：距离矩阵，D[0][i] 越小（L2）越像"),
+                                                topic("I：下标矩阵，I[0][i] 是第 i 名在原 vectors 里的行号"),
+                                                topic("拿原文：用下标去你自己保存的 documents 列表里取"),
+                                            ],
+                                        ),
+                                        topic("局限：Flat 不能单独改一条，要更新通常整库重建"),
                                     ],
                                 ),
                             ],
@@ -1612,12 +1736,34 @@ TREE = topic(
                                 topic(
                                     "代码详解 对照 918.py IVF",
                                     children=[
-                                        topic("quantizer = faiss.IndexFlatL2(dimension)"),
-                                        topic("index = faiss.IndexIVFFlat(quantizer, dimension, nlist=100)"),
-                                        topic("index.train(vectors) 必须先做，内部 k-means；不训练会报错"),
-                                        topic("index.add(vectors) 训练完才能 add"),
-                                        topic("index.nprobe = 10  # 查最近 10 个簇，越大越准越慢"),
-                                        topic("D, I = index.search(query, k=5)"),
+                                        topic(
+                                            "quantizer = faiss.IndexFlatL2(dimension)",
+                                            children=[
+                                                topic("意思：底层用精确索引当「量尺」，给 IVF 算哪个簇最近"),
+                                            ],
+                                        ),
+                                        topic(
+                                            "index = faiss.IndexIVFFlat(quantizer, dimension, nlist=100)",
+                                            children=[
+                                                topic("意思：把空间切成 100 个簇（倒排桶）"),
+                                                topic("nlist 常取约 sqrt(N)；太小每桶太大，太大要扫的桶变多"),
+                                            ],
+                                        ),
+                                        topic(
+                                            "index.train(vectors) 必须先做",
+                                            children=[
+                                                topic("意思：用 k-means 找到每个簇的中心"),
+                                                topic("不 train 就 add/search 会报错，这是 IVF 和 Flat 最大差别"),
+                                            ],
+                                        ),
+                                        topic(
+                                            "index.add(vectors) → index.nprobe = 10 → search",
+                                            children=[
+                                                topic("add：把向量丢进最近的簇"),
+                                                topic("nprobe：查询时搜几个最近簇；越大越准越慢，=nlist 就接近暴力搜"),
+                                                topic("search 返回值仍是 D 距离、I 下标，用法和 Flat 一样"),
+                                            ],
+                                        ),
                                     ],
                                 ),
                                 topic("nlist：聚类中心数，通常取 sqrt(N)。太小每簇太大；太大要查的簇变多"),
