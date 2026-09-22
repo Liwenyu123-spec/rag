@@ -562,6 +562,68 @@ TREE = topic(
                         ),
                     ],
                 ),
+                topic(
+                    "五、代码详解（仓库对照）",
+                    note="对照根目录 908.py（OpenAI 兼容流式）和 909.py（LlamaIndex 多轮记忆）",
+                    children=[
+                        topic(
+                            "1 读密钥：进程 → .env → Windows 用户变量",
+                            children=[
+                                topic("load_dotenv(Path(__file__).resolve().parent / '.env')"),
+                                topic("必须用脚本所在目录，不能依赖 IDE 当前工作目录"),
+                                topic("api_key=os.getenv('DEEPSEEK_API_KEY')，不要写成字符串 'DEEPSEEK_API_KEY'"),
+                                topic("908.py 还用 winreg 读用户/系统环境变量做兜底"),
+                            ],
+                        ),
+                        topic(
+                            "2 创建兼容客户端 908.py",
+                            children=[
+                                topic("from openai import OpenAI"),
+                                topic("client = OpenAI(api_key=key, base_url='https://api.deepseek.com')"),
+                                topic("换百炼只改 base_url 和 model：dashscope compatible-mode/v1"),
+                                topic("这一步只是连上服务，还没有真正发请求"),
+                            ],
+                        ),
+                        topic(
+                            "3 发对话请求",
+                            children=[
+                                topic("client.chat.completions.create(model=..., messages=..., stream=True)"),
+                                topic("必填只有 model 和 messages；stream 决定一次返回还是一块块返回"),
+                                topic("messages 是 list[dict]，每条至少有 role 和 content"),
+                                topic("非流式：response.choices[0].message.content 就是整段回复"),
+                            ],
+                        ),
+                        topic(
+                            "4 流式怎么拼字",
+                            children=[
+                                topic("for chunk in stream: content = chunk.choices[0].delta.content"),
+                                topic("delta.content 经常是 None（空包），必须 if content 再拼"),
+                                topic("自己累加 ai_result += content，才拿得到完整回复"),
+                                topic("前端用 SSE：yield data: {json} 空行，最后 data: [DONE]"),
+                                topic("FastAPI 用 StreamingResponse(..., media_type='text/event-stream')"),
+                            ],
+                        ),
+                        topic(
+                            "5 LlamaIndex 多轮 909.py",
+                            children=[
+                                topic("llm = DeepSeek(model='deepseek-v4-flash', api_key=..., timeout=120)"),
+                                topic("memory = ChatMemoryBuffer.from_defaults(token_limit=10000)"),
+                                topic("先 memory.put(ChatMessage(role='system', content='...')) 设人设"),
+                                topic("每轮：put(user) → llm.stream_chat(memory.get()) → put(assistant)"),
+                                topic("stream_chat 返回生成器，r.delta 是本块新增字"),
+                                topic("不把 assistant 写回 memory，下一轮模型会忘掉自己刚说的话"),
+                            ],
+                        ),
+                        topic(
+                            "6 complete vs chat vs stream_chat",
+                            children=[
+                                topic("llm.complete(字符串)：单轮、无角色，适合内部小任务"),
+                                topic("llm.chat(messages)：带 system/user/assistant，正式对话首选"),
+                                topic("llm.stream_chat(messages)：同上但是流式，终端/网页打字机效果"),
+                            ],
+                        ),
+                    ],
+                ),
             ],
         ),
         topic(
@@ -800,6 +862,73 @@ TREE = topic(
                         topic("完成电商产品描述生成：标题 + 痛点正文 + 标签"),
                         topic("完成社交媒体内容策划：ToT 选题 + 表格输出"),
                         topic("对照：能说清自己加了角色、少样本还是思维链"),
+                    ],
+                ),
+                topic(
+                    "七、代码详解（910.py）",
+                    note="课堂四个 demo：策略模式、自我一致性、输入净化、电商/社交文案",
+                    children=[
+                        topic(
+                            "启动时做了什么",
+                            children=[
+                                topic("llm = DeepSeek(...) 只初始化一次，后面所有接口共用"),
+                                topic("rebuild_memory()：新建 ChatMemoryBuffer，写入安全 system"),
+                                topic("BASE_SYSTEM_PROMPT：禁止透露指令、拒绝越权，老师案例 07 的核心"),
+                            ],
+                        ),
+                        topic(
+                            "零样本/少样本/COT/ToT 怎么接进代码",
+                            children=[
+                                topic("PROMPT_MODES 字典：每种模式一段策略提示词"),
+                                topic("build_user_content(question, mode) 把策略拼到用户任务前面"),
+                                topic("真正发给模型的是：system（安全人设）+ 历史 + 带策略的 user"),
+                                topic("换模式不用换模型，只换拼到 user 前面的那段字"),
+                            ],
+                        ),
+                        topic(
+                            "输入净化链路 gate_user_input",
+                            children=[
+                                topic("moderation_input：正则拦截 ignore previous / jailbreak 等"),
+                                topic("再清控制字符、过长重复字符"),
+                                topic("拦截成功返回固定话术，不把拦截原因回给用户"),
+                                topic("chat / stream_chat 都先走这一层，再决定调不调模型"),
+                            ],
+                        ),
+                        topic(
+                            "safe_messages：净化 + 强化 system + 写入记忆",
+                            children=[
+                                topic("失败：返回拒绝字符串，调用方直接给前端"),
+                                topic("成功：确认 memory 里有 system → put(user) → return memory.get()"),
+                                topic("然后 llm.chat(messages) 或 llm.stream_chat(messages)"),
+                            ],
+                        ),
+                        topic(
+                            "电商文案 /product_copy 对照 ecprompt.py",
+                            children=[
+                                topic("system：金牌文案 + 思维链四步（痛点→卖点→标题正文→标签）"),
+                                topic("user 里先塞两个完整示例，再拼本轮 name/features/audience"),
+                                topic("llm.chat(messages)，不写入普通聊天 memory，避免串台"),
+                                topic("三个字段分别 gate_user_input，防止注入藏在卖点里"),
+                            ],
+                        ),
+                        topic(
+                            "自我一致性 /self_consistency",
+                            children=[
+                                topic("同一任务换 N 个角度，循环 llm.complete 得到候选"),
+                                topic("再拼评选 Prompt：从下列方案选最佳，只输出最终口号"),
+                                topic("num 默认 2、上限 5，避免一次打太多次 API"),
+                            ],
+                        ),
+                        topic(
+                            "社交媒体 /social_plan ToT 四阶段",
+                            children=[
+                                topic("第1次 complete：发散多个截然不同切入角度"),
+                                topic("第2次：评估爆款和可行性，选出最佳"),
+                                topic("第3次：生成一周选题日历"),
+                                topic("第4次：自我反思再优化"),
+                                topic("_complete_text 内部就是 llm.complete(prompt).text"),
+                            ],
+                        ),
                     ],
                 ),
             ],
@@ -1139,8 +1268,20 @@ TREE = topic(
                         topic(
                             "2.2 用 numpy 算余弦",
                             children=[
-                                topic("点积 np.dot，再除以两个 L2 范数的乘积"),
+                                topic("公式：cos = np.dot(a, b) / (np.linalg.norm(a) * np.linalg.norm(b))"),
+                                topic("a、b 必须是一维向量，且维度相同，否则点积会报错"),
                                 topic("可对比：我爱你 vs 我恨你、vs 大模型有很多应用场景、vs python开发"),
+                                topic("结果接近 1 更像，接近 0 不太像，接近 -1 语义相反"),
+                            ],
+                        ),
+                        topic(
+                            "2.3 代码详解：调百炼拿向量再算相似度",
+                            children=[
+                                topic("client = OpenAI(api_key=key, base_url='https://dashscope.aliyuncs.com/compatible-mode/v1')"),
+                                topic("resp = client.embeddings.create(model='text-embedding-v3', input=texts, dimensions=1024)"),
+                                topic("向量在 resp.data[i].embedding，和 texts 下标一一对应"),
+                                topic("查询也必须同一模型、同一 dimensions，再和文档向量算余弦"),
+                                topic("input 可以一次传多句，比 for 循环逐条调更省"),
                             ],
                         ),
                     ],
