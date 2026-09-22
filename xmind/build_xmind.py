@@ -764,16 +764,42 @@ TREE = topic(
                 topic(
                     "六、最佳实践",
                     children=[
-                        topic("设计原则：明确、完整、角色风格一致、考虑安全"),
-                        topic("调优策略：先零样本再加复杂度、按输出迭代、建立评估标准、记录有效模板"),
-                        topic("趋势：自动生成优化提示、多模态提示、按反馈动态调、按用户特征个性化"),
+                        topic(
+                            "设计原则",
+                            children=[
+                                topic("明确：一次只交代一件主任务，避免又写文案又做分析"),
+                                topic("完整：角色 + 任务 + 上下文 + 约束 + 输出格式尽量齐"),
+                                topic("角色风格一致：system 人设不要和 user 指令打架"),
+                                topic("考虑安全：外部用户输入不可直接拼进系统提示"),
+                            ],
+                        ),
+                        topic(
+                            "调优策略",
+                            children=[
+                                topic("先零样本：确认模型会不会做，再决定要不要加示例"),
+                                topic("再加复杂度：Few-Shot → COT → ToT，按失败点加，不一次堆满"),
+                                topic("按输出迭代：先改格式，再改事实，再改语气"),
+                                topic("建立评估标准：正确、完整、格式、安全四项打分"),
+                                topic("记录有效模板：把跑通的 Prompt 存成可复用版本"),
+                            ],
+                        ),
+                        topic(
+                            "趋势",
+                            children=[
+                                topic("自动生成/优化提示：用模型改模型的指令"),
+                                topic("多模态提示：图+文一起当指令"),
+                                topic("按反馈动态调：根据用户点踩实时改约束"),
+                                topic("按用户特征个性化：同一任务对不同受众换角色和口吻"),
+                            ],
+                        ),
                     ],
                 ),
                 topic(
                     "课后作业",
                     children=[
-                        topic("完成电商产品描述生成"),
-                        topic("完成社交媒体内容策划"),
+                        topic("完成电商产品描述生成：标题 + 痛点正文 + 标签"),
+                        topic("完成社交媒体内容策划：ToT 选题 + 表格输出"),
+                        topic("对照：能说清自己加了角色、少样本还是思维链"),
                     ],
                 ),
             ],
@@ -1001,11 +1027,41 @@ TREE = topic(
                         topic(
                             "2.5 局限与挑战",
                             children=[
-                                topic("检索质量决定上限：最相关文件没召回，生成再强也没用"),
-                                topic("上下文窗口：答案分散在多处时可能被截断"),
-                                topic("检索噪声：无关片段会误导模型"),
-                                topic("延迟增加：比纯 LLM 多一步检索，需要异步或缓存"),
-                                topic("依赖 Embedding 和切分策略，中文和专业术语很敏感"),
+                                topic(
+                                    "检索质量决定上限",
+                                    children=[
+                                        topic("最相关文件没召回，生成再强也没用"),
+                                        topic("后面 07/08 的改写、混合检索、重排序都是在抬这个上限"),
+                                    ],
+                                ),
+                                topic(
+                                    "上下文窗口",
+                                    children=[
+                                        topic("答案分散在多处时可能被截断"),
+                                        topic("对策：父子块、上下文压缩、子查询分别答再综合"),
+                                    ],
+                                ),
+                                topic(
+                                    "检索噪声",
+                                    children=[
+                                        topic("无关片段会误导模型，看起来像幻觉"),
+                                        topic("对策：重排序、去重、强制“没有依据就说不知道”"),
+                                    ],
+                                ),
+                                topic(
+                                    "延迟增加",
+                                    children=[
+                                        topic("比纯 LLM 多一步检索，链路越长越慢"),
+                                        topic("对策：异步、缓存热门问、先小模型改写再检索"),
+                                    ],
+                                ),
+                                topic(
+                                    "依赖 Embedding 和切分",
+                                    children=[
+                                        topic("中文和专业术语很敏感，切错/向量空间不一致会全崩"),
+                                        topic("写入和查询必须同一套 Embedding"),
+                                    ],
+                                ),
                             ],
                         ),
                     ],
@@ -1140,6 +1196,50 @@ TREE = topic(
                             ],
                         ),
                         topic("Embedding 位于隐藏层权重矩阵 W，相当于词向量查找表"),
+                        topic(
+                            "和现代句向量的差别",
+                            children=[
+                                topic("Word2Vec：一个词一个向量，不管上下文（bank 河岸/银行会混）"),
+                                topic("现在 RAG 用的是句子/段落 Embedding，同一词在不同句里向量不同"),
+                                topic("课上实操走的是后者：text-embedding-v3、bge、nomic-embed-text"),
+                            ],
+                        ),
+                    ],
+                ),
+                topic(
+                    "5 课上和项目常用模型",
+                    children=[
+                        topic(
+                            "云端：阿里云百炼 text-embedding-v3",
+                            children=[
+                                topic("接口：embeddings.create，维度可设 128 或 1024"),
+                                topic("DashScopeEmbedding 可设 text_type=document 或 query"),
+                                topic("限制：单条 ≤8192 tokens，batch size ≤10"),
+                            ],
+                        ),
+                        topic(
+                            "本地 HuggingFace：BAAI/bge-small-zh-v1.5",
+                            children=[
+                                topic("本仓库 semantic_search 默认走这条，中文友好"),
+                                topic("首次运行会下载权重，约百 MB 级"),
+                                topic("可换 bge-base-zh-v1.5，效果更好、更吃内存"),
+                            ],
+                        ),
+                        topic(
+                            "本地 Ollama：nomic-embed-text / qwen3-embedding:0.6b",
+                            children=[
+                                topic("适合数据不出本机"),
+                                topic("LlamaIndex 用 llama-index-embeddings-ollama"),
+                            ],
+                        ),
+                        topic(
+                            "必须遵守的对照原则",
+                            children=[
+                                topic("写入和查询必须同一模型、同一维度，否则空间对不上"),
+                                topic("换模型就要重建整个向量库，不能混着用"),
+                                topic("选型可看 MTEB Leaderboard，中文优先看 C-MTEB"),
+                            ],
+                        ),
                     ],
                 ),
             ],
@@ -1452,8 +1552,10 @@ TREE = topic(
                         topic(
                             "3 知识存储",
                             children=[
-                                topic("向量化后写入向量库"),
-                                topic("建立 embedding 与文档切片 chunk 的映射"),
+                                topic("向量化后写入向量库，不要只把向量扔内存里"),
+                                topic("必须建立 embedding ↔ chunk 原文的映射，检索到向量才能拿出文本"),
+                                topic("再记下 metadata：来源文件、页码、切分方式，方便引用和过滤"),
+                                topic("本仓库落盘目录：semantic_search/chroma_db"),
                             ],
                         ),
                     ],
@@ -1472,7 +1574,17 @@ TREE = topic(
                                         topic("可用极少代码接入文档、数据库、API，快速做生产级 RAG"),
                                     ],
                                 ),
-                                topic("1.2 核心概念速览：Document / Node / Index / Retriever / QueryEngine / ChatEngine"),
+                                topic(
+                                    "1.2 核心概念速览",
+                                    children=[
+                                        topic("Document：一篇原始文档，带 metadata（来源、文件名）"),
+                                        topic("Node：切出来的块，检索的基本单位"),
+                                        topic("Index：把 Node 编成可检索结构，课上主要是向量索引"),
+                                        topic("Retriever：只负责找回 Node，不生成答案"),
+                                        topic("QueryEngine：检索 + 拼 Prompt + 调用 LLM，一次问答"),
+                                        topic("ChatEngine：QueryEngine + Memory，多轮对话"),
+                                    ],
+                                ),
                             ],
                         ),
                         topic(
