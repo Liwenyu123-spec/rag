@@ -1,4 +1,15 @@
-# RAG / 提示词策略聊天助手
+# RAG 四个实战项目
+
+按课程表格拆成独立目录（旧的 `908.py` / `910.py` 仍可运行，会自动跳转）：
+
+| 项目 | 目录 | 启动 | 端口 |
+|------|------|------|------|
+| 基础聊天机器人 | `基础聊天机器人/` | `python 基础聊天机器人/main.py` | 8000 |
+| 带安全校验的聊天机器人 | `带安全校验的聊天机器人/` | `python 带安全校验的聊天机器人/main.py` | 8001 |
+| 社交媒体文案和电商内容生成 | `社交媒体文案和电商内容生成/` | `python 社交媒体文案和电商内容生成/main.py` | 8002 |
+| chroma文档管理（FastAPI） | `chroma文档管理/` | `python chroma文档管理/run.py` | 8003 |
+
+`.env` 放在仓库根目录，配置 `DEEPSEEK_API_KEY`。
 
 ## 同学已有 Ollama + 模型（不用下载整个项目）
 
@@ -21,7 +32,3 @@ curl.exe -sL "https://raw.githubusercontent.com/Liwenyu123-spec/rag/master/pna_p
 ## 完整下载本地启动（备选）
 
 解压 [Release](https://github.com/Liwenyu123-spec/rag/releases/tag/ollama-share) 后双击 `classmate_start.bat` → http://127.0.0.1:8002
-
-## 云端 DeepSeek
-
-`.env` 配置 `DEEPSEEK_API_KEY` 后：`python 910.py`
