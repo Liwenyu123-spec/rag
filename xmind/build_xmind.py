@@ -565,62 +565,167 @@ TREE = topic(
                 ),
                 topic(
                     "五、代码详解（仓库对照）",
-                    note="对照根目录 908.py（OpenAI 兼容流式）和 909.py（LlamaIndex 多轮记忆）",
+                    note="对照「基础聊天机器人」(原908) 与 909.py（LlamaIndex 多轮）。每条都是：代码 → 意思 → 注意点。",
                     children=[
                         topic(
-                            "1 读密钥：进程 → .env → Windows 用户变量",
+                            "1 读密钥",
                             children=[
-                                topic("load_dotenv(Path(__file__).resolve().parent / '.env')"),
-                                topic("必须用脚本所在目录，不能依赖 IDE 当前工作目录"),
-                                topic("api_key=os.getenv('DEEPSEEK_API_KEY')，不要写成字符串 'DEEPSEEK_API_KEY'"),
-                                topic("908.py 还用 winreg 读用户/系统环境变量做兜底"),
+                                topic(
+                                    "load_dotenv(脚本目录 / '.env')",
+                                    children=[
+                                        topic("意思：把 .env 里的 KEY=值 读进 os.environ"),
+                                        topic("为什么：密钥不写死在代码里，换机器只改 .env"),
+                                        topic("注意：必须用脚本所在目录；用相对路径会受 IDE 工作目录影响读不到"),
+                                    ],
+                                ),
+                                topic(
+                                    "api_key = os.getenv('DEEPSEEK_API_KEY')",
+                                    children=[
+                                        topic("意思：从环境变量取出密钥字符串"),
+                                        topic("大坑：写成 api_key='DEEPSEEK_API_KEY' 会把字面量当密钥，一定报错"),
+                                        topic("兜底：基础聊天机器人还用 winreg 读 Windows 用户/系统变量"),
+                                    ],
+                                ),
                             ],
                         ),
                         topic(
-                            "2 创建兼容客户端 908.py",
+                            "2 创建客户端（还不发请求）",
                             children=[
-                                topic("from openai import OpenAI"),
-                                topic("client = OpenAI(api_key=key, base_url='https://api.deepseek.com')"),
-                                topic("换百炼只改 base_url 和 model：dashscope compatible-mode/v1"),
-                                topic("这一步只是连上服务，还没有真正发请求"),
+                                topic(
+                                    "from openai import OpenAI",
+                                    children=[
+                                        topic("意思：导入官方兼容 SDK（很多国产模型都能用这一套）"),
+                                    ],
+                                ),
+                                topic(
+                                    "client = OpenAI(api_key=key, base_url='https://api.deepseek.com')",
+                                    children=[
+                                        topic("意思：创建一个「会说话的客户端对象」，记下地址和密钥"),
+                                        topic("这一步只连配置，不会产生费用、也不会生成文字"),
+                                        topic("换百炼：base_url 改成 dashscope 的 compatible-mode/v1，model 改成 qwen-plus 等"),
+                                    ],
+                                ),
                             ],
                         ),
                         topic(
                             "3 发对话请求",
                             children=[
-                                topic("client.chat.completions.create(model=..., messages=..., stream=True)"),
-                                topic("必填只有 model 和 messages；stream 决定一次返回还是一块块返回"),
-                                topic("messages 是 list[dict]，每条至少有 role 和 content"),
-                                topic("非流式：response.choices[0].message.content 就是整段回复"),
+                                topic(
+                                    "client.chat.completions.create(model=..., messages=..., stream=True)",
+                                    children=[
+                                        topic("意思：真正向服务器发一轮聊天请求"),
+                                        topic("model：用哪颗模型；messages：对话历史列表"),
+                                        topic("stream=True：边生成边返回；False：等整段说完一次返回"),
+                                        topic("messages 每条是字典，至少含 role（system/user/assistant）和 content"),
+                                    ],
+                                ),
+                                topic(
+                                    "非流式取全文：response.choices[0].message.content",
+                                    children=[
+                                        topic("意思：从返回对象里取出助手说的整段文字"),
+                                        topic("choices[0]：第一条候选（一般只用这一条）"),
+                                    ],
+                                ),
                             ],
                         ),
                         topic(
-                            "4 流式怎么拼字",
+                            "4 流式怎么拼字（打字机效果）",
                             children=[
-                                topic("for chunk in stream: content = chunk.choices[0].delta.content"),
-                                topic("delta.content 经常是 None（空包），必须 if content 再拼"),
-                                topic("自己累加 ai_result += content，才拿得到完整回复"),
-                                topic("前端用 SSE：yield data: {json} 空行，最后 data: [DONE]"),
-                                topic("FastAPI 用 StreamingResponse(..., media_type='text/event-stream')"),
+                                topic(
+                                    "for chunk in stream: content = chunk.choices[0].delta.content",
+                                    children=[
+                                        topic("意思：流式接口一次只给一小段新增字，叫 delta"),
+                                        topic("为什么用 for：要边收边推给前端，不能等全部结束"),
+                                    ],
+                                ),
+                                topic(
+                                    "必须 if content: 再拼接",
+                                    children=[
+                                        topic("意思：有的 chunk 是空包，delta.content 是 None"),
+                                        topic("不判断直接 += 会报错或拼进 'None' 字符串"),
+                                    ],
+                                ),
+                                topic(
+                                    "ai_result += content",
+                                    children=[
+                                        topic("意思：自己攒完整回复，后面才能写入历史"),
+                                        topic("不攒的话：屏幕上有字，memory 里没有，下一轮会失忆"),
+                                    ],
+                                ),
+                                topic(
+                                    "SSE：yield 'data: {json}\\n\\n'，最后 [DONE]",
+                                    children=[
+                                        topic("意思：浏览器 EventSource 约定的格式，一行一个事件"),
+                                        topic("FastAPI：StreamingResponse(..., media_type='text/event-stream')"),
+                                    ],
+                                ),
                             ],
                         ),
                         topic(
-                            "5 LlamaIndex 多轮 909.py",
+                            "5 LlamaIndex 多轮（909.py）",
                             children=[
-                                topic("llm = DeepSeek(model='deepseek-v4-flash', api_key=..., timeout=120)"),
-                                topic("memory = ChatMemoryBuffer.from_defaults(token_limit=10000)"),
-                                topic("先 memory.put(ChatMessage(role='system', content='...')) 设人设"),
-                                topic("每轮：put(user) → llm.stream_chat(memory.get()) → put(assistant)"),
-                                topic("stream_chat 返回生成器，r.delta 是本块新增字"),
-                                topic("不把 assistant 写回 memory，下一轮模型会忘掉自己刚说的话"),
+                                topic(
+                                    "llm = DeepSeek(model=..., api_key=..., timeout=120)",
+                                    children=[
+                                        topic("意思：用 LlamaIndex 包装好的 DeepSeek 客户端"),
+                                        topic("后面用 llm.chat / stream_chat，不用自己拼 OpenAI 返回结构"),
+                                    ],
+                                ),
+                                topic(
+                                    "memory = ChatMemoryBuffer.from_defaults(token_limit=10000)",
+                                    children=[
+                                        topic("意思：一块「对话记事本」，按 token 上限自动裁旧消息"),
+                                        topic("10000：大约能记住很长一段多轮；太大费钱，太小易忘"),
+                                    ],
+                                ),
+                                topic(
+                                    "memory.put(ChatMessage(role='system', content='...'))",
+                                    children=[
+                                        topic("意思：先写入人设/规则，模型之后每轮都能看到"),
+                                        topic("一般只在启动时写一次，不要每轮重复塞"),
+                                    ],
+                                ),
+                                topic(
+                                    "每轮三步：put(user) → stream_chat(memory.get()) → put(assistant)",
+                                    children=[
+                                        topic("put(user)：先把用户话记下来，再问模型"),
+                                        topic("memory.get()：把当前全部历史作为上下文交给模型"),
+                                        topic("put(assistant)：把完整回复记回去，否则下一轮不知道自己说过什么"),
+                                    ],
+                                ),
+                                topic(
+                                    "for r in llm.stream_chat(...): print(r.delta)",
+                                    children=[
+                                        topic("意思：r.delta 是本块新增字，边打边显示"),
+                                        topic("要完整答案：自己 ai_result += (r.delta or '')"),
+                                    ],
+                                ),
                             ],
                         ),
                         topic(
-                            "6 complete vs chat vs stream_chat",
+                            "6 三种调用怎么选",
                             children=[
-                                topic("llm.complete(字符串)：单轮、无角色，适合内部小任务"),
-                                topic("llm.chat(messages)：带 system/user/assistant，正式对话首选"),
-                                topic("llm.stream_chat(messages)：同上但是流式，终端/网页打字机效果"),
+                                topic(
+                                    "llm.complete('一段话')",
+                                    children=[
+                                        topic("意思：单轮、无角色，输入输出都是纯字符串"),
+                                        topic("适合：内部小任务、改写、评分，不适合正式多轮客服"),
+                                    ],
+                                ),
+                                topic(
+                                    "llm.chat(messages)",
+                                    children=[
+                                        topic("意思：传入 system/user/assistant 列表，一次拿完整回复"),
+                                        topic("适合：正式对话、要人设、要历史"),
+                                    ],
+                                ),
+                                topic(
+                                    "llm.stream_chat(messages)",
+                                    children=[
+                                        topic("意思：和 chat 一样，但是一块块返回，体验更好、不易超时"),
+                                        topic("适合：网页/终端打字机效果"),
+                                    ],
+                                ),
                             ],
                         ),
                     ],
