@@ -1385,6 +1385,27 @@ TREE = topic(
                         ),
                     ],
                 ),
+                topic(
+                    "6 代码详解：项目里怎么挂 Embedding",
+                    children=[
+                        topic(
+                            "semantic_search/app/engine.py _init_embed_model",
+                            children=[
+                                topic("DashScope：DashScopeEmbedding(model_name=..., api_key=..., text_type='document')"),
+                                topic("本地：HuggingFaceEmbedding(model_name='BAAI/bge-small-zh-v1.5')"),
+                                topic("Settings.embed_model = ... 设成全局，后面分块/检索都会用它"),
+                            ],
+                        ),
+                        topic(
+                            "写入和查询不要混 text_type",
+                            children=[
+                                topic("建库用 text_type='document'，查询侧有的模型要改成 query"),
+                                topic("BGE 系列查询前常加指令：为这个句子生成表示以用于检索"),
+                                topic("本仓库默认本地 bge，query 和 document 走同一 HuggingFaceEmbedding"),
+                            ],
+                        ),
+                    ],
+                ),
             ],
         ),
         topic(
@@ -1444,8 +1465,20 @@ TREE = topic(
                             children=[
                                 topic("初学者：pip install faiss-cpu，或 conda-forge"),
                                 topic("有 NVIDIA+CUDA 再装 faiss-gpu"),
-                                topic("流程：随机向量 → 创建索引 → add → search → 返回结果"),
                                 topic("课上示例：10000 条、每条 128 维 float32 矩阵"),
+                                topic(
+                                    "代码详解 对照 918.py IndexFlat",
+                                    children=[
+                                        topic("vectors = np.random.random((10000, 128)).astype('float32')"),
+                                        topic("必须 float32，FAISS 不吃 float64"),
+                                        topic("index = faiss.IndexFlatL2(128)  # 维度要和向量列数一致"),
+                                        topic("index.add(vectors)  # 写入后 index.ntotal 应等于 10000"),
+                                        topic("query 也要形状 (1, 128) 的 float32，不能传一维 (128,)"),
+                                        topic("D, I = index.search(query, k=5)  # D=距离，I=下标"),
+                                        topic("用 I[0][i] 回查原向量或原文；距离越小（L2）越像"),
+                                        topic("Flat 不能单独改某一条，要更新通常重建索引"),
+                                    ],
+                                ),
                             ],
                         ),
                         topic(
@@ -1470,11 +1503,20 @@ TREE = topic(
                             children=[
                                 topic("把向量空间划成多个聚类中心 Voronoi 区域"),
                                 topic("每个向量分到最近中心，查询只搜最近几个中心"),
-                                topic("必须先 index.train，内部是 k-means；不训练不能搜"),
-                                topic("quantizer 常用底层 IndexFlatL2"),
+                                topic(
+                                    "代码详解 对照 918.py IVF",
+                                    children=[
+                                        topic("quantizer = faiss.IndexFlatL2(dimension)"),
+                                        topic("index = faiss.IndexIVFFlat(quantizer, dimension, nlist=100)"),
+                                        topic("index.train(vectors) 必须先做，内部 k-means；不训练会报错"),
+                                        topic("index.add(vectors) 训练完才能 add"),
+                                        topic("index.nprobe = 10  # 查最近 10 个簇，越大越准越慢"),
+                                        topic("D, I = index.search(query, k=5)"),
+                                    ],
+                                ),
                                 topic("nlist：聚类中心数，通常取 sqrt(N)。太小每簇太大；太大要查的簇变多"),
                                 topic("nprobe：查几个簇。1 最快最糙；等于 nlist 就变精确搜"),
-                                topic("正向索引：文档→词，搜“苹果”要扫 100 万篇，O(N)"),
+                                topic("正向索引：文档→词，搜苹果要扫 100 万篇，O(N)"),
                                 topic("倒排索引：词→文档，直接取倒排表，接近 O(1)，课上说可提速约 100 倍"),
                                 topic("FAISS 里用簇代替词，思想一样"),
                             ],
