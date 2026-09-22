@@ -1571,6 +1571,20 @@ TREE = topic(
                                 topic("2 create_collection，类似关系库里的表"),
                                 topic("3 add：documents + metadatas + ids"),
                                 topic("4 query：用自然语言查最相似的几条"),
+                                topic(
+                                    "代码详解 对照 918.py",
+                                    children=[
+                                        topic("client = chromadb.PersistentClient(path='./chroma_data')"),
+                                        topic("collection = client.get_or_create_collection('kaoqin')"),
+                                        topic("add 时 ids、documents、metadatas 三个 list 等长"),
+                                        topic("只传 documents：库用默认 all-MiniLM-L6-v2 自动向量化"),
+                                        topic("只传 embeddings：跳过嵌入，适合已经用千问算好的向量"),
+                                        topic("重复运行同一 id 会 DuplicateID，先 collection.delete(ids=...)"),
+                                        topic("res = collection.query(query_texts=['年假几天'], n_results=3)"),
+                                        topic("看 res['documents'][0]、res['metadatas'][0]、res['distances'][0]"),
+                                        topic("where={'category': '年假'} 是先过滤再向量搜"),
+                                    ],
+                                ),
                             ],
                         ),
                         topic(
@@ -1672,6 +1686,14 @@ TREE = topic(
                         ),
                         topic("课上测试：GET /search?q=向量搜索工具&k=3"),
                         topic("参考：faiss.ai 、 docs.trychroma.com"),
+                        topic(
+                            "完整落地已迁到 semantic_search，代码详解见第 06 章",
+                            children=[
+                                topic("启动：python -m semantic_search → http://127.0.0.1:8001/"),
+                                topic("只检索：GET /search?q=...&k=3"),
+                                topic("检索+生成：GET /query?q=..."),
+                            ],
+                        ),
                     ],
                 ),
             ],
@@ -1902,6 +1924,73 @@ TREE = topic(
                                 topic("Generate：前端「一次性问答」/query、「多轮问答」/chat"),
                                 topic("持久化目录：semantic_search/chroma_db"),
                                 topic("启动：在 rag 根目录 python -m semantic_search → http://127.0.0.1:8001/"),
+                            ],
+                        ),
+                        topic(
+                            "7 代码详解 engine.py / main.py",
+                            children=[
+                                topic(
+                                    "启动 lifespan（main.py）",
+                                    children=[
+                                        topic("缺 DEEPSEEK_API_KEY 时引擎为 None，接口会 503，页面仍能打开"),
+                                        topic("SemanticSearchEngine()：挂 Embedding、LLM、Chroma、索引"),
+                                        topic("seed_if_empty()：库空则写入示例，并加载 data 目录文件"),
+                                    ],
+                                ),
+                                topic(
+                                    "入库 ingest_files / add_documents",
+                                    children=[
+                                        topic("SimpleDirectoryReader(input_files=... 或 input_dir=...)"),
+                                        topic("load_data() → clean_empty_text 去掉空文档"),
+                                        topic("splitter.get_nodes_from_documents(documents) 切成 Node"),
+                                        topic("index.insert_nodes(nodes) 内部：embed + collection.add"),
+                                        topic("知识库变了要 _reset_chat_engines()，否则多轮还用旧上下文"),
+                                    ],
+                                ),
+                                topic(
+                                    "三种分块器构造",
+                                    children=[
+                                        topic("SentenceSplitter(chunk_size, chunk_overlap, paragraph_separator, secondary_chunking_regex)"),
+                                        topic("TokenTextSplitter(chunk_size, chunk_overlap)"),
+                                        topic("SemanticSplitterNodeParser(buffer_size=1, breakpoint_percentile_threshold=95, sentence_splitter=中文分句)"),
+                                        topic("_splitter(mode) 按 'sentence'/'token'/'semantic' 选一个"),
+                                    ],
+                                ),
+                                topic(
+                                    "只检索 search",
+                                    children=[
+                                        topic("retriever = self.index.as_retriever(similarity_top_k=k)"),
+                                        topic("results = retriever.retrieve(query)  # 不调大模型"),
+                                        topic("item.node.get_content() 是原文，item.score 是相似度"),
+                                        topic("对应路由：GET/POST /search"),
+                                    ],
+                                ),
+                                topic(
+                                    "一次性问答 query",
+                                    children=[
+                                        topic("engine = self.index.as_query_engine(similarity_top_k=k)"),
+                                        topic("response = engine.query(question)"),
+                                        topic("str(response) 是答案，response.source_nodes 是引用片段"),
+                                        topic("对应路由：GET/POST /query"),
+                                    ],
+                                ),
+                                topic(
+                                    "多轮问答 chat",
+                                    children=[
+                                        topic("as_chat_engine(chat_mode='condense_plus_context', memory=..., similarity_top_k=k, system_prompt=...)"),
+                                        topic("condense_plus_context：先把多轮问题改写成独立问句，再检索"),
+                                        topic("memory 按 session_id 复用，同一会话才能记住上文"),
+                                        topic("对应路由：POST /chat，body 带 session_id"),
+                                    ],
+                                ),
+                                topic(
+                                    "从向量库恢复索引",
+                                    children=[
+                                        topic("collection.count() > 0 时：VectorStoreIndex.from_vector_store(...)"),
+                                        topic("空库：VectorStoreIndex(nodes=[], storage_context=...) 以后再 insert"),
+                                        topic("Settings.embed_model 必须和建库时同一个，否则检索会乱"),
+                                    ],
+                                ),
                             ],
                         ),
                     ],
@@ -2436,6 +2525,52 @@ TREE = topic(
                                         topic("已有：Sentence / Token / Semantic 三种分块"),
                                         topic("未接：HyDE、Multi-Query、SubQuestion、父子块、RRF"),
                                         topic("可作为下一阶段作业：先给 /query 加一层查询改写"),
+                                    ],
+                                ),
+                            ],
+                        ),
+                        topic(
+                            "4 代码详解：讲义里的 LlamaIndex 写法",
+                            children=[
+                                topic(
+                                    "分块",
+                                    children=[
+                                        topic("splitter = SentenceSplitter(chunk_size=512, chunk_overlap=100)"),
+                                        topic("nodes = splitter.get_nodes_from_documents(docs)"),
+                                        topic("语义切：SemanticSplitterNodeParser(..., embed_model=Settings.embed_model)"),
+                                        topic("中文分句：re.split(r'(?<=[。！？!?\\n])\\s*', text)"),
+                                    ],
+                                ),
+                                topic(
+                                    "HyDE 包装查询引擎",
+                                    children=[
+                                        topic("hyde = HyDEQueryTransform(include_original=True)"),
+                                        topic("engine = TransformQueryEngine(query_engine, hyde)"),
+                                        topic("engine.query(question) 会先生成假设文档再检索"),
+                                        topic("include_original=True：假设文档和原问题一起搜，降低写偏风险"),
+                                    ],
+                                ),
+                                topic(
+                                    "Multi-Query + RRF",
+                                    children=[
+                                        topic("fusion = QueryFusionRetriever(retrievers=[...], mode='reciprocal_rerank')"),
+                                        topic("多路 retrieve 后按 1/(k+排名) 合并，不依赖原始分数是否可比"),
+                                    ],
+                                ),
+                                topic(
+                                    "子查询分解",
+                                    children=[
+                                        topic("tools = [QueryEngineTool.from_defaults(query_engine=..., description='...')]"),
+                                        topic("engine = SubQuestionQueryEngine.from_defaults(query_engine_tools=tools)"),
+                                        topic("description 要写清这个工具查哪类资料，否则路由会乱"),
+                                    ],
+                                ),
+                                topic(
+                                    "父子块",
+                                    children=[
+                                        topic("parser = HierarchicalNodeParser.from_defaults(chunk_sizes=[2048, 512])"),
+                                        topic("叶子建 VectorStoreIndex，父块放 docstore"),
+                                        topic("retriever = AutoMergingRetriever(leaf_retriever, storage_context)"),
                                     ],
                                 ),
                             ],
