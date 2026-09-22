@@ -353,43 +353,94 @@
           </outline>
         </outline>
         <outline text="五、代码详解（仓库对照）">
-          <outline text="1 读密钥：进程 → .env → Windows 用户变量">
-            <outline text="load_dotenv(Path(__file__).resolve().parent / '.env')"/>
-            <outline text="必须用脚本所在目录，不能依赖 IDE 当前工作目录"/>
-            <outline text="api_key=os.getenv('DEEPSEEK_API_KEY')，不要写成字符串 'DEEPSEEK_API_KEY'"/>
-            <outline text="908.py 还用 winreg 读用户/系统环境变量做兜底"/>
+          <outline text="1 读密钥">
+            <outline text="load_dotenv(脚本目录 / '.env')">
+              <outline text="意思：把 .env 里的 KEY=值 读进 os.environ"/>
+              <outline text="为什么：密钥不写死在代码里，换机器只改 .env"/>
+              <outline text="注意：必须用脚本所在目录；用相对路径会受 IDE 工作目录影响读不到"/>
+            </outline>
+            <outline text="api_key = os.getenv('DEEPSEEK_API_KEY')">
+              <outline text="意思：从环境变量取出密钥字符串"/>
+              <outline text="大坑：写成 api_key='DEEPSEEK_API_KEY' 会把字面量当密钥，一定报错"/>
+              <outline text="兜底：基础聊天机器人还用 winreg 读 Windows 用户/系统变量"/>
+            </outline>
           </outline>
-          <outline text="2 创建兼容客户端 908.py">
-            <outline text="from openai import OpenAI"/>
-            <outline text="client = OpenAI(api_key=key, base_url='https://api.deepseek.com')"/>
-            <outline text="换百炼只改 base_url 和 model：dashscope compatible-mode/v1"/>
-            <outline text="这一步只是连上服务，还没有真正发请求"/>
+          <outline text="2 创建客户端（还不发请求）">
+            <outline text="from openai import OpenAI">
+              <outline text="意思：导入官方兼容 SDK（很多国产模型都能用这一套）"/>
+            </outline>
+            <outline text="client = OpenAI(api_key=key, base_url='https://api.deepseek.com')">
+              <outline text="意思：创建一个「会说话的客户端对象」，记下地址和密钥"/>
+              <outline text="这一步只连配置，不会产生费用、也不会生成文字"/>
+              <outline text="换百炼：base_url 改成 dashscope 的 compatible-mode/v1，model 改成 qwen-plus 等"/>
+            </outline>
           </outline>
           <outline text="3 发对话请求">
-            <outline text="client.chat.completions.create(model=..., messages=..., stream=True)"/>
-            <outline text="必填只有 model 和 messages；stream 决定一次返回还是一块块返回"/>
-            <outline text="messages 是 list[dict]，每条至少有 role 和 content"/>
-            <outline text="非流式：response.choices[0].message.content 就是整段回复"/>
+            <outline text="client.chat.completions.create(model=..., messages=..., stream=True)">
+              <outline text="意思：真正向服务器发一轮聊天请求"/>
+              <outline text="model：用哪颗模型；messages：对话历史列表"/>
+              <outline text="stream=True：边生成边返回；False：等整段说完一次返回"/>
+              <outline text="messages 每条是字典，至少含 role（system/user/assistant）和 content"/>
+            </outline>
+            <outline text="非流式取全文：response.choices[0].message.content">
+              <outline text="意思：从返回对象里取出助手说的整段文字"/>
+              <outline text="choices[0]：第一条候选（一般只用这一条）"/>
+            </outline>
           </outline>
-          <outline text="4 流式怎么拼字">
-            <outline text="for chunk in stream: content = chunk.choices[0].delta.content"/>
-            <outline text="delta.content 经常是 None（空包），必须 if content 再拼"/>
-            <outline text="自己累加 ai_result += content，才拿得到完整回复"/>
-            <outline text="前端用 SSE：yield data: {json} 空行，最后 data: [DONE]"/>
-            <outline text="FastAPI 用 StreamingResponse(..., media_type='text/event-stream')"/>
+          <outline text="4 流式怎么拼字（打字机效果）">
+            <outline text="for chunk in stream: content = chunk.choices[0].delta.content">
+              <outline text="意思：流式接口一次只给一小段新增字，叫 delta"/>
+              <outline text="为什么用 for：要边收边推给前端，不能等全部结束"/>
+            </outline>
+            <outline text="必须 if content: 再拼接">
+              <outline text="意思：有的 chunk 是空包，delta.content 是 None"/>
+              <outline text="不判断直接 += 会报错或拼进 'None' 字符串"/>
+            </outline>
+            <outline text="ai_result += content">
+              <outline text="意思：自己攒完整回复，后面才能写入历史"/>
+              <outline text="不攒的话：屏幕上有字，memory 里没有，下一轮会失忆"/>
+            </outline>
+            <outline text="SSE：yield 'data: {json}\n\n'，最后 [DONE]">
+              <outline text="意思：浏览器 EventSource 约定的格式，一行一个事件"/>
+              <outline text="FastAPI：StreamingResponse(..., media_type='text/event-stream')"/>
+            </outline>
           </outline>
-          <outline text="5 LlamaIndex 多轮 909.py">
-            <outline text="llm = DeepSeek(model='deepseek-v4-flash', api_key=..., timeout=120)"/>
-            <outline text="memory = ChatMemoryBuffer.from_defaults(token_limit=10000)"/>
-            <outline text="先 memory.put(ChatMessage(role='system', content='...')) 设人设"/>
-            <outline text="每轮：put(user) → llm.stream_chat(memory.get()) → put(assistant)"/>
-            <outline text="stream_chat 返回生成器，r.delta 是本块新增字"/>
-            <outline text="不把 assistant 写回 memory，下一轮模型会忘掉自己刚说的话"/>
+          <outline text="5 LlamaIndex 多轮（909.py）">
+            <outline text="llm = DeepSeek(model=..., api_key=..., timeout=120)">
+              <outline text="意思：用 LlamaIndex 包装好的 DeepSeek 客户端"/>
+              <outline text="后面用 llm.chat / stream_chat，不用自己拼 OpenAI 返回结构"/>
+            </outline>
+            <outline text="memory = ChatMemoryBuffer.from_defaults(token_limit=10000)">
+              <outline text="意思：一块「对话记事本」，按 token 上限自动裁旧消息"/>
+              <outline text="10000：大约能记住很长一段多轮；太大费钱，太小易忘"/>
+            </outline>
+            <outline text="memory.put(ChatMessage(role='system', content='...'))">
+              <outline text="意思：先写入人设/规则，模型之后每轮都能看到"/>
+              <outline text="一般只在启动时写一次，不要每轮重复塞"/>
+            </outline>
+            <outline text="每轮三步：put(user) → stream_chat(memory.get()) → put(assistant)">
+              <outline text="put(user)：先把用户话记下来，再问模型"/>
+              <outline text="memory.get()：把当前全部历史作为上下文交给模型"/>
+              <outline text="put(assistant)：把完整回复记回去，否则下一轮不知道自己说过什么"/>
+            </outline>
+            <outline text="for r in llm.stream_chat(...): print(r.delta)">
+              <outline text="意思：r.delta 是本块新增字，边打边显示"/>
+              <outline text="要完整答案：自己 ai_result += (r.delta or '')"/>
+            </outline>
           </outline>
-          <outline text="6 complete vs chat vs stream_chat">
-            <outline text="llm.complete(字符串)：单轮、无角色，适合内部小任务"/>
-            <outline text="llm.chat(messages)：带 system/user/assistant，正式对话首选"/>
-            <outline text="llm.stream_chat(messages)：同上但是流式，终端/网页打字机效果"/>
+          <outline text="6 三种调用怎么选">
+            <outline text="llm.complete('一段话')">
+              <outline text="意思：单轮、无角色，输入输出都是纯字符串"/>
+              <outline text="适合：内部小任务、改写、评分，不适合正式多轮客服"/>
+            </outline>
+            <outline text="llm.chat(messages)">
+              <outline text="意思：传入 system/user/assistant 列表，一次拿完整回复"/>
+              <outline text="适合：正式对话、要人设、要历史"/>
+            </outline>
+            <outline text="llm.stream_chat(messages)">
+              <outline text="意思：和 chat 一样，但是一块块返回，体验更好、不易超时"/>
+              <outline text="适合：网页/终端打字机效果"/>
+            </outline>
           </outline>
         </outline>
       </outline>
@@ -540,46 +591,76 @@
           <outline text="完成社交媒体内容策划：ToT 选题 + 表格输出"/>
           <outline text="对照：能说清自己加了角色、少样本还是思维链"/>
         </outline>
-        <outline text="七、代码详解（910.py）">
+        <outline text="七、代码详解（带安全校验 / 文案项目）">
           <outline text="启动时做了什么">
-            <outline text="llm = DeepSeek(...) 只初始化一次，后面所有接口共用"/>
-            <outline text="rebuild_memory()：新建 ChatMemoryBuffer，写入安全 system"/>
-            <outline text="BASE_SYSTEM_PROMPT：禁止透露指令、拒绝越权，老师案例 07 的核心"/>
+            <outline text="llm = DeepSeek(...) 只建一次">
+              <outline text="意思：整个服务共用一个模型客户端"/>
+              <outline text="为什么：每个请求都新建会又慢又浪费连接"/>
+            </outline>
+            <outline text="rebuild_memory() → 新建 ChatMemoryBuffer + 写入安全 system">
+              <outline text="意思：清空旧对话，并放入 BASE_SYSTEM_PROMPT"/>
+              <outline text="BASE_SYSTEM_PROMPT 作用：禁止透露系统指令、拒绝越权，这是安全底线"/>
+            </outline>
           </outline>
           <outline text="零样本/少样本/COT/ToT 怎么接进代码">
-            <outline text="PROMPT_MODES 字典：每种模式一段策略提示词"/>
-            <outline text="build_user_content(question, mode) 把策略拼到用户任务前面"/>
-            <outline text="真正发给模型的是：system（安全人设）+ 历史 + 带策略的 user"/>
-            <outline text="换模式不用换模型，只换拼到 user 前面的那段字"/>
+            <outline text="PROMPT_MODES = {'zero_shot': '...', 'cot': '...', ...}">
+              <outline text="意思：四种策略各自是一段「前置说明文字」"/>
+              <outline text="换模式 = 换这段文字，不换模型、不改接口"/>
+            </outline>
+            <outline text="build_user_content(question, mode) → 策略 + '\n用户任务：' + 问题">
+              <outline text="意思：把策略提示粘到用户问题前面，组成一条 user 消息"/>
+              <outline text="真正发给模型的顺序：system（安全）→ 历史 → 这条带策略的 user"/>
+            </outline>
           </outline>
-          <outline text="输入净化链路 gate_user_input">
-            <outline text="moderation_input：正则拦截 ignore previous / jailbreak 等"/>
-            <outline text="再清控制字符、过长重复字符"/>
-            <outline text="拦截成功返回固定话术，不把拦截原因回给用户"/>
-            <outline text="chat / stream_chat 都先走这一层，再决定调不调模型"/>
+          <outline text="输入净化 gate_user_input(text)">
+            <outline text="moderation_input：一堆正则扫 ignore previous / jailbreak 等">
+              <outline text="意思：发现像「覆盖系统提示」的攻击句，直接判危险"/>
+              <outline text="返回 None 表示拦截；返回清洗后的字符串表示通过"/>
+            </outline>
+            <outline text="拦截后返回固定话术，不解释原因">
+              <outline text="意思：对外只说「无法回答」，不教对方怎么绕过"/>
+              <outline text="chat/stream_chat 都先过这一关，过不了就不调模型（省钱也更安全）"/>
+            </outline>
           </outline>
-          <outline text="safe_messages：净化 + 强化 system + 写入记忆">
-            <outline text="失败：返回拒绝字符串，调用方直接给前端"/>
-            <outline text="成功：确认 memory 里有 system → put(user) → return memory.get()"/>
-            <outline text="然后 llm.chat(messages) 或 llm.stream_chat(messages)"/>
+          <outline text="safe_messages(question, mode)">
+            <outline text="失败返回 str（拒绝话术）">
+              <outline text="意思：调用方看到是字符串就直接给前端，不再 llm.chat"/>
+            </outline>
+            <outline text="成功：确保有 system → put(user) → return memory.get()">
+              <outline text="意思：返回「当前完整消息列表」，已经包含历史和本轮用户话"/>
+              <outline text="接着：response = llm.chat(prepared)，再 put(assistant)"/>
+            </outline>
           </outline>
-          <outline text="电商文案 /product_copy 对照 ecprompt.py">
-            <outline text="system：金牌文案 + 思维链四步（痛点→卖点→标题正文→标签）"/>
-            <outline text="user 里先塞两个完整示例，再拼本轮 name/features/audience"/>
-            <outline text="llm.chat(messages)，不写入普通聊天 memory，避免串台"/>
-            <outline text="三个字段分别 gate_user_input，防止注入藏在卖点里"/>
+          <outline text="电商文案 /product_copy">
+            <outline text="build_product_messages(product)">
+              <outline text="system：金牌文案 + 四步思维链（痛点→卖点→标题正文→标签）"/>
+              <outline text="user：先放两个完整示例（Few-Shot），再放本轮 name/features/audience"/>
+              <outline text="为什么示例要完整：锁住语气和输出格式，少写废话"/>
+            </outline>
+            <outline text="llm.chat(messages)，且不写入普通聊天 memory">
+              <outline text="意思：文案是一次性任务，别污染客服多轮记忆"/>
+              <outline text="三个字段分别 gate_user_input：防止注入藏在「卖点」里"/>
+            </outline>
           </outline>
           <outline text="自我一致性 /self_consistency">
-            <outline text="同一任务换 N 个角度，循环 llm.complete 得到候选"/>
-            <outline text="再拼评选 Prompt：从下列方案选最佳，只输出最终口号"/>
-            <outline text="num 默认 2、上限 5，避免一次打太多次 API"/>
+            <outline text="循环 N 次 llm.complete(不同角度 Prompt)">
+              <outline text="意思：同一任务换说法各生成一个候选口号"/>
+              <outline text="得到 candidates 列表"/>
+            </outline>
+            <outline text="再 llm.complete(评选 Prompt)">
+              <outline text="意思：让模型从候选里挑一个，只输出最终口号"/>
+              <outline text="num 默认 2：少打几次 API，省时间省钱"/>
+            </outline>
           </outline>
-          <outline text="社交媒体 /social_plan ToT 四阶段">
-            <outline text="第1次 complete：发散多个截然不同切入角度"/>
-            <outline text="第2次：评估爆款和可行性，选出最佳"/>
-            <outline text="第3次：生成一周选题日历"/>
-            <outline text="第4次：自我反思再优化"/>
-            <outline text="_complete_text 内部就是 llm.complete(prompt).text"/>
+          <outline text="社交媒体 /social_plan（ToT 四次 complete）">
+            <outline text="第1次：发散 3 个截然不同切入角度（干货/情感/争议）"/>
+            <outline text="第2次：评估爆款与难度，选出最佳方向"/>
+            <outline text="第3次：按选定方向生成一周选题表"/>
+            <outline text="第4次：自我批判再润色"/>
+            <outline text="_complete_text(prompt) = llm.complete(prompt).text">
+              <outline text="意思：小工具函数，专门拿完整字符串结果"/>
+              <outline text="四阶段就是四次独立 complete，不是一次长对话"/>
+            </outline>
           </outline>
         </outline>
       </outline>
@@ -796,11 +877,24 @@
             <outline text="结果接近 1 更像，接近 0 不太像，接近 -1 语义相反"/>
           </outline>
           <outline text="2.3 代码详解：调百炼拿向量再算相似度">
-            <outline text="client = OpenAI(api_key=key, base_url='https://dashscope.aliyuncs.com/compatible-mode/v1')"/>
-            <outline text="resp = client.embeddings.create(model='text-embedding-v3', input=texts, dimensions=1024)"/>
-            <outline text="向量在 resp.data[i].embedding，和 texts 下标一一对应"/>
-            <outline text="查询也必须同一模型、同一 dimensions，再和文档向量算余弦"/>
-            <outline text="input 可以一次传多句，比 for 循环逐条调更省"/>
+            <outline text="client = OpenAI(..., base_url='...dashscope.../compatible-mode/v1')">
+              <outline text="意思：假装在调 OpenAI，实际打到阿里云百炼"/>
+              <outline text="好处：代码和 DeepSeek/OpenAI 几乎一样，只改 base_url 和 model"/>
+            </outline>
+            <outline text="resp = client.embeddings.create(model='text-embedding-v3', input=texts, dimensions=1024)">
+              <outline text="意思：把多段文本一次性变成向量"/>
+              <outline text="input 可以是字符串列表：一次多句比 for 循环逐条调更省延迟"/>
+              <outline text="dimensions：向量长度，写入和查询必须相同"/>
+            </outline>
+            <outline text="vec = resp.data[i].embedding">
+              <outline text="意思：第 i 段文本对应的浮点数列表（如 1024 个数）"/>
+              <outline text="和 texts[i] 一一对应，不要搞乱下标"/>
+            </outline>
+            <outline text="余弦：np.dot(a,b) / (norm(a)*norm(b))">
+              <outline text="意思：比两个向量「方向」有多像，不比长短"/>
+              <outline text="≈1 很像；≈0 没关系；≈-1 语义相反"/>
+              <outline text="查询向量必须和文档用同一模型、同一维度，否则空间对不上"/>
+            </outline>
           </outline>
         </outline>
         <outline text="3 Embedding 的三大作用">
@@ -864,15 +958,16 @@
           </outline>
         </outline>
         <outline text="6 代码详解：项目里怎么挂 Embedding">
-          <outline text="semantic_search/app/engine.py _init_embed_model">
-            <outline text="DashScope：DashScopeEmbedding(model_name=..., api_key=..., text_type='document')"/>
-            <outline text="本地：HuggingFaceEmbedding(model_name='BAAI/bge-small-zh-v1.5')"/>
-            <outline text="Settings.embed_model = ... 设成全局，后面分块/检索都会用它"/>
+          <outline text="Settings.embed_model = DashScopeEmbedding(...) 或 HuggingFaceEmbedding(...)">
+            <outline text="意思：告诉 LlamaIndex「以后所有向量化都用这个模型」"/>
+            <outline text="DashScope：云端千问，要 api_key；text_type='document' 表示按文档侧编码"/>
+            <outline text="HuggingFace：本地下载 BAAI/bge-small-zh-v1.5，首次会拉权重"/>
+            <outline text="为什么设全局：分块语义切分、写入、检索都会自动用同一模型，避免空间不一致"/>
           </outline>
-          <outline text="写入和查询不要混 text_type">
-            <outline text="建库用 text_type='document'，查询侧有的模型要改成 query"/>
-            <outline text="BGE 系列查询前常加指令：为这个句子生成表示以用于检索"/>
-            <outline text="本仓库默认本地 bge，query 和 document 走同一 HuggingFaceEmbedding"/>
+          <outline text="写入 vs 查询">
+            <outline text="有的云端模型区分 document / query 两种编码，别混用"/>
+            <outline text="本仓库默认本地 bge：读写都走同一个 HuggingFaceEmbedding，简单不容易错"/>
+            <outline text="换模型必须重建向量库，旧向量和新模型不在同一空间"/>
           </outline>
         </outline>
       </outline>
@@ -913,14 +1008,28 @@
             <outline text="有 NVIDIA+CUDA 再装 faiss-gpu"/>
             <outline text="课上示例：10000 条、每条 128 维 float32 矩阵"/>
             <outline text="代码详解 对照 918.py IndexFlat">
-              <outline text="vectors = np.random.random((10000, 128)).astype('float32')"/>
-              <outline text="必须 float32，FAISS 不吃 float64"/>
-              <outline text="index = faiss.IndexFlatL2(128)  # 维度要和向量列数一致"/>
-              <outline text="index.add(vectors)  # 写入后 index.ntotal 应等于 10000"/>
-              <outline text="query 也要形状 (1, 128) 的 float32，不能传一维 (128,)"/>
-              <outline text="D, I = index.search(query, k=5)  # D=距离，I=下标"/>
-              <outline text="用 I[0][i] 回查原向量或原文；距离越小（L2）越像"/>
-              <outline text="Flat 不能单独改某一条，要更新通常重建索引"/>
+              <outline text="vectors = np.random.random((10000, 128)).astype('float32')">
+                <outline text="意思：造 10000 条假向量，每条 128 维，当作「库里的文档向量」"/>
+                <outline text="astype('float32')：FAISS 只吃 float32，float64 会报错或行为怪异"/>
+              </outline>
+              <outline text="index = faiss.IndexFlatL2(128)">
+                <outline text="意思：建一个「暴力精确搜」索引，距离用欧氏距离 L2"/>
+                <outline text="128 必须等于向量列数，对不上会直接报错"/>
+              </outline>
+              <outline text="index.add(vectors)">
+                <outline text="意思：把全部向量装进索引"/>
+                <outline text="装完看 index.ntotal，应等于 10000"/>
+              </outline>
+              <outline text="query 形状必须是 (1, 128)">
+                <outline text="意思：一次查询也可以多条，所以第一维是「几条查询」"/>
+                <outline text="传一维 (128,) 会维度错误；要用 query.reshape(1, -1)"/>
+              </outline>
+              <outline text="D, I = index.search(query, k=5)">
+                <outline text="D：距离矩阵，D[0][i] 越小（L2）越像"/>
+                <outline text="I：下标矩阵，I[0][i] 是第 i 名在原 vectors 里的行号"/>
+                <outline text="拿原文：用下标去你自己保存的 documents 列表里取"/>
+              </outline>
+              <outline text="局限：Flat 不能单独改一条，要更新通常整库重建"/>
             </outline>
           </outline>
           <outline text="索引选型决策树">
@@ -938,12 +1047,22 @@
             <outline text="把向量空间划成多个聚类中心 Voronoi 区域"/>
             <outline text="每个向量分到最近中心，查询只搜最近几个中心"/>
             <outline text="代码详解 对照 918.py IVF">
-              <outline text="quantizer = faiss.IndexFlatL2(dimension)"/>
-              <outline text="index = faiss.IndexIVFFlat(quantizer, dimension, nlist=100)"/>
-              <outline text="index.train(vectors) 必须先做，内部 k-means；不训练会报错"/>
-              <outline text="index.add(vectors) 训练完才能 add"/>
-              <outline text="index.nprobe = 10  # 查最近 10 个簇，越大越准越慢"/>
-              <outline text="D, I = index.search(query, k=5)"/>
+              <outline text="quantizer = faiss.IndexFlatL2(dimension)">
+                <outline text="意思：底层用精确索引当「量尺」，给 IVF 算哪个簇最近"/>
+              </outline>
+              <outline text="index = faiss.IndexIVFFlat(quantizer, dimension, nlist=100)">
+                <outline text="意思：把空间切成 100 个簇（倒排桶）"/>
+                <outline text="nlist 常取约 sqrt(N)；太小每桶太大，太大要扫的桶变多"/>
+              </outline>
+              <outline text="index.train(vectors) 必须先做">
+                <outline text="意思：用 k-means 找到每个簇的中心"/>
+                <outline text="不 train 就 add/search 会报错，这是 IVF 和 Flat 最大差别"/>
+              </outline>
+              <outline text="index.add(vectors) → index.nprobe = 10 → search">
+                <outline text="add：把向量丢进最近的簇"/>
+                <outline text="nprobe：查询时搜几个最近簇；越大越准越慢，=nlist 就接近暴力搜"/>
+                <outline text="search 返回值仍是 D 距离、I 下标，用法和 Flat 一样"/>
+              </outline>
             </outline>
             <outline text="nlist：聚类中心数，通常取 sqrt(N)。太小每簇太大；太大要查的簇变多"/>
             <outline text="nprobe：查几个簇。1 最快最糙；等于 nlist 就变精确搜"/>
@@ -987,16 +1106,31 @@
             <outline text="2 create_collection，类似关系库里的表"/>
             <outline text="3 add：documents + metadatas + ids"/>
             <outline text="4 query：用自然语言查最相似的几条"/>
-            <outline text="代码详解 对照 918.py">
-              <outline text="client = chromadb.PersistentClient(path='./chroma_data')"/>
-              <outline text="collection = client.get_or_create_collection('kaoqin')"/>
-              <outline text="add 时 ids、documents、metadatas 三个 list 等长"/>
-              <outline text="只传 documents：库用默认 all-MiniLM-L6-v2 自动向量化"/>
-              <outline text="只传 embeddings：跳过嵌入，适合已经用千问算好的向量"/>
-              <outline text="重复运行同一 id 会 DuplicateID，先 collection.delete(ids=...)"/>
-              <outline text="res = collection.query(query_texts=['年假几天'], n_results=3)"/>
-              <outline text="看 res['documents'][0]、res['metadatas'][0]、res['distances'][0]"/>
-              <outline text="where={'category': '年假'} 是先过滤再向量搜"/>
+            <outline text="代码详解 对照 918.py（Chroma 四步）">
+              <outline text="client = chromadb.PersistentClient(path='./chroma_data')">
+                <outline text="意思：打开/创建一个落盘的向量库目录"/>
+                <outline text="和 Client() 区别：进程关掉数据还在"/>
+              </outline>
+              <outline text="collection = client.get_or_create_collection('kaoqin')">
+                <outline text="意思：有同名集合就打开，没有就新建（入门最省事）"/>
+                <outline text="集合 ≈ 关系库里的一张表"/>
+              </outline>
+              <outline text="collection.add(ids=..., documents=..., metadatas=...)">
+                <outline text="意思：写入原文；没传 embeddings 时库会自动向量化"/>
+                <outline text="三个 list 必须等长：第 i 个 id 对应第 i 段文档"/>
+                <outline text="只传 embeddings：跳过嵌入，适合你已经用千问算好向量"/>
+                <outline text="同一 id 再 add 会 DuplicateID → 先 delete(ids=...)"/>
+              </outline>
+              <outline text="res = collection.query(query_texts=['年假几天'], n_results=3)">
+                <outline text="意思：把问句向量化，取最像的 3 条"/>
+                <outline text="看结果：res['documents'][0] 是文本列表"/>
+                <outline text="res['distances'][0] 是距离（越小越像，具体含义看 hnsw:space）"/>
+                <outline text="res['metadatas'][0] 可拿来源、分类等"/>
+              </outline>
+              <outline text="where={'category': '年假'}">
+                <outline text="意思：先按元数据硬过滤，再在子集里做向量搜"/>
+                <outline text="适合：只要某类制度、某年通知，减少噪声"/>
+              </outline>
             </outline>
           </outline>
           <outline text="三种客户端">
@@ -1210,49 +1344,87 @@
             <outline text="Search：前端「语义搜索」或 GET/POST /search"/>
             <outline text="Generate：前端「一次性问答」/query、「多轮问答」/chat"/>
             <outline text="持久化目录：semantic_search/chroma_db"/>
-            <outline text="启动：在 rag 根目录 python -m semantic_search → http://127.0.0.1:8001/"/>
+            <outline text="启动：python chroma文档管理/run.py → http://127.0.0.1:8003/"/>
           </outline>
-          <outline text="7 代码详解 engine.py / main.py">
-            <outline text="启动 lifespan（main.py）">
-              <outline text="缺 DEEPSEEK_API_KEY 时引擎为 None，接口会 503，页面仍能打开"/>
-              <outline text="SemanticSearchEngine()：挂 Embedding、LLM、Chroma、索引"/>
-              <outline text="seed_if_empty()：库空则写入示例，并加载 data 目录文件"/>
+          <outline text="7 代码详解 engine.py / main.py（chroma文档管理）">
+            <outline text="启动 lifespan">
+              <outline text="SemanticSearchEngine()">
+                <outline text="意思：一次性挂好 Embedding、LLM、Chroma、空/旧索引"/>
+                <outline text="缺 API Key 时引擎可为 None，页面能开，/query 会 503"/>
+              </outline>
+              <outline text="seed_if_empty()">
+                <outline text="意思：库是空的才灌示例文档 + 扫描 data 目录"/>
+                <outline text="为什么：第一次启动就能搜，不用手工入库"/>
+              </outline>
             </outline>
-            <outline text="入库 ingest_files / add_documents">
-              <outline text="SimpleDirectoryReader(input_files=... 或 input_dir=...)"/>
-              <outline text="load_data() → clean_empty_text 去掉空文档"/>
-              <outline text="splitter.get_nodes_from_documents(documents) 切成 Node"/>
-              <outline text="index.insert_nodes(nodes) 内部：embed + collection.add"/>
-              <outline text="知识库变了要 _reset_chat_engines()，否则多轮还用旧上下文"/>
+            <outline text="入库：文件 → 块 → 向量">
+              <outline text="SimpleDirectoryReader(...).load_data()">
+                <outline text="意思：把 PDF/TXT/MD 等读成 Document 列表"/>
+                <outline text="每个 Document 带 text + metadata（文件名等）"/>
+              </outline>
+              <outline text="clean_empty_text(docs)">
+                <outline text="意思：丢掉空内容，避免后面 embedding 报错"/>
+              </outline>
+              <outline text="splitter.get_nodes_from_documents(docs)">
+                <outline text="意思：切成 Node（检索的基本单位=chunk）"/>
+                <outline text="sentence/token/semantic 三种切法由 _splitter(mode) 决定"/>
+              </outline>
+              <outline text="index.insert_nodes(nodes)">
+                <outline text="意思：对每个 Node 调 embed_model 得向量，再写入 Chroma"/>
+                <outline text="之后要 _reset_chat_engines()：知识变了，旧多轮引擎不能继续用"/>
+              </outline>
             </outline>
-            <outline text="三种分块器构造">
-              <outline text="SentenceSplitter(chunk_size, chunk_overlap, paragraph_separator, secondary_chunking_regex)"/>
-              <outline text="TokenTextSplitter(chunk_size, chunk_overlap)"/>
-              <outline text="SemanticSplitterNodeParser(buffer_size=1, breakpoint_percentile_threshold=95, sentence_splitter=中文分句)"/>
-              <outline text="_splitter(mode) 按 'sentence'/'token'/'semantic' 选一个"/>
+            <outline text="三种分块器（构造时在说什么）">
+              <outline text="SentenceSplitter(chunk_size, chunk_overlap, ...)">
+                <outline text="意思：尽量按句子边界凑满约 chunk_size 个 token"/>
+                <outline text="overlap：下一块带上上块尾巴，防止关键句被切断"/>
+              </outline>
+              <outline text="TokenTextSplitter(...)">
+                <outline text="意思：严格按 token 数切，控制上下文更硬"/>
+              </outline>
+              <outline text="SemanticSplitterNodeParser(buffer_size=1, breakpoint=95, ...)">
+                <outline text="意思：算相邻句向量相似度，主题一变就切开"/>
+                <outline text="更慢但语义更整；中文要自定义分句函数"/>
+              </outline>
             </outline>
-            <outline text="只检索 search">
-              <outline text="retriever = self.index.as_retriever(similarity_top_k=k)"/>
-              <outline text="results = retriever.retrieve(query)  # 不调大模型"/>
-              <outline text="item.node.get_content() 是原文，item.score 是相似度"/>
-              <outline text="对应路由：GET/POST /search"/>
+            <outline text="只检索 search（不调大模型）">
+              <outline text="retriever = index.as_retriever(similarity_top_k=k)">
+                <outline text="意思：只要「找片段」的工具，不做生成"/>
+              </outline>
+              <outline text="results = retriever.retrieve(query)">
+                <outline text="意思：返回 NodeWithScore 列表"/>
+                <outline text="item.node.get_content() → 原文；item.score → 相似度"/>
+                <outline text="对应接口：GET/POST /search"/>
+              </outline>
             </outline>
             <outline text="一次性问答 query">
-              <outline text="engine = self.index.as_query_engine(similarity_top_k=k)"/>
-              <outline text="response = engine.query(question)"/>
-              <outline text="str(response) 是答案，response.source_nodes 是引用片段"/>
-              <outline text="对应路由：GET/POST /query"/>
+              <outline text="engine = index.as_query_engine(similarity_top_k=k)">
+                <outline text="意思：检索 + 拼 Prompt + 调 LLM，一条龙"/>
+              </outline>
+              <outline text="response = engine.query(question)">
+                <outline text="str(response) → 给用户的答案文字"/>
+                <outline text="response.source_nodes → 引用了哪些片段（可展示来源）"/>
+                <outline text="对应接口：GET/POST /query"/>
+              </outline>
             </outline>
             <outline text="多轮问答 chat">
-              <outline text="as_chat_engine(chat_mode='condense_plus_context', memory=..., similarity_top_k=k, system_prompt=...)"/>
-              <outline text="condense_plus_context：先把多轮问题改写成独立问句，再检索"/>
-              <outline text="memory 按 session_id 复用，同一会话才能记住上文"/>
-              <outline text="对应路由：POST /chat，body 带 session_id"/>
+              <outline text="as_chat_engine(chat_mode='condense_plus_context', memory=..., ...)">
+                <outline text="condense_plus_context 意思：先把「结合上文的问题」改写成独立问句，再检索"/>
+                <outline text="为什么：用户说「那扣多少」时，检索要用改写后的完整问题"/>
+              </outline>
+              <outline text="memory 按 session_id 复用">
+                <outline text="意思：同一浏览器会话共用一块记忆"/>
+                <outline text="换 session_id = 新对话；对应 POST /chat"/>
+              </outline>
             </outline>
-            <outline text="从向量库恢复索引">
-              <outline text="collection.count() &gt; 0 时：VectorStoreIndex.from_vector_store(...)"/>
-              <outline text="空库：VectorStoreIndex(nodes=[], storage_context=...) 以后再 insert"/>
-              <outline text="Settings.embed_model 必须和建库时同一个，否则检索会乱"/>
+            <outline text="重启后如何找回索引">
+              <outline text="collection.count() &gt; 0 → VectorStoreIndex.from_vector_store(...)">
+                <outline text="意思：Chroma 里已有向量，挂上去就能搜，不必重切分"/>
+              </outline>
+              <outline text="空库 → VectorStoreIndex(nodes=[], storage_context=...)">
+                <outline text="意思：先占个空索引，以后 insert_nodes 再往里填"/>
+              </outline>
+              <outline text="铁律：Settings.embed_model 必须和建库时同一个"/>
             </outline>
           </outline>
         </outline>
@@ -1574,30 +1746,52 @@
           </outline>
           <outline text="4 代码详解：讲义里的 LlamaIndex 写法">
             <outline text="分块">
-              <outline text="splitter = SentenceSplitter(chunk_size=512, chunk_overlap=100)"/>
-              <outline text="nodes = splitter.get_nodes_from_documents(docs)"/>
-              <outline text="语义切：SemanticSplitterNodeParser(..., embed_model=Settings.embed_model)"/>
-              <outline text="中文分句：re.split(r'(?&lt;=[。！？!?\n])\s*', text)"/>
+              <outline text="splitter = SentenceSplitter(chunk_size=512, chunk_overlap=100)">
+                <outline text="意思：目标每块约 512 token，相邻块重叠 100"/>
+                <outline text="overlap 太小易断句；太大冗余多、费存储"/>
+              </outline>
+              <outline text="nodes = splitter.get_nodes_from_documents(docs)">
+                <outline text="意思：执行切分，得到 Node 列表（真正入库的单位）"/>
+              </outline>
+              <outline text="SemanticSplitterNodeParser(..., embed_model=Settings.embed_model)">
+                <outline text="意思：用向量相似度找「主题断点」再切"/>
+                <outline text="要花钱/耗时算 embedding，适合长文质量优先"/>
+              </outline>
             </outline>
             <outline text="HyDE 包装查询引擎">
-              <outline text="hyde = HyDEQueryTransform(include_original=True)"/>
-              <outline text="engine = TransformQueryEngine(query_engine, hyde)"/>
-              <outline text="engine.query(question) 会先生成假设文档再检索"/>
-              <outline text="include_original=True：假设文档和原问题一起搜，降低写偏风险"/>
+              <outline text="hyde = HyDEQueryTransform(include_original=True)">
+                <outline text="意思：查询前先让 LLM 写一篇「假想答案文档」"/>
+                <outline text="include_original=True：假想文档和原问题一起检索，降低写偏风险"/>
+              </outline>
+              <outline text="engine = TransformQueryEngine(query_engine, hyde)">
+                <outline text="意思：在原有查询引擎外包一层变换"/>
+                <outline text="调用仍是 engine.query(question)，内部多了一步生成"/>
+              </outline>
             </outline>
             <outline text="Multi-Query + RRF">
-              <outline text="fusion = QueryFusionRetriever(retrievers=[...], mode='reciprocal_rerank')"/>
-              <outline text="多路 retrieve 后按 1/(k+排名) 合并，不依赖原始分数是否可比"/>
+              <outline text="QueryFusionRetriever(..., mode='reciprocal_rerank')">
+                <outline text="意思：多路检索结果按排名融合，不靠原始分数对齐"/>
+                <outline text="RRF 直觉：分数 ≈ Σ 1/(k+排名)，排越前贡献越大"/>
+              </outline>
             </outline>
             <outline text="子查询分解">
-              <outline text="tools = [QueryEngineTool.from_defaults(query_engine=..., description='...')]"/>
-              <outline text="engine = SubQuestionQueryEngine.from_defaults(query_engine_tools=tools)"/>
-              <outline text="description 要写清这个工具查哪类资料，否则路由会乱"/>
+              <outline text="QueryEngineTool.from_defaults(query_engine=..., description='...')">
+                <outline text="意思：把一个检索引擎包装成可被路由的工具"/>
+                <outline text="description 必须写清「查什么资料」，写糊了会路由错库"/>
+              </outline>
+              <outline text="SubQuestionQueryEngine.from_defaults(query_engine_tools=tools)">
+                <outline text="意思：复杂问题拆子问题 → 并发查 → LLM 综合"/>
+                <outline text="适合比较题、多跳题，不适合一句闲聊"/>
+              </outline>
             </outline>
             <outline text="父子块">
-              <outline text="parser = HierarchicalNodeParser.from_defaults(chunk_sizes=[2048, 512])"/>
-              <outline text="叶子建 VectorStoreIndex，父块放 docstore"/>
-              <outline text="retriever = AutoMergingRetriever(leaf_retriever, storage_context)"/>
+              <outline text="HierarchicalNodeParser.from_defaults(chunk_sizes=[2048, 512])">
+                <outline text="意思：父块大（上下文全），子块小（好命中）"/>
+              </outline>
+              <outline text="叶子建向量索引；AutoMergingRetriever 命中后合并回父块">
+                <outline text="意思：检索用小块准，送给 LLM 用大块上下文"/>
+                <outline text="解决：块太小没上下文、块太大检索不准"/>
+              </outline>
             </outline>
           </outline>
         </outline>
