@@ -76,9 +76,10 @@ def rebuild_memory(system_prompt: str | None = None):
 rebuild_memory()  # 启动时写入默认安全 system
 
 
-# React 构建产物静态资源
+# React 构建产物静态资源（兼容 base=/ 与 GitHub Pages 的 base=/rag/）
 if (FRONTEND_DIST / "assets").exists():
     app.mount("/assets", StaticFiles(directory=FRONTEND_DIST / "assets"), name="assets")
+    app.mount("/rag/assets", StaticFiles(directory=FRONTEND_DIST / "assets"), name="rag-assets")
 
 
 # ---------- demo01：四种提示词策略 ----------
