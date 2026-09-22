@@ -2609,405 +2609,543 @@ TREE = topic(
         ),
         topic(
             "08 检索前优化（Pre-retrieval）",
-            note=(
-                "核心：向量库还没开始算相似度之前，把「问句」和「文档形态」准备好。"
-                "下面每项都按：在干什么 → 怎么操作 → 注意点。"
-            ),
+            note="每种方法按：适用场景 → 输入 → 分步分解 → 输出 → 完整例子 → 翻车点。",
             children=[
                 topic(
-                    "〇、先搞清边界",
+                    "〇、总览：方法地图",
                     children=[
+                        topic("查询侧：清洗 → 澄清 → 重写 / 扩展 / HyDE / Step-Back / 分解"),
+                        topic("文档侧（离线）：分块 → 元数据 → 增强 → 多表示 / 路由规则"),
+                        topic("原则：先判断病症，再选一种方法；不要一次全开"),
+                    ],
+                ),
+                topic(
+                    "方法1：查询文本清洗",
+                    children=[
+                        topic("适用：问题里废话多、口语多、术语不统一"),
                         topic(
-                            "检索前在干什么",
+                            "输入",
                             children=[
-                                topic("对用户问题：改写、扩展、拆分、澄清、清洗术语"),
-                                topic("对知识库（多在离线）：分块、打标签、建多表示、路由规则"),
-                                topic("目标：问得清楚、搜得准范围、少噪声"),
+                                topic("原始用户问题字符串"),
+                                topic("可选：公司术语表（俚语→标准词）"),
                             ],
                         ),
                         topic(
-                            "和后面两步的分界",
+                            "分步分解",
                             children=[
-                                topic("检索中：真正去 Chroma/FAISS/BM25 里搜"),
-                                topic("检索后：对搜回来的结果重排、压缩、再生成"),
-                                topic("记住：问句歪了，后面 rerank 也很难救"),
+                                topic("Step1 去口语：删「帮我看看」「那个」「嗯啊」等无信息词"),
+                                topic("Step2 去标点噪音：多余空格、表情、重复符号"),
+                                topic("Step3 术语标准化：查表替换（电脑→笔记本电脑；年假→带薪年休假）"),
+                                topic("Step4 实体抽出：产品名、日期、工号单独列出（可给 BM25 用）"),
+                                topic("Step5 得到「干净查询」再进入改写或直接 embedding"),
+                            ],
+                        ),
+                        topic(
+                            "输出",
+                            children=[
+                                topic("clean_query：清洗后的问句"),
+                                topic("entities：抽出的关键词列表（可选）"),
+                            ],
+                        ),
+                        topic(
+                            "完整例子",
+                            children=[
+                                topic("输入：嗯那个帮我看看请假咋扣钱啊???"),
+                                topic("Step1-2 后：请假咋扣钱"),
+                                topic("Step3 后：请假 如何 扣款"),
+                                topic("entities：['请假','扣款']"),
                             ],
                         ),
                     ],
                 ),
                 topic(
-                    "一、查询重写 Query Rewriting",
+                    "方法2：澄清反问",
                     children=[
+                        topic("适用：缺实体、多意图、指代不明（上次那个、这个）"),
                         topic(
-                            "在干什么",
+                            "输入",
                             children=[
-                                topic("把口语、指代不明、缺词的问句，改成检索友好的完整表达"),
-                                topic("例：上次那个产品的安全规范 → XX产品 最新版 安全规范 文档"),
-                                topic("不改变用户意图，只改变「怎么说」"),
+                                topic("原始问题 + 可选多轮历史"),
                             ],
                         ),
                         topic(
-                            "怎么操作（手工/Prompt）",
+                            "分步分解",
                             children=[
-                                topic("1 写改写 Prompt：你是检索改写助手，只输出改写后的查询，不要解释"),
-                                topic("2 要求：补全实体名、去掉口语、保留原意、可加同义术语"),
-                                topic("3 temperature 调低（如 0~0.3），减少乱跑"),
-                                topic("4 用改写后的句子去做 embedding + 检索"),
-                                topic("5 可选：原句和改写句都检索，结果合并（防改歪）"),
+                                topic("Step1 判断是否模糊：缺类型？缺时间？有指代？多意图？"),
+                                topic("Step2 若清晰：跳过，进入重写/检索"),
+                                topic("Step3 若模糊：生成 1 个澄清问题返回前端，本轮先不检索或只轻量搜"),
+                                topic("Step4 用户补充后，拼成「完整问题」= 原问题 + 用户选择"),
+                                topic("Step5 用完整问题再走清洗/重写/检索"),
                             ],
                         ),
                         topic(
-                            "怎么操作（LlamaIndex）",
+                            "输出",
                             children=[
-                                topic("自定义类继承 BaseQueryTransform，在 _run 里调 LLM 改写"),
-                                topic("或用现成 TransformQueryEngine 包一层"),
-                                topic("engine.query(原问题) 时内部先改写再检索"),
+                                topic("分支A：clarify_question（反问文案）"),
+                                topic("分支B：resolved_query（澄清后的完整查询）"),
                             ],
                         ),
                         topic(
-                            "注意",
+                            "完整例子",
                             children=[
-                                topic("改写过头会偏题 → 保留原查询一起搜"),
-                                topic("适合：指代、口语、缺关键词；不适合：已经很规范的短事实问句（可跳过）"),
+                                topic("输入：请假扣钱吗"),
+                                topic("Step1：缺假期类型 → 模糊"),
+                                topic("Step3 反问：请问是事假、病假还是年假？"),
+                                topic("用户答：事假 → resolved_query=事假是否扣钱及扣款规则"),
                             ],
                         ),
                     ],
                 ),
                 topic(
-                    "二、查询扩展 Query Expansion / Multi-Query",
+                    "方法3：查询重写 Query Rewriting",
                     children=[
+                        topic("适用：口语、指代、缺关键词，但意图基本单一"),
                         topic(
-                            "在干什么",
+                            "输入",
                             children=[
-                                topic("同一意图生成多个近义/不同句式变体，多路检索再合并"),
-                                topic("例：请假怎么扣钱 → 事假扣款；年假规则；考勤制度旷工；迟到罚款"),
-                                topic("目的：提高召回，怕用户用词和文档用词对不上"),
+                                topic("clean_query（最好先清洗）"),
+                                topic("可选：对话历史（用来解析「那个」「上次」）"),
                             ],
                         ),
                         topic(
-                            "怎么操作",
+                            "分步分解",
                             children=[
-                                topic("1 Prompt：请为下列问题生成 N 个检索用变体，每行一个，不要编号解释"),
-                                topic("2 对每个变体分别做向量检索，各取 Top-K"),
-                                topic("3 用 RRF 或去重合并：同一文档多次命中应加分或只留一次"),
-                                topic("4 再把合并后的 Top-M 交给生成（或先重排）"),
+                                topic("Step1 准备改写 Prompt：角色=检索改写助手；只输出改写句；不解释"),
+                                topic("Step2 约束：补全实体、保留原意、可加同义术语、不要编造不存在的产品名"),
+                                topic("Step3 调 LLM（低温 0~0.3）得到 rewritten_query"),
+                                topic("Step4 用 rewritten_query 做 embedding"),
+                                topic("Step5（推荐）原句也 embedding，两路检索结果合并，防改歪"),
+                                topic("Step6 合并后的片段再交给生成"),
                             ],
                         ),
                         topic(
-                            "LlamaIndex 操作",
+                            "输出",
                             children=[
-                                topic("QueryFusionRetriever(retrievers=[...], num_queries=N, mode='reciprocal_rerank')"),
-                                topic("它会自动生成多查询、多路 retrieve、按排名融合"),
+                                topic("rewritten_query：检索用问句"),
+                                topic("可选：retrieval_queries = [原句, 改写句]"),
                             ],
                         ),
                         topic(
-                            "注意",
+                            "完整例子",
                             children=[
-                                topic("N 太大：延迟和费用上去，噪声也多；一般 3~5 个变体"),
-                                topic("和「分解」不同：扩展是同义多说法，不是拆成不同子问题"),
+                                topic("输入：上次那个产品的安全规范更新了吗"),
+                                topic("历史里「那个产品」= 智能手表 X1"),
+                                topic("改写：智能手表X1 安全规范 是否更新 最新版本"),
+                                topic("操作：改写句检索 + 原句检索 → 合并 Top 片段 → 生成"),
+                            ],
+                        ),
+                        topic(
+                            "LlamaIndex 落点",
+                            children=[
+                                topic("自定义 BaseQueryTransform._run 里调 LLM"),
+                                topic("或 TransformQueryEngine(base_engine, transform)"),
                             ],
                         ),
                     ],
                 ),
                 topic(
-                    "三、HyDE 假设文档检索",
+                    "方法4：查询扩展 Multi-Query",
                     children=[
+                        topic("适用：用词不准、同义多、怕漏召回"),
                         topic(
-                            "在干什么",
+                            "输入",
                             children=[
-                                topic("先让 LLM 写一篇「假想的理想答案文档」，再用这篇去向量库搜"),
-                                topic("原理：库里存的是「答案体」段落，假想答案和它更像，短问句不像"),
-                                topic("例：问「年假怎么算」→ 先生成一段像制度条文的假想说明 → 用这段去搜真制度"),
+                                topic("一条核心问题（可已清洗/改写）"),
+                                topic("参数 N：变体个数，常用 3~5"),
                             ],
                         ),
                         topic(
-                            "怎么操作（逐步）",
+                            "分步分解",
                             children=[
-                                topic("1 调 LLM：请写一段可能回答该问题的文档片段（不要对话口吻）"),
-                                topic("2 对假想文档做 embedding（用和建库同一模型）"),
-                                topic("3 在向量库里 search，取 Top-K"),
-                                topic("4 强烈建议：同时用「原问题」再搜一路，两路结果合并"),
-                                topic("5 把合并后的真实文档片段交给生成模型回答（不要把假想文档当事实）"),
+                                topic("Step1 Prompt：生成 N 个检索变体，覆盖同义词、不同句式、上下位词；每行一个"),
+                                topic("Step2 解析 LLM 输出为列表 variants[1..N]"),
+                                topic("Step3 对每个 variant 分别向量检索，各取 Top-K"),
+                                topic("Step4 融合：RRF（按排名加分）或去重保留最高分"),
+                                topic("Step5 取融合后 Top-M 作为最终检索结果"),
+                                topic("Step6 再进入生成或重排"),
                             ],
                         ),
                         topic(
-                            "LlamaIndex 操作",
+                            "输出",
+                            children=[
+                                topic("variants：N 条查询字符串"),
+                                topic("fused_nodes：融合后的文档块列表"),
+                            ],
+                        ),
+                        topic(
+                            "完整例子",
+                            children=[
+                                topic("输入：请假怎么扣钱"),
+                                topic("变体1：事假扣款规则"),
+                                topic("变体2：病假是否带薪"),
+                                topic("变体3：考勤制度 旷工 罚款"),
+                                topic("变体4：年假提前离职如何折算"),
+                                topic("四路检索 → RRF 合并 → 把事假/考勤相关块顶上来"),
+                            ],
+                        ),
+                        topic(
+                            "LlamaIndex 落点",
+                            children=[
+                                topic("QueryFusionRetriever(..., num_queries=4, mode='reciprocal_rerank')"),
+                            ],
+                        ),
+                        topic("和重写区别：重写≈改成更好的一句；扩展≈变成多句一起查"),
+                    ],
+                ),
+                topic(
+                    "方法5：HyDE 假设文档检索",
+                    children=[
+                        topic("适用：问句很短，或用户说法和文档风格差很大"),
+                        topic(
+                            "输入",
+                            children=[
+                                topic("用户原问题"),
+                                topic("同一套 Embedding 模型（必须与建库一致）"),
+                            ],
+                        ),
+                        topic(
+                            "分步分解",
+                            children=[
+                                topic("Step1 Prompt：请写一段「可能回答该问题」的文档片段，用说明文/制度口吻，不要对话"),
+                                topic("Step2 LLM 生成 hypo_doc（假想答案文档）"),
+                                topic("Step3 对 hypo_doc 做 embedding → hypo_vec"),
+                                topic("Step4 用 hypo_vec 在向量库 search Top-K → 得到真实文档块"),
+                                topic("Step5（强烈建议）对原问题再 search 一路"),
+                                topic("Step6 两路结果合并/去重"),
+                                topic("Step7 只用真实文档块生成答案；假想文档绝不当事实引用"),
+                            ],
+                        ),
+                        topic(
+                            "输出",
+                            children=[
+                                topic("hypo_doc：仅用于检索的中间产物"),
+                                topic("real_chunks：库里的真实片段"),
+                            ],
+                        ),
+                        topic(
+                            "完整例子",
+                            children=[
+                                topic("输入：年假怎么算"),
+                                topic("Step2 假想：员工入职满一年享有带薪年假…按工龄递增…"),
+                                topic("Step4 用这段去搜 → 命中《考勤手册》年假条款真文"),
+                                topic("Step7 根据真文回答，并引用考勤手册"),
+                            ],
+                        ),
+                        topic(
+                            "LlamaIndex 落点",
                             children=[
                                 topic("hyde = HyDEQueryTransform(include_original=True)"),
-                                topic("engine = TransformQueryEngine(base_query_engine, hyde)"),
-                                topic("engine.query(用户问题) 即可；include_original=True 就是第 4 步"),
+                                topic("engine = TransformQueryEngine(base_engine, hyde)"),
+                                topic("include_original=True 即自动做 Step5"),
                             ],
                         ),
-                        topic(
-                            "注意",
-                            children=[
-                                topic("假想写偏会带偏检索 → 必须保留原查询或人工抽查"),
-                                topic("多一次 LLM，延迟和费用上升"),
-                                topic("适合：问句短、表述和文档差大；不适合：极严事实且模型完全不懂该领域"),
-                            ],
-                        ),
+                        topic("翻车点：假想胡编会带偏 → 必须保留原查询；多一次 LLM 更慢更贵"),
                     ],
                 ),
                 topic(
-                    "四、子查询分解 Query Decomposition",
+                    "方法6：Step-Back 后退提问",
                     children=[
+                        topic("适用：细节问题缺少背景，直接搜容易碎片化"),
                         topic(
-                            "在干什么",
+                            "输入",
                             children=[
-                                topic("把一个复杂问题拆成多个原子子问题，分别检索（或分别回答），最后综合"),
-                                topic("例：比较 A/B 公司 2023 营收增长"),
-                                topic("子问1：A 2023 营收；子问2：B 2023 营收；子问3：各自相对上年增长率；最后对比"),
+                                topic("具体问题 specific_q"),
                             ],
                         ),
                         topic(
-                            "怎么操作",
+                            "分步分解",
                             children=[
-                                topic("1 LLM 分解：请把问题拆成可独立检索的子问题列表（JSON）"),
-                                topic("2 对每个子问题调用同一个或不同的 query_engine"),
-                                topic("3 收集各子答案/证据片段"),
-                                topic("4 再调 LLM：根据下列证据综合回答原问题，并标注来源"),
+                                topic("Step1 Prompt：把具体问题改写成更抽象的背景/原理问题"),
+                                topic("Step2 得到 step_back_q"),
+                                topic("Step3 用 step_back_q 检索 → 背景材料 background_chunks"),
+                                topic("Step4 用 specific_q 检索 → 细节材料 detail_chunks"),
+                                topic("Step5 生成时同时塞入背景+细节，先背景后细节回答"),
                             ],
                         ),
                         topic(
-                            "LlamaIndex 操作",
+                            "输出",
                             children=[
-                                topic("把各知识库包成 QueryEngineTool，description 写清「这个工具查什么」"),
+                                topic("step_back_q"),
+                                topic("background_chunks + detail_chunks"),
+                            ],
+                        ),
+                        topic(
+                            "完整例子",
+                            children=[
+                                topic("specific_q：Qwen2.5-7B 上下文窗口多长"),
+                                topic("step_back_q：主流大语言模型上下文窗口一般是什么量级"),
+                                topic("先检索通识，再检索该型号说明，最后综合"),
+                            ],
+                        ),
+                        topic("和 HyDE 区别：Step-Back 产出的是更宽的「问题」；HyDE 产出假想「答案文档」"),
+                    ],
+                ),
+                topic(
+                    "方法7：子查询分解 Decomposition",
+                    children=[
+                        topic("适用：比较题、多跳题、要多个信息点才能答"),
+                        topic(
+                            "输入",
+                            children=[
+                                topic("复杂原问题 complex_q"),
+                                topic("可选：多个 QueryEngine/工具（不同库）"),
+                            ],
+                        ),
+                        topic(
+                            "分步分解",
+                            children=[
+                                topic("Step1 LLM 分解：输出 JSON 子问题列表，每个可独立检索"),
+                                topic("Step2 校验：子问题是否原子、是否覆盖原问题所需信息"),
+                                topic("Step3 路由：每个子问题选哪个工具/索引（靠 tool description）"),
+                                topic("Step4 并发检索（或并发问答）得到 sub_results[]"),
+                                topic("Step5 综合 Prompt：根据子结果回答原问题，标注每条证据来源"),
+                                topic("Step6 输出最终答案 + 引用"),
+                            ],
+                        ),
+                        topic(
+                            "输出",
+                            children=[
+                                topic("sub_questions[]"),
+                                topic("sub_results[]"),
+                                topic("final_answer + citations"),
+                            ],
+                        ),
+                        topic(
+                            "完整例子",
+                            children=[
+                                topic("complex_q：比较 A/B 公司 2023 营收增长谁快"),
+                                topic("子问1：A 公司 2023 营收是多少"),
+                                topic("子问2：B 公司 2023 营收是多少"),
+                                topic("子问3：A、B 相对 2022 的增长率"),
+                                topic("分别检索年报片段 → LLM 算增长并对比 → 给出结论"),
+                            ],
+                        ),
+                        topic(
+                            "LlamaIndex 落点",
+                            children=[
+                                topic("QueryEngineTool.from_defaults(..., description='查A公司财务')"),
                                 topic("SubQuestionQueryEngine.from_defaults(query_engine_tools=tools)"),
-                                topic("engine.query(复杂问题) 会自动拆、路由、并发、综合"),
-                                topic("description 糊了会路由错库，这是最常见翻车点"),
+                                topic("description 不准 → 路由错库（最常见失败）"),
+                            ],
+                        ),
+                        topic("和扩展区别：扩展=同义多说法；分解=不同信息点"),
+                    ],
+                ),
+                topic(
+                    "方法8：句子分块 SentenceSplitter",
+                    children=[
+                        topic("适用：大多数中文文档的默认方案（离线建库）"),
+                        topic(
+                            "输入",
+                            children=[
+                                topic("Document 列表（load_data 得到）"),
+                                topic("参数：chunk_size、chunk_overlap"),
                             ],
                         ),
                         topic(
-                            "注意",
+                            "分步分解",
                             children=[
-                                topic("适合比较题、多跳题、跨文档题；不适合一句闲聊"),
-                                topic("和扩展区别：分解是不同信息点；扩展是同一意思多种说法"),
+                                topic("Step1 按段落分隔符粗切（如多个换行）"),
+                                topic("Step2 再按句子边界细切（。！？等）"),
+                                topic("Step3 把句子累加，直到接近 chunk_size（按 token）"),
+                                topic("Step4 输出一块；下一块带上上块末尾 overlap 句子"),
+                                topic("Step5 所有块变成 Node，再 embedding 入库"),
+                            ],
+                        ),
+                        topic(
+                            "输出",
+                            children=[
+                                topic("nodes[]：每块含 text + metadata"),
+                            ],
+                        ),
+                        topic(
+                            "操作命令",
+                            children=[
+                                topic("splitter = SentenceSplitter(chunk_size=512, chunk_overlap=100)"),
+                                topic("nodes = splitter.get_nodes_from_documents(docs)"),
+                                topic("index.insert_nodes(nodes)"),
+                            ],
+                        ),
+                        topic("调参：缺上下文 → 加大 chunk 或 overlap；检不中 → 块可能太大或要改查询"),
+                    ],
+                ),
+                topic(
+                    "方法9：语义分块 SemanticSplitter",
+                    children=[
+                        topic("适用：长文、主题多变，希望按语义边界切"),
+                        topic(
+                            "输入",
+                            children=[
+                                topic("长文档 + embed_model（与检索同一套）"),
+                                topic("buffer_size、breakpoint_percentile_threshold"),
+                            ],
+                        ),
+                        topic(
+                            "分步分解",
+                            children=[
+                                topic("Step1 中文分句（自定义：按。！？和换行切）"),
+                                topic("Step2 用滑动窗口组成「组合句」（buffer_size 控制前后各几句）"),
+                                topic("Step3 对组合句 embedding，算相邻组合句相似度"),
+                                topic("Step4 相似度下跌超过阈值（百分位）→ 在此处切开"),
+                                topic("Step5 得到语义块 Node → 入库"),
+                            ],
+                        ),
+                        topic(
+                            "输出",
+                            children=[
+                                topic("按主题相对完整的块（块大小不固定）"),
+                            ],
+                        ),
+                        topic(
+                            "操作要点",
+                            children=[
+                                topic("SemanticSplitterNodeParser(buffer_size=1, breakpoint_percentile_threshold=95, ...)"),
+                                topic("先 clean_empty_text；千问 embedding 注意 batch≤10"),
+                                topic("更慢更贵（要算很多句向量）"),
                             ],
                         ),
                     ],
                 ),
                 topic(
-                    "五、Step-Back 后退提问",
+                    "方法10：父子块 Parent-Child",
                     children=[
+                        topic("适用：既要检索准，又要生成时有完整上下文"),
                         topic(
-                            "在干什么",
+                            "输入",
                             children=[
-                                topic("先退一步问更宽泛的背景/原理问题，检索背景后再回答原细节问题"),
-                                topic("例：Qwen2.5-7B 上下文多长 → 先检索「主流 LLM 上下文窗口一般多少」再答具体型号"),
+                                topic("文档 + 两级大小，如父 2048、子 512"),
                             ],
                         ),
                         topic(
-                            "怎么操作",
+                            "分步分解",
                             children=[
-                                topic("1 Prompt：把具体问题改写成一个更抽象的背景问题"),
-                                topic("2 用背景问题检索，拿到通识/原理片段"),
-                                topic("3 再用原问题检索细节（或直接带着背景片段生成）"),
-                                topic("4 生成时同时参考「背景材料 + 细节材料」"),
+                                topic("Step1 HierarchicalNodeParser 切出父大块、子小块，建立父子关系"),
+                                topic("Step2 只对叶子小块做 embedding，建向量索引"),
+                                topic("Step3 父块原文放进 docstore（不靠向量找父块）"),
+                                topic("Step4 查询时：向量检索命中小块"),
+                                topic("Step5 AutoMergingRetriever：把命中的小块合并回父块（或更大上下文）"),
+                                topic("Step6 把合并后的大上下文交给 LLM 生成"),
                             ],
                         ),
                         topic(
-                            "和 HyDE 的差别",
+                            "输出",
                             children=[
-                                topic("Step-Back：找更宽的「问题」"),
-                                topic("HyDE：写假想的「答案文档」"),
+                                topic("检索命中：小块；生成输入：父块/合并块"),
                             ],
                         ),
+                        topic(
+                            "操作要点",
+                            children=[
+                                topic("parser = HierarchicalNodeParser.from_defaults(chunk_sizes=[2048, 512])"),
+                                topic("retriever = AutoMergingRetriever(leaf_retriever, storage_context)"),
+                            ],
+                        ),
+                        topic("解决的矛盾：小块好中、大块好答"),
                     ],
                 ),
                 topic(
-                    "六、澄清 / 反问（多轮）",
+                    "方法11：元数据预过滤",
                     children=[
+                        topic("适用：用户带时间/类别/来源限制"),
                         topic(
-                            "在干什么",
+                            "分步分解",
                             children=[
-                                topic("问题含糊时先问清意图，再检索；避免乱搜一堆无关制度"),
-                                topic("例：「请假扣钱吗」→ 先问：事假、病假还是年假？"),
+                                topic("Step1 建库时给 Node 打 metadata（category/year/source/page）"),
+                                topic("Step2 查询时解析约束（只要 2024、只要年假）"),
+                                topic("Step3 构造 where 条件"),
+                                topic("Step4 向量检索只在过滤后的子集里做"),
+                                topic("Step5 无约束则 where 为空，全库搜"),
                             ],
                         ),
                         topic(
-                            "怎么操作",
+                            "完整例子",
                             children=[
-                                topic("1 用小模型/规则判断：是否缺实体、是否多意图、是否指代不明"),
-                                topic("2 若模糊：返回澄清问题给用户，本轮不检索或只做轻量检索"),
-                                topic("3 用户补充后，把「澄清后的完整问题」再走改写/检索"),
-                                topic("4 可做分支：意图A走制度库，意图B走 FAQ 库"),
+                                topic("入库：metadata={'category':'年假','year':2024}"),
+                                topic("问题：2024 年年假怎么请"),
+                                topic("where={'category':'年假','year':2024} → 再向量搜"),
                             ],
                         ),
+                        topic("口述：先缩小书架，再找相似书"),
                     ],
                 ),
                 topic(
-                    "七、查询向量化前的文本清洗（很便宜）",
+                    "方法12：意图路由",
                     children=[
+                        topic("适用：多个知识库/集合，问题类型不同"),
                         topic(
-                            "在干什么",
+                            "分步分解",
                             children=[
-                                topic("去掉口语废话，统一术语，抽出实体，让 embedding 更干净"),
+                                topic("Step1 准备多库：制度库、FAQ 库、技术文档库"),
+                                topic("Step2 为每个库写清 description（给路由用）"),
+                                topic("Step3 分类：规则 / 小模型 / LLM 判断问题类型"),
+                                topic("Step4 只调用对应库的 retriever/query_engine"),
+                                topic("Step5 或多工具交给 SubQuestionQueryEngine 自动路由"),
                             ],
                         ),
-                        topic(
-                            "怎么操作",
-                            children=[
-                                topic("1 去口语：删掉「那个」「嗯」「帮我看看」等无信息词"),
-                                topic("2 术语表映射：年假=带薪年休假；电脑=笔记本电脑（按你们库用词）"),
-                                topic("3 实体抽出：产品名、工号、日期，可同时丢给 BM25"),
-                                topic("4 再 embedding；专名多时建议混合检索"),
-                            ],
-                        ),
+                        topic("翻车点：description 写糊 → 路由乱；要写「查什么 / 不查什么」"),
                     ],
                 ),
                 topic(
-                    "八、文档分块优化（离线，但是检索前）",
+                    "方法13：权限过滤",
                     children=[
+                        topic("适用：多租户、按部门/角色可见"),
                         topic(
-                            "在干什么",
+                            "分步分解",
                             children=[
-                                topic("决定「一段知识怎么切成可检索的块」：切得好，后面才搜得着、答得全"),
-                                topic("切太碎：命中准但上下文残缺；切太大：向量稀释检不中"),
+                                topic("Step1 文档 metadata 写入 allowed_roles / dept"),
+                                topic("Step2 请求带上当前用户角色"),
+                                topic("Step3 检索前 where 加上角色条件"),
+                                topic("Step4 再向量搜；无权限文档根本不会进候选集"),
                             ],
                         ),
-                        topic(
-                            "怎么操作：SentenceSplitter（课上默认）",
-                            children=[
-                                topic("1 splitter = SentenceSplitter(chunk_size=512, chunk_overlap=100)"),
-                                topic("2 nodes = splitter.get_nodes_from_documents(docs)"),
-                                topic("3 入库 index.insert_nodes(nodes)"),
-                                topic("4 overlap=100：相邻块重叠，防止关键句被切断"),
-                                topic("5 中文可配 secondary_chunking_regex，按。！？切"),
-                            ],
-                        ),
-                        topic(
-                            "怎么操作：语义分块",
-                            children=[
-                                topic("1 先中文分句（。！？换行）"),
-                                topic("2 SemanticSplitterNodeParser(buffer_size=1, breakpoint_percentile_threshold=95, embed_model=...)"),
-                                topic("3 算句间相似度，主题一变（相似度下跌）就切开"),
-                                topic("4 更慢（要 embedding），适合长文质量优先"),
-                                topic("5 空文本先 clean_empty_text，否则会报错"),
-                            ],
-                        ),
-                        topic(
-                            "怎么操作：父子块 Parent-Child",
-                            children=[
-                                topic("1 HierarchicalNodeParser.from_defaults(chunk_sizes=[2048, 512])"),
-                                topic("2 小块（叶子）建向量索引；大块（父）放 docstore"),
-                                topic("3 检索时用 AutoMergingRetriever：小块命中后合并回父块"),
-                                topic("4 效果：检索准（小块）+ 生成有上下文（大块）"),
-                            ],
-                        ),
-                        topic(
-                            "参数怎么调（实操）",
-                            children=[
-                                topic("先 512/100 跑通，看坏例：答案缺上下文就加大块或加 overlap"),
-                                topic("检不中关键句：块可能太大或问句需改写"),
-                                topic("换分块策略通常要重建向量库"),
-                            ],
-                        ),
+                        topic("铁律：不能先搜出敏感段再靠 Prompt「别泄露」"),
                     ],
                 ),
                 topic(
-                    "九、元数据、路由、权限（检索前缩小范围）",
+                    "方法14：文档增强（摘要/关键词/假设问题）",
                     children=[
+                        topic("适用：正文不好搜，需要额外「入口」"),
                         topic(
-                            "元数据标注在干什么",
+                            "分步分解（离线）",
                             children=[
-                                topic("给每块打上 title/source/date/category/page 等标签"),
-                                topic("后面可以 where 过滤、展示引用、按年归档"),
+                                topic("Step1 对每个 chunk 调 LLM 生成：一句话摘要、关键词、2 个假设用户问题"),
+                                topic("Step2 把假设问题也做成可检索向量（或与 chunk 同 id 关联）"),
+                                topic("Step3 可选：摘要单独一路向量"),
+                                topic("Step4 在线检索时可匹配「假设问题」或「摘要」（类似反向 HyDE）"),
+                                topic("Step5 命中后仍返回原 chunk 正文给生成"),
                             ],
                         ),
-                        topic(
-                            "怎么操作：打标签 + 预过滤",
-                            children=[
-                                topic("1 入库时 metadata={'category':'年假','year':2024,'source':'考勤手册'}"),
-                                topic("2 查询时先解析用户意图（只要 2024、只要年假）"),
-                                topic("3 Chroma：query(..., where={'category':'年假'}) 先过滤再向量搜"),
-                                topic("4 口述：先缩小书架，再在书架里找相似段落"),
-                            ],
-                        ),
-                        topic(
-                            "意图路由怎么操作",
-                            children=[
-                                topic("1 准备多个索引/集合：制度库、FAQ 库、技术文档库"),
-                                topic("2 用分类器或 LLM 判断问题类型"),
-                                topic("3 只去对应库检索；或拆成工具 description 交给 SubQuestion 路由"),
-                                topic("4 description 必须写清差异，否则会路由乱"),
-                            ],
-                        ),
-                        topic(
-                            "权限过滤怎么操作",
-                            children=[
-                                topic("1 文档 metadata 带 allowed_roles / dept"),
-                                topic("2 检索前 where 加上当前用户角色条件"),
-                                topic("3 绝不能：先搜出敏感段再靠 Prompt 说「别泄露」"),
-                            ],
-                        ),
+                        topic("输出：更易被问句命中的索引，而不改变最终依据仍是原文"),
                     ],
                 ),
                 topic(
-                    "十、文档增强与多表示索引（离线）",
+                    "方法怎么串起来（推荐顺序）",
                     children=[
                         topic(
-                            "在干什么",
+                            "离线",
                             children=[
-                                topic("除了正文，再存摘要、关键词、假设问题等，提高可检索性"),
-                                topic("像给每本书写目录、标签、常见问答，找起来更容易"),
+                                topic("加载 → 清洗空文 → 分块(8/9/10选一) → 打元数据 → 可选增强 → 同一 Embedding 入库"),
                             ],
                         ),
                         topic(
-                            "怎么操作",
+                            "在线",
                             children=[
-                                topic("1 对每个 chunk 用 LLM 生成：摘要一句、3~5 关键词、2 个假设用户问题"),
-                                topic("2 把假设问题也向量化入库（或与 chunk 绑同一 id）"),
-                                topic("3 检索时可对「假设问题」匹配（类似反向 HyDE）"),
-                                topic("4 或多路：摘要向量一路 + 正文向量一路 + 关键词 BM25 一路，再融合"),
-                            ],
-                        ),
-                    ],
-                ),
-                topic(
-                    "十一、一套可落地的操作流水线（建议照做）",
-                    children=[
-                        topic(
-                            "离线建库",
-                            children=[
-                                topic("1 加载文档 → 清洗空文本"),
-                                topic("2 选分块：先 Sentence 512/100，难例再试语义/父子"),
-                                topic("3 打 metadata（来源、分类、时间）"),
-                                topic("4 同一 Embedding 写入 Chroma，记下模型名"),
+                                topic("1 清洗（方法1）"),
+                                topic("2 模糊？→ 澄清（方法2）"),
+                                topic("3 复杂比较？→ 分解（方法7）"),
+                                topic("4 否则三选一：重写(3) / 扩展(4) / HyDE(5)；缺背景加 Step-Back(6)"),
+                                topic("5 有类别时间？→ 预过滤(11)；多库？→ 路由(12)；有权限？→(13)"),
+                                topic("6 进入向量检索（检索中）→ 再重排生成（检索后）"),
                             ],
                         ),
                         topic(
-                            "在线查询（检索前段）",
+                            "本仓库最小改法",
                             children=[
-                                topic("1 清洗口语 + 术语标准化"),
-                                topic("2 若模糊 → 澄清；若复杂比较 → 分解"),
-                                topic("3 否则：改写 或 HyDE(include_original) 或 Multi-Query"),
-                                topic("4 有类别/时间意图 → where 预过滤"),
-                                topic("5 再进入向量检索（检索中）"),
+                                topic("先在 query() 前加方法1+3（清洗+重写）"),
+                                topic("再试 HyDEQueryTransform(include_original=True)"),
+                                topic("专名多再加混合检索；回答飘再加重排"),
                             ],
                         ),
-                        topic(
-                            "对照本仓库怎么加",
-                            children=[
-                                topic("现有：三种分块 + /query（Native）"),
-                                topic("最小改动：在 query() 里先 LLM 改写再 retrieve"),
-                                topic("进阶：TransformQueryEngine + HyDEQueryTransform"),
-                                topic("再进阶：Multi-Query / SubQuestion / 父子块"),
-                            ],
-                        ),
-                    ],
-                ),
-                topic(
-                    "十二、选型速查（遇到问题选哪个）",
-                    children=[
-                        topic("指代/口语 → 查询重写"),
-                        topic("问句太短、和文档不像 → HyDE + 保留原句"),
-                        topic("用词不准、召回低 → Multi-Query 扩展"),
-                        topic("比较/多跳 → 子查询分解"),
-                        topic("缺背景 → Step-Back"),
-                        topic("意图不清 → 先澄清"),
-                        topic("专名多 → 清洗实体 + 后面接混合检索"),
-                        topic("答案缺上下文 → 加大块或父子块"),
-                        topic("检不中 → 检查分块/改写/是否同 Embedding"),
                     ],
                 ),
             ],
