@@ -97,4 +97,4 @@ CHUNK_OVERLAP = int(os.getenv("CHUNK_OVERLAP", "128"))  # 分块重叠，减轻�
 SIMILARITY_TOP_K = int(os.getenv("SIMILARITY_TOP_K", "5"))  # 默认检索返回条数
 
 HOST = os.getenv("SEARCH_HOST", "127.0.0.1")  # Web 服务监听地址
-PORT = int(os.getenv("SEARCH_PORT", "8001"))  # Web 服务端口
+PORT = int(os.getenv("SEARCH_PORT", "8003"))  # 默认 8003，避免和「带安全校验的聊天机器人」8001 冲突
