@@ -90,7 +90,13 @@ async def root():  # 返回前端问答 / 搜索页面
     """返回前端问答 / 搜索页面。"""  # OpenAPI 文档里显示的接口说明
     if not INDEX_HTML.is_file():  # 前端文件不存在时避免返回空白错误
         raise HTTPException(status_code=404, detail="前端页面缺失：semantic_search/static/index.html")  # 404 提示缺文件
-    return FileResponse(INDEX_HTML)  # 把 index.html 原样返回给浏览器
+    return FileResponse(  # 把 index.html 返回给浏览器，并禁止缓存以免改样式不生效
+        INDEX_HTML,
+        headers={
+            "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
+            "Pragma": "no-cache",
+        },
+    )
 
 
 @app.get("/api")  # JSON 形式的服务入口说明（以前根路径返回的内容挪到这里）
