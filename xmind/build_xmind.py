@@ -979,9 +979,11 @@ TREE = topic(
                                 topic(
                                     "Advanced RAG 初中生找得更准",
                                     children=[
-                                        topic("检索前：查询改写、扩展，提高模糊问题命中率"),
+                                        topic("检索前：查询改写、扩展、HyDE，提高模糊问题命中率"),
+                                        topic("检索中：混合检索（向量 + BM25），专名和语义都照顾"),
                                         topic("检索后：重排序 Re-ranking，精细模型二次打分，最相关的排前面"),
                                         topic("定位：效果和成本的平衡点，工业界主流"),
+                                        topic("细节展开：见第 07 章；检索前专训见第 08 章"),
                                     ],
                                 ),
                                 topic(
@@ -1728,56 +1730,267 @@ TREE = topic(
             note=(
                 "飞书文档：01-RAG（Advance RAG）"
                 "https://ecnwvcdzorsp.feishu.cn/docx/F2wRdmBPNoI25vx3l8Pc3MvWnTe\n"
-                "在朴素 RAG 上对检索前 / 检索中 / 检索后系统优化。"
+                "在朴素 RAG 上对检索前 / 检索中 / 检索后系统优化。细节专训见第 08 章。"
             ),
             children=[
                 topic(
                     "核心定位",
                     children=[
-                        topic("不是检索一次就完事，而是让检索链路每个环节都尽量优化"),
-                        topic("闭环：查什么（查询优化）→ 去哪查（混合检索）→ 查得准（重排序）→ 怎么用（上下文压缩）"),
+                        topic(
+                            "相对 Native RAG 多了什么",
+                            children=[
+                                topic("Native：提问 → 向量检索 Top-K → 塞进 Prompt → 生成"),
+                                topic("Advanced：检索前改查询、检索中多路召回、检索后重排压缩"),
+                                topic("不是检索一次就完事，每个环节都尽量优化"),
+                            ],
+                        ),
+                        topic(
+                            "闭环四问",
+                            children=[
+                                topic("查什么：查询优化（改写 / 扩展 / HyDE / 分解）"),
+                                topic("去哪查：混合检索、多路召回、路由到不同索引"),
+                                topic("查得准：重排序 Re-ranking，相关的排前面"),
+                                topic("怎么用：上下文压缩、引用约束、动态 Top-K"),
+                            ],
+                        ),
+                        topic(
+                            "工业界常先做的三件套",
+                            children=[
+                                topic("1 查询改写：先把问题说清楚"),
+                                topic("2 混合检索：语义 + 关键词互补"),
+                                topic("3 重排序：召回 20~50 条，精排后再给模型 3~5 条"),
+                            ],
+                        ),
+                        topic("和第 03 章五大范式的关系：这里就是 Advanced RAG 的展开"),
                     ],
                 ),
                 topic(
                     "一、检索前优化（Pre-retrieval）",
-                    note="目标：让查询更精准，让文档库更适合检索",
+                    note="目标：让查询更精准，让文档库更适合检索。专训见第 08 章。",
                     children=[
-                        topic("查询重写 Query Rewriting：把原问题改写成更适合检索的表达（扩展术语等）"),
-                        topic("查询扩展 Query Expansion：生成多个相关变体，并行检索再合并"),
-                        topic("HyDE：先让 LLM 生成「假设答案文档」，再用该文档去检索"),
-                        topic("子查询分解：复杂问题拆成多个简单子问题分别检索"),
-                        topic("文档分块优化：按语义 / 段落 / 固定长度+重叠切分"),
-                        topic("文档增强：为文档生成摘要、关键词、假设问题等元数据"),
+                        topic(
+                            "查询重写 Query Rewriting",
+                            children=[
+                                topic("做什么：口语/模糊问题改成检索友好表达，补术语"),
+                                topic("例子：上次那个产品的安全规范 → 某产品 最新 安全规范 文档"),
+                                topic("适合：指代不明、口语、缺关键词"),
+                                topic("注意：改写过头会偏离原意，可同时保留原查询"),
+                                topic("LlamaIndex：自定义 BaseQueryTransform，低温只输出改写文本"),
+                            ],
+                        ),
+                        topic(
+                            "查询扩展 Query Expansion",
+                            children=[
+                                topic("做什么：生成多个相关变体，并行检索再合并"),
+                                topic("变体来源：同义词、上下位词、专业术语、不同句式"),
+                                topic("适合：用户用词不专业、术语多、召回不够"),
+                                topic("合并：常用 RRF 倒数排名融合，避免某一路独占"),
+                                topic("LlamaIndex：Multi-Query + QueryFusionRetriever"),
+                            ],
+                        ),
+                        topic(
+                            "HyDE 假设文档检索",
+                            children=[
+                                topic("做什么：先让 LLM 写一篇「假设答案」，再拿这篇去检索"),
+                                topic("为什么有效：答案文档和知识库文档更像，比短问句更好匹配"),
+                                topic("适合：问句很短、表述和文档差很大"),
+                                topic("代价：多一次 LLM 生成，延迟和费用上升"),
+                                topic("LlamaIndex：HyDEQueryTransform + include_original=True"),
+                            ],
+                        ),
+                        topic(
+                            "子查询分解",
+                            children=[
+                                topic("做什么：复杂问题拆成多个简单子问题，分别检索再综合"),
+                                topic("例子：比较 A/B 公司 2023 营收增长 → 先分别查营收再算增长率"),
+                                topic("常用思路：Least-to-Most（先易后难）、CoT 分解"),
+                                topic("适合：比较题、多跳题、跨章节题"),
+                                topic("LlamaIndex：SubQuestionQueryEngine + QueryEngineTool"),
+                            ],
+                        ),
+                        topic(
+                            "文档分块优化",
+                            children=[
+                                topic("固定长度 + overlap：实现简单，可能切断语义"),
+                                topic("按句子/段落：保证完整句，课上 SentenceSplitter 默认推荐"),
+                                topic("按语义相似度切：主题变了再切，适合长文"),
+                                topic("父子块：小块负责命中，大块负责给上下文"),
+                            ],
+                        ),
+                        topic(
+                            "文档增强",
+                            children=[
+                                topic("给文档预生成摘要、关键词、假设问题，一并入库"),
+                                topic("检索时可以对「假设问题」向量匹配，类似反向 HyDE"),
+                                topic("元数据：标题、时间、来源、分类，供过滤和引用"),
+                            ],
+                        ),
                     ],
                 ),
                 topic(
                     "二、检索中优化（Retrieval）",
                     note="目标：提升召回率和相关性",
                     children=[
-                        topic("混合检索 Hybrid：向量检索（语义）+ 关键词检索（BM25/TF-IDF）"),
-                        topic("多路召回：多种策略并行（不同 Embedding / 不同索引）"),
-                        topic("多向量表示 / ColBERT：token 级交互，而非单文档向量"),
-                        topic("稀疏向量检索 Sparse（如 SPLADE）：兼顾词匹配与语义"),
+                        topic(
+                            "混合检索 Hybrid",
+                            children=[
+                                topic("向量检索：抓语义相近，不怕同义不同词"),
+                                topic("关键词 BM25/TF-IDF：抓产品型号、错误码、专有名词、精确 ID"),
+                                topic("两者互补：语义懂「笔记本≈电脑」，关键词命中 SKU-8832"),
+                                topic("融合：分数归一化加权，或 RRF 按排名融合"),
+                                topic("适合：知识库里专名、编号多的场景"),
+                            ],
+                        ),
+                        topic(
+                            "多路召回",
+                            children=[
+                                topic("多种策略并行：不同 Embedding、不同 chunk 大小、不同索引"),
+                                topic("先取并集保证召回，再交给重排序去噪"),
+                                topic("注意：路数越多越慢越贵，2~3 路通常够用"),
+                            ],
+                        ),
+                        topic(
+                            "多向量表示 / ColBERT",
+                            children=[
+                                topic("普通 RAG：整段一个向量，可能丢掉细粒度词"),
+                                topic("ColBERT：token 级交互，查询词和文档词做 MaxSim"),
+                                topic("更准但更吃存储和算力，适合精度优先"),
+                            ],
+                        ),
+                        topic(
+                            "稀疏向量检索 Sparse（如 SPLADE）",
+                            children=[
+                                topic("学出来的稀疏向量，可走倒排索引"),
+                                topic("兼顾词面匹配和一点语义，比纯 BM25 更聪明"),
+                                topic("常和稠密向量一起做混合检索"),
+                            ],
+                        ),
+                        topic(
+                            "RRF 倒数排名融合",
+                            children=[
+                                topic("公式直觉：分数 ≈ Σ 1/(k+排名)，k 常取 60"),
+                                topic("不依赖各路原始分数是否可比"),
+                                topic("LlamaIndex 融合模式：reciprocal_rerank"),
+                            ],
+                        ),
                     ],
                 ),
                 topic(
                     "三、检索后优化（Post-retrieval）",
                     note="目标：精简上下文，提升生成质量",
                     children=[
-                        topic("上下文压缩：去掉冗余，只保留与问题最相关的句段"),
-                        topic("去重与过滤：去掉重复或低相关文档，降噪声"),
-                        topic("重排序后再筛选 Top-K：按重排分数动态选送入生成的文档数"),
-                        topic("提示工程优化：更好的 Prompt 模板、引用格式、输出约束"),
-                        topic("引用溯源 Citation：让模型标注答案来源，提高可信度"),
+                        topic(
+                            "重排序 Re-ranking",
+                            children=[
+                                topic("召回用双塔/向量（快但不精），精排用交叉编码器（慢但准）"),
+                                topic("流程：先取 Top-50 → 重排模型打分 → 只留 Top-3/5 给 LLM"),
+                                topic("常用：bge-reranker、Cohere Rerank，也可用 LLM 当裁判"),
+                                topic("这是 Advanced RAG 里性价比最高的一环"),
+                            ],
+                        ),
+                        topic(
+                            "上下文压缩",
+                            children=[
+                                topic("块里只有一两句有用，整块塞进去会浪费窗口、引入噪声"),
+                                topic("做法：抽与问题最相关的句段，丢掉其余"),
+                                topic("LlamaIndex 有各类 Node Postprocessor 可做压缩"),
+                            ],
+                        ),
+                        topic(
+                            "去重与过滤",
+                            children=[
+                                topic("去掉重复块、低相关块、过期文档"),
+                                topic("可设相似度阈值：太低的直接丢，不要硬凑满 K 条"),
+                            ],
+                        ),
+                        topic(
+                            "动态 Top-K",
+                            children=[
+                                topic("不是固定返回 5 条：按重排分数决定送几条"),
+                                topic("高分很少就少送，避免硬塞无关内容"),
+                            ],
+                        ),
+                        topic(
+                            "提示工程优化",
+                            children=[
+                                topic("明确：仅根据下列资料回答，没有依据就说不知道"),
+                                topic("给每条资料编号，要求回答里带引用"),
+                                topic("控制篇幅和格式，减少模型自由发挥"),
+                            ],
+                        ),
+                        topic(
+                            "引用溯源 Citation",
+                            children=[
+                                topic("让模型标注答案来自哪一段/哪份文件"),
+                                topic("方便人工核查，也抑制瞎编"),
+                                topic("前端可把引用展示成来源卡片（本仓库搜索页已有片段）"),
+                            ],
+                        ),
                     ],
                 ),
                 topic(
                     "四、其他进阶技术",
                     children=[
-                        topic("Self-RAG：生成过程中自行判断是否需要检索，避免过度依赖"),
-                        topic("Corrective RAG：评估检索质量；差则切换外部搜索（如网页）"),
-                        topic("RAG-Fusion：多查询并行 + RRF（倒数排名融合）合并结果"),
-                        topic("自适应检索 Adaptive：按问题难度动态决定检索深度与策略"),
+                        topic(
+                            "Self-RAG",
+                            children=[
+                                topic("生成过程中自行判断：这个问题要不要检索"),
+                                topic("简单闲聊可以不查，降低延迟和噪声"),
+                                topic("查完还会自评：这段资料够不够、要不要再查"),
+                            ],
+                        ),
+                        topic(
+                            "Corrective RAG",
+                            children=[
+                                topic("先评估检索质量：相关 / 模糊 / 不相关"),
+                                topic("差则切换外部搜索（网页等），再纠正后再生成"),
+                                topic("适合知识库覆盖不全、用户常问最新资讯"),
+                            ],
+                        ),
+                        topic(
+                            "RAG-Fusion",
+                            children=[
+                                topic("多查询并行检索 + RRF 合并，是扩展检索的完整打法"),
+                                topic("和 Multi-Query 是一家：先发散问法，再融合排名"),
+                            ],
+                        ),
+                        topic(
+                            "自适应检索 Adaptive",
+                            children=[
+                                topic("按问题难度动态决定：查不查、查几路、查多深"),
+                                topic("简单事实少查，多跳比较题加深分解和多路"),
+                            ],
+                        ),
+                        topic(
+                            "再往后看第 03 章范式",
+                            children=[
+                                topic("GraphRAG：实体关系图，适合多跳和全局摘要"),
+                                topic("Agentic RAG：Agent 自己规划检索和工具调用"),
+                            ],
+                        ),
+                    ],
+                ),
+                topic(
+                    "五、怎么选、怎么接到本仓库",
+                    children=[
+                        topic(
+                            "效果不够时的加项顺序",
+                            children=[
+                                topic("先检查分块和 Embedding 是否一致（Native 没跑通先别上高级）"),
+                                topic("再加查询改写或 HyDE，专门治问法和文档不像"),
+                                topic("专名/编号搜不到就加混合检索"),
+                                topic("召回有了但答案仍飘，加重点排序 + 压缩"),
+                                topic("比较题/多跳题再上子查询分解"),
+                            ],
+                        ),
+                        topic(
+                            "本仓库 semantic_search 当前状态",
+                            children=[
+                                topic("仍是 Native RAG：三种分块 + Chroma + /search /query /chat"),
+                                topic("还没接 HyDE、Multi-Query、BM25、重排序"),
+                                topic("下一步最值得加：查询改写 或 bge-reranker"),
+                            ],
+                        ),
                     ],
                 ),
             ],
@@ -1787,7 +2000,7 @@ TREE = topic(
             note=(
                 "飞书文档：02-检索前优化（Pre-retrieval）"
                 "https://ecnwvcdzorsp.feishu.cn/docx/EId6d4FwjoCrA4x8LELcG8eyn3g\n"
-                "核心目标：进入向量库前提升查询质量、缩小范围、降低噪声。"
+                "核心目标：进入向量库前提升查询质量、缩小范围、降低噪声。对应 07 章第一节的专训。"
             ),
             children=[
                 topic(
@@ -1796,50 +2009,146 @@ TREE = topic(
                         topic(
                             "1 查询改写与扩展",
                             children=[
-                                topic("HyDE：用假设理想答案去检索；适合短/模糊、表述差异大"),
-                                topic("查询扩展：补关键词/同义词/上下位词；适合术语多、用词不专业"),
-                                topic("多视角改写：多种表达分别检索再合并；适合高召回"),
-                                topic("反事实/澄清：模糊时反问或分支意图；适合多轮客服"),
+                                topic(
+                                    "HyDE",
+                                    children=[
+                                        topic("用假设理想答案去检索，而不是用短问句"),
+                                        topic("适合：问句短/模糊、用户表述和文档差很大"),
+                                        topic("副作用：假设答案写偏了会带偏检索，可和原查询一起搜"),
+                                    ],
+                                ),
+                                topic(
+                                    "查询扩展",
+                                    children=[
+                                        topic("补关键词、同义词、上下位词"),
+                                        topic("适合：术语多、用户用词不专业"),
+                                        topic("例子：请假怎么扣钱 → 事假 年假 扣款 考勤制度"),
+                                    ],
+                                ),
+                                topic(
+                                    "多视角改写",
+                                    children=[
+                                        topic("同件事用多种表达分别检索再合并"),
+                                        topic("适合：要高召回，不怕多查几次"),
+                                        topic("落地：Multi-Query + RRF"),
+                                    ],
+                                ),
+                                topic(
+                                    "反事实 / 澄清",
+                                    children=[
+                                        topic("问题模糊时先反问，或按不同意图分支检索"),
+                                        topic("适合：多轮客服、指代不明（上次那个产品）"),
+                                        topic("没澄清就检索，噪声会很大"),
+                                    ],
+                                ),
                             ],
                         ),
                         topic(
                             "2 查询分解 Query Decomposition",
                             children=[
                                 topic("多跳问题拆成子查询，分别检索后再整合"),
-                                topic("示例：比较 A/B 公司 2023 营收增长 → 分别检索营收 → 算增长率 → LLM 综合"),
-                                topic("常用：Least-to-Most、CoT 分解"),
+                                topic(
+                                    "完整例子",
+                                    children=[
+                                        topic("原问：比较 A/B 公司 2023 营收增长"),
+                                        topic("子问1：A 公司 2023 营收"),
+                                        topic("子问2：B 公司 2023 营收"),
+                                        topic("子问3：各自相对 2022 的增长率"),
+                                        topic("最后 LLM 综合对比，不要指望一次检索搞定"),
+                                    ],
+                                ),
+                                topic("常用：Least-to-Most（由易到难）、CoT 分解"),
+                                topic("扩展 vs 分解：扩展=近义变体提召回；分解=不同侧面子问题"),
                             ],
                         ),
                         topic(
                             "3 文档预处理与分块",
                             children=[
-                                topic("语义分块：按段落/主题边界，避免切断语义"),
-                                topic("重叠窗口 Overlap：相邻块保留重叠，防上下文丢失"),
-                                topic("父子块 Parent-Child / Small-to-Big：小块匹配，返回父级大上下文"),
-                                topic("元数据标注：标题、时间、来源、分类，供后续过滤"),
+                                topic(
+                                    "语义分块",
+                                    children=[
+                                        topic("按段落/主题边界切，避免一句话被劈成两块"),
+                                        topic("主题一变（相似度下跌）就切开"),
+                                    ],
+                                ),
+                                topic(
+                                    "重叠窗口 Overlap",
+                                    children=[
+                                        topic("相邻块保留重叠，关键句落在边界也不丢上下文"),
+                                        topic("课上示例：chunk_size=512, chunk_overlap=100"),
+                                        topic("重叠太大：冗余多、费存储；太小：边界语义仍会断"),
+                                    ],
+                                ),
+                                topic(
+                                    "父子块 Parent-Child / Small-to-Big",
+                                    children=[
+                                        topic("小块负责精确匹配，命中后再返回父级大上下文"),
+                                        topic("解决：块太小没上下文、块太大检索不准"),
+                                    ],
+                                ),
+                                topic(
+                                    "元数据标注",
+                                    children=[
+                                        topic("标题、时间、来源、分类、页码"),
+                                        topic("后续可过滤、可引用、可按权限裁剪"),
+                                    ],
+                                ),
                             ],
                         ),
                         topic(
                             "4 结构化路由与过滤",
                             children=[
-                                topic("意图路由：按问题类型选不同索引（技术文档 vs 客服 FAQ）"),
-                                topic("元数据预过滤：先按时间/作者/类别硬过滤，再向量检索"),
-                                topic("权限过滤：按用户身份排除无权文档空间"),
+                                topic(
+                                    "意图路由",
+                                    children=[
+                                        topic("按问题类型选不同索引：技术文档 vs 客服 FAQ vs 制度"),
+                                        topic("tool description 要写清差异，否则会路由乱"),
+                                    ],
+                                ),
+                                topic(
+                                    "元数据预过滤",
+                                    children=[
+                                        topic("先按时间/作者/类别硬过滤，再向量检索"),
+                                        topic("例子：只要 2024 年以后的通知，不要把旧文件搜进来"),
+                                    ],
+                                ),
+                                topic(
+                                    "权限过滤",
+                                    children=[
+                                        topic("按用户身份排除无权文档空间"),
+                                        topic("必须在检索前过滤，不能先搜出来再靠 Prompt 保密"),
+                                    ],
+                                ),
                             ],
                         ),
                         topic(
                             "5 查询向量化前的文本优化",
                             children=[
-                                topic("去口语化冗余：提取核心实体与意图"),
-                                topic("术语标准化：俚语映射到标准术语表"),
-                                topic("实体识别与链接：人名/产品名辅助关键词混合检索"),
+                                topic("去口语化冗余：提取核心实体与意图，删掉嗯啊那个"),
+                                topic("术语标准化：俚语/缩写映射到标准术语表"),
+                                topic("实体识别与链接：人名/产品名提出来，辅助关键词混合检索"),
+                                topic("这一步很便宜，往往比换模型更划算"),
                             ],
                         ),
                         topic(
                             "6 索引层面的预优化（离线）",
                             children=[
-                                topic("多表示索引：摘要向量 + 详细内容向量 + 关键词倒排"),
-                                topic("图索引 GraphRAG：实体关系图，检索前图遍历定位相关社区"),
+                                topic(
+                                    "多表示索引",
+                                    children=[
+                                        topic("摘要向量：抓主题"),
+                                        topic("详细内容向量：抓细节"),
+                                        topic("关键词倒排：抓专名"),
+                                        topic("查询时可三路一起召回"),
+                                    ],
+                                ),
+                                topic(
+                                    "图索引 GraphRAG",
+                                    children=[
+                                        topic("先抽实体-关系，检索前在图上走相关社区"),
+                                        topic("适合：要归纳主题、多跳关系，不只找相似段落"),
+                                    ],
+                                ),
                             ],
                         ),
                     ],
@@ -1854,19 +2163,30 @@ TREE = topic(
                                     "1.1 SentenceSplitter",
                                     note="chunk_size 按 token（tiktoken）；中文约 1 字≈1~1.5 token",
                                     children=[
-                                        topic("按句子边界切分 + 重叠窗口"),
+                                        topic("按句子边界切分 + 重叠窗口，课上默认推荐"),
                                         topic("示例：chunk_size=512, chunk_overlap=100"),
                                         topic("可配中文 secondary_chunking_regex"),
-                                        topic("思想：粗分隔符先拆，再细粒度句子边界拆"),
+                                        topic("思想：粗分隔符先拆，再按句子边界细拆"),
+                                        topic("本仓库默认也走 SentenceSplitter"),
                                     ],
                                 ),
                                 topic(
                                     "1.2 SemanticSplitterNodeParser",
                                     children=[
                                         topic("按句子间语义相似度变化决定切分点"),
-                                        topic("buffer_size：相似度比较的上下文缓冲窗口"),
+                                        topic("buffer_size：比较相似度时看前后几句"),
                                         topic("breakpoint_percentile_threshold：越高越敏感、块越小"),
+                                        topic("中文需自定义 chinese_sentence_splitter（。！？!?\\n）"),
                                         topic("DashScope text-embedding-v3 需分批（每批≤10）"),
+                                        topic("空文本要先 clean_empty_text，否则 embedding 会报错"),
+                                    ],
+                                ),
+                                topic(
+                                    "1.3 Hierarchical 父子块",
+                                    children=[
+                                        topic("HierarchicalNodeParser：父大块 + 子小块"),
+                                        topic("叶子（小块）建向量索引，根块进 docstore"),
+                                        topic("AutoMergingRetriever：小块命中后合并回父上下文"),
                                     ],
                                 ),
                             ],
@@ -1881,16 +2201,27 @@ TREE = topic(
                                         topic("HyDEQueryTransform + TransformQueryEngine（常更好）"),
                                         topic("自定义 Prompt 重写：继承 BaseQueryTransform"),
                                         topic("Prompt 要点：角色=改写助手；只输出改写文本；低温稳定"),
-                                        topic("include_original=True 可同时保留原查询"),
+                                        topic("include_original=True 可同时保留原查询再融合"),
                                     ],
                                 ),
                                 topic(
                                     "2.2 查询扩展",
                                     children=[
-                                        topic("Step-Back：具体问题退一步成更宽泛问题，补背景"),
-                                        topic("Multi-Query：生成 N 个变体 + QueryFusionRetriever"),
-                                        topic("融合模式：reciprocal_rerank（RRF）合并多路结果"),
-                                        topic("扩展 vs 分解：扩展=近义变体提召回；分解=不同侧面子问题"),
+                                        topic(
+                                            "Step-Back 后退提问",
+                                            children=[
+                                                topic("具体问题先退一步变成更宽泛问题，补背景"),
+                                                topic("例子：Qwen2.5-7B 上下文多长 → 先问主流 LLM 上下文窗口一般多少"),
+                                            ],
+                                        ),
+                                        topic(
+                                            "Multi-Query",
+                                            children=[
+                                                topic("生成 N 个变体，各查一遍"),
+                                                topic("QueryFusionRetriever 合并多路结果"),
+                                                topic("融合模式：reciprocal_rerank（RRF）"),
+                                            ],
+                                        ),
                                     ],
                                 ),
                                 topic(
@@ -1907,16 +2238,21 @@ TREE = topic(
                         topic(
                             "3 完整改造流水线",
                             children=[
-                                topic("分块三选一：Sentence / Semantic / Hierarchical 父子块"),
-                                topic("检索：VectorIndexRetriever；分层可用 AutoMergingRetriever"),
-                                topic("检索前：HyDE TransformQueryEngine"),
-                                topic("复杂题：SubQuestionQueryEngine 包 HyDE 引擎"),
                                 topic(
-                                    "父子块案例",
+                                    "推荐组装顺序",
                                     children=[
-                                        topic("HierarchicalNodeParser：父大块 + 子小块"),
-                                        topic("叶子建向量索引，根块进 docstore"),
-                                        topic("AutoMergingRetriever：小块命中后合并回父上下文"),
+                                        topic("分块三选一：Sentence / Semantic / Hierarchical"),
+                                        topic("检索：VectorIndexRetriever；分层用 AutoMergingRetriever"),
+                                        topic("检索前套一层：HyDE TransformQueryEngine"),
+                                        topic("复杂题再包：SubQuestionQueryEngine 包住 HyDE 引擎"),
+                                    ],
+                                ),
+                                topic(
+                                    "对照本仓库还缺什么",
+                                    children=[
+                                        topic("已有：Sentence / Token / Semantic 三种分块"),
+                                        topic("未接：HyDE、Multi-Query、SubQuestion、父子块、RRF"),
+                                        topic("可作为下一阶段作业：先给 /query 加一层查询改写"),
                                     ],
                                 ),
                             ],
@@ -2017,14 +2353,27 @@ def paint_chapter(node: dict, accent: str, soft: str, depth: int = 0) -> None:
 
 
 def make_overview(chapters: list) -> dict:
-    """总览：顺时针放射，各章不同颜色。"""
+    """总览：顺时针放射，各章不同颜色；小节下再露出一层要点。"""
     children = []
     for i, ch in enumerate(chapters):
         accent, soft = CHAPTER_COLORS[i % len(CHAPTER_COLORS)]
         sections = ch.get("children", {}).get("attached", [])
-        section_nodes = [topic(s["title"]) for s in sections]
-        for sn in section_nodes:
+        section_nodes = []
+        for s in sections:
+            grand = s.get("children", {}).get("attached", [])
+            kids = []
+            for g in grand[:6]:
+                title = g["title"]
+                if len(title) > 26:
+                    title = title[:26] + "…"
+                kn = topic(title)
+                kn["style"] = style_topic("#FFFFFF", "#64748B", size="10pt", border="#E2E8F0", line=soft)
+                kids.append(kn)
+            sn = topic(s["title"], children=kids or None)
             sn["style"] = style_topic("#FFFFFF", "#334155", size="11pt", border=soft, line=soft)
+            if kids:
+                sn["structureClass"] = "org.xmind.ui.map.unbalanced"
+            section_nodes.append(sn)
         node = topic(ch["title"], children=section_nodes or None)
         node["style"] = style_topic(accent, "#FFFFFF", bold=True, size="12pt", line=accent)
         node["structureClass"] = "org.xmind.ui.map.unbalanced"
@@ -2042,9 +2391,12 @@ def make_overview(chapters: list) -> dict:
 
 def shorten_sheet_title(title: str) -> str:
     t = title.strip()
+    if "（" in t:
+        t = t.split("（")[0].strip()
     if t.startswith("0") and " " in t:
-        return t.split(" ", 1)[0] + " " + t.split(" ", 1)[1][:10]
-    return t[:14]
+        num, rest = t.split(" ", 1)
+        return f"{num} {rest[:18]}".strip()
+    return t[:20]
 
 
 def make_sheet(title: str, root: dict) -> dict:
