@@ -1,0 +1,404 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>RAG 四合一综合平台</title>
+  <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+  <style>
+    :root {
+      --bg: #0b1220; --panel: #121a2b; --card: #172033; --line: #2a3650;
+      --text: #e8eefc; --muted: #93a0b8; --accent: #3b82f6; --ok: #34d399;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+      color: var(--text); background: var(--bg); height: 100vh; overflow: hidden;
+    }
+    #app { display: grid; grid-template-columns: 240px 1fr; height: 100vh; }
+    .side {
+      background: linear-gradient(180deg, #152038, #0f1626); border-right: 1px solid var(--line);
+      padding: 20px 14px; display: flex; flex-direction: column; gap: 8px;
+    }
+    .brand { font-size: 18px; font-weight: 700; margin-bottom: 6px; }
+    .brand small { display: block; color: var(--muted); font-size: 12px; font-weight: 500; margin-top: 4px; }
+    .nav-btn {
+      text-align: left; padding: 12px 12px; border-radius: 10px; border: 1px solid transparent;
+      background: transparent; color: var(--text); cursor: pointer;
+    }
+    .nav-btn small { display: block; color: var(--muted); margin-top: 4px; font-size: 11px; }
+    .nav-btn.active { background: rgba(59,130,246,.18); border-color: rgba(59,130,246,.4); }
+    .status { margin-top: auto; font-size: 12px; color: var(--muted); line-height: 1.6; }
+    .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #f87171; margin-right: 6px; }
+    .dot.on { background: var(--ok); }
+    .main { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+    .head { padding: 16px 22px; border-bottom: 1px solid var(--line); background: rgba(18,26,43,.9); }
+    .head h2 { font-size: 18px; }
+    .head p { color: var(--muted); font-size: 13px; margin-top: 4px; }
+    .body { flex: 1; min-height: 0; overflow: auto; padding: 18px 22px 24px; }
+    .panel { max-width: 900px; }
+    .row { display: flex; gap: 10px; margin-top: 12px; }
+    input, textarea, select, button {
+      font: inherit; border-radius: 10px; border: 1px solid var(--line);
+      background: var(--card); color: var(--text); padding: 10px 12px;
+    }
+    textarea { width: 100%; min-height: 80px; resize: vertical; }
+    input, select { width: 100%; }
+    button {
+      background: var(--accent); border: 0; cursor: pointer; font-weight: 600; white-space:nowrap;
+    }
+    button:disabled { opacity: .45; cursor: not-allowed; }
+    .log {
+      margin-top: 14px; padding: 14px; border-radius: 12px; border: 1px solid var(--line);
+      background: #0d1524; min-height: 220px; white-space: pre-wrap; line-height: 1.65; font-size: 14px;
+    }
+    .msg { margin: 10px 0; }
+    .msg.user { color: #93c5fd; }
+    .msg.bot { color: #d1fae5; }
+    .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .card { padding: 14px; border: 1px solid var(--line); border-radius: 12px; background: var(--card); margin-top: 12px; }
+    .src { font-size: 12px; color: var(--muted); margin-top: 8px; padding: 8px; background: #0b1220; border-radius: 8px; }
+  </style>
+</head>
+<body>
+<div id="app">
+  <aside class="side">
+    <div class="brand">RAG 四合一平台<small>单端口 · 单页面 · 四模块</small></div>
+    <button class="nav-btn" :class="{active: tab==='basic'}" @click="tab='basic'">
+      基础聊天<small>流式多轮通用对话</small>
+    </button>
+    <button class="nav-btn" :class="{active: tab==='secure'}" @click="tab='secure'">
+      安全校验聊天<small>净化 + 提示词策略</small>
+    </button>
+    <button class="nav-btn" :class="{active: tab==='content'}" @click="tab='content'">
+      文案与电商内容<small>产品文案 / ToT / 口号</small>
+    </button>
+    <button class="nav-btn" :class="{active: tab==='rag'}" @click="tab='rag'">
+      知识库 RAG<small>检索 / 问答 / 上传文档</small>
+    </button>
+    <div class="status">
+      <span class="dot" :class="{on: health?.status==='ok'}"></span>
+      {{ health?.status === 'ok' ? '服务正常' : '检测中…' }}<br>
+      模型：{{ health?.model || '-' }}<br>
+      RAG：{{ health?.rag_ready ? '已就绪' : '未就绪' }}
+    </div>
+  </aside>
+
+  <main class="main">
+    <header class="head">
+      <h2>{{ titles[tab].h }}</h2>
+      <p>{{ titles[tab].p }}</p>
+    </header>
+    <div class="body">
+
+      <!-- 基础聊天 -->
+      <div class="panel" v-show="tab==='basic'">
+        <div class="log" ref="basicLog">
+          <div v-for="(m,i) in basicMsgs" :key="i" class="msg" :class="m.role">{{ m.role==='user'?'我：':'AI：' }}{{ m.text }}</div>
+        </div>
+        <div class="row">
+          <input v-model="basicInput" @keydown.enter="sendBasic" placeholder="随便聊，可连续追问" :disabled="busy" />
+          <button @click="sendBasic" :disabled="busy || !basicInput.trim()">发送</button>
+          <button @click="clearBasic" style="background:#334155">清空</button>
+        </div>
+      </div>
+
+      <!-- 安全聊天 -->
+      <div class="panel" v-show="tab==='secure'">
+        <div class="grid2">
+          <div>
+            <label style="font-size:12px;color:var(--muted)">提示词策略</label>
+            <select v-model="secureMode">
+              <option value="zero_shot">零样本</option>
+              <option value="few_shot">少样本</option>
+              <option value="cot">思维链 CoT</option>
+              <option value="tot">思维树 ToT</option>
+            </select>
+          </div>
+          <div style="display:flex;align-items:end">
+            <button @click="resetSecure" style="background:#334155;width:100%">重置会话记忆</button>
+          </div>
+        </div>
+        <div class="log">
+          <div v-for="(m,i) in secureMsgs" :key="i" class="msg" :class="m.role">{{ m.role==='user'?'我：':'AI：' }}{{ m.text }}</div>
+        </div>
+        <div class="row">
+          <input v-model="secureInput" @keydown.enter="sendSecure" placeholder="带安全校验的提问…" :disabled="busy" />
+          <button @click="sendSecure" :disabled="busy || !secureInput.trim()">发送</button>
+        </div>
+      </div>
+
+      <!-- 文案 -->
+      <div class="panel" v-show="tab==='content'">
+        <div class="card">
+          <h3>电商产品描述</h3>
+          <div class="grid2" style="margin-top:8px">
+            <input v-model="product.name" placeholder="产品名称" />
+            <input v-model="product.audience" placeholder="目标人群" />
+          </div>
+          <input style="margin-top:8px" v-model="product.features" placeholder="核心卖点" />
+          <button style="margin-top:10px" @click="genProduct" :disabled="busy">生成文案</button>
+        </div>
+        <div class="card">
+          <h3>社交媒体策划（ToT）</h3>
+          <input style="margin-top:8px" v-model="socialTopic" placeholder="主题，如：夏季减肥" />
+          <button style="margin-top:10px" @click="genSocial" :disabled="busy">生成策划</button>
+        </div>
+        <div class="card">
+          <h3>自我一致性口号</h3>
+          <input style="margin-top:8px" v-model="sloganTask" placeholder="为户外运动鞋写一句广告口号" />
+          <button style="margin-top:10px" @click="genSlogan" :disabled="busy">评选口号</button>
+        </div>
+        <div class="log">{{ contentOut || '结果会显示在这里' }}</div>
+      </div>
+
+      <!-- RAG -->
+      <div class="panel" v-show="tab==='rag'">
+        <div class="card">
+          <h3>上传文档到知识库</h3>
+          <input type="file" multiple @change="onPick" accept=".pdf,.txt,.md,.csv,.docx,.html" style="margin-top:8px" />
+          <select v-model="ragSplitter" style="margin-top:8px">
+            <option value="sentence">按句子分块</option>
+            <option value="token">按 Token 分块</option>
+            <option value="semantic">语义分块</option>
+          </select>
+          <button style="margin-top:10px" @click="uploadRag" :disabled="busy || !ragFiles.length">上传并入库</button>
+          <div style="margin-top:8px;font-size:12px;color:var(--muted)">文档数：{{ ragStatus?.total_documents ?? '-' }} · {{ uploadMsg }}</div>
+        </div>
+        <div class="grid2" style="margin-top:12px">
+          <select v-model="ragMode">
+            <option value="ask">检索前优化问答</option>
+            <option value="query">一次性问答</option>
+            <option value="chat">多轮知识库问答</option>
+            <option value="search">仅语义搜索</option>
+          </select>
+          <select v-model="askStrategy" v-if="ragMode==='ask'">
+            <option value="rewrite">清洗+重写</option>
+            <option value="hyde">HyDE</option>
+            <option value="clean">仅清洗</option>
+            <option value="none">不优化</option>
+          </select>
+        </div>
+        <div class="row">
+          <input v-model="ragInput" @keydown.enter="sendRag" placeholder="基于知识库提问，例如：迟到怎么扣钱" :disabled="busy" />
+          <button @click="sendRag" :disabled="busy || !ragInput.trim()">提问</button>
+        </div>
+        <div class="log">
+          <div v-for="(m,i) in ragMsgs" :key="i" class="msg" :class="m.role">
+            <div>{{ m.role==='user'?'我：':'AI：' }}{{ m.text }}</div>
+            <div class="src" v-for="(s,si) in (m.sources||[])" :key="si">#{{s.rank}} 相似度 {{s.similarity}} · {{s.document}}</div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </main>
+</div>
+
+<script>
+const { createApp, ref, onMounted, nextTick } = Vue;
+createApp({
+  setup() {
+    const tab = ref('basic');
+    const busy = ref(false);
+    const health = ref(null);
+    const titles = {
+      basic: { h: '基础聊天机器人', p: '通用 DeepSeek 流式多轮对话（不走知识库）' },
+      secure: { h: '带安全校验的聊天', p: '输入净化 + 强化 system + 零样本/少样本/CoT/ToT' },
+      content: { h: '社交媒体文案与电商内容', p: '产品描述、ToT 策划、自我一致性口号' },
+      rag: { h: '知识库 RAG / 文档管理', p: '上传文档、语义检索、检索前优化问答（只依据知识库）' },
+    };
+
+    const basicMsgs = ref([]);
+    const basicInput = ref('');
+    const basicHistory = [{ role: 'system', content: '你是一个有帮助的中文助手。' }];
+
+    const secureMsgs = ref([]);
+    const secureInput = ref('');
+    const secureMode = ref('zero_shot');
+
+    const product = ref({ name: '无线降噪耳机', features: '40dB深度降噪, 30小时续航', audience: '通勤上班族' });
+    const socialTopic = ref('夏季减肥');
+    const sloganTask = ref('为户外运动鞋写一句广告口号');
+    const contentOut = ref('');
+
+    const ragMsgs = ref([]);
+    const ragInput = ref('');
+    const ragMode = ref('ask');
+    const askStrategy = ref('rewrite');
+    const ragSplitter = ref('sentence');
+    const ragFiles = ref([]);
+    const uploadMsg = ref('可选文件后上传');
+    const ragStatus = ref(null);
+    const ragSession = 'web-' + Math.random().toString(36).slice(2, 8);
+
+    async function refreshHealth() {
+      try {
+        health.value = await (await fetch('/health')).json();
+        ragStatus.value = await (await fetch('/api/rag/status')).json();
+      } catch (e) {
+        health.value = { status: 'error' };
+      }
+    }
+
+    async function readSSE(res, onDelta) {
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '', full = '';
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const parts = buffer.split('\n\n');
+        buffer = parts.pop();
+        for (const part of parts) {
+          const line = part.trim();
+          if (!line.startsWith('data:')) continue;
+          const data = line.slice(5).trim();
+          if (data === '[DONE]') continue;
+          try {
+            const obj = JSON.parse(data);
+            if (obj.content) { full += obj.content; onDelta(full); }
+          } catch (_) {}
+        }
+      }
+      return full;
+    }
+
+    async function sendBasic() {
+      const q = basicInput.value.trim();
+      if (!q || busy.value) return;
+      busy.value = true;
+      basicInput.value = '';
+      basicHistory.push({ role: 'user', content: q });
+      basicMsgs.value.push({ role: 'user', text: q });
+      basicMsgs.value.push({ role: 'bot', text: '' });
+      const bot = basicMsgs.value[basicMsgs.value.length - 1];
+      try {
+        const res = await fetch('/api/basic/chat', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ messages: basicHistory }),
+        });
+        const full = await readSSE(res, (t) => { bot.text = t; });
+        basicHistory.push({ role: 'assistant', content: full });
+      } catch (e) {
+        bot.text = '请求失败：' + e.message;
+      } finally { busy.value = false; refreshHealth(); }
+    }
+    function clearBasic() {
+      basicHistory.length = 1;
+      basicMsgs.value = [];
+    }
+
+    async function sendSecure() {
+      const q = secureInput.value.trim();
+      if (!q || busy.value) return;
+      busy.value = true;
+      secureInput.value = '';
+      secureMsgs.value.push({ role: 'user', text: q });
+      secureMsgs.value.push({ role: 'bot', text: '' });
+      const bot = secureMsgs.value[secureMsgs.value.length - 1];
+      try {
+        const url = `/api/secure/stream_chat?question=${encodeURIComponent(q)}&mode=${secureMode.value}`;
+        const res = await fetch(url);
+        await readSSE(res, (t) => { bot.text = t; });
+      } catch (e) {
+        bot.text = '请求失败：' + e.message;
+      } finally { busy.value = false; }
+    }
+    async function resetSecure() {
+      await fetch('/api/secure/reset', { method: 'POST' });
+      secureMsgs.value = [];
+    }
+
+    async function genProduct() {
+      busy.value = true; contentOut.value = '生成中…';
+      try {
+        const r = await fetch('/api/content/product_copy', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(product.value),
+        });
+        const j = await r.json();
+        contentOut.value = j.result || j.error || JSON.stringify(j, null, 2);
+      } catch (e) { contentOut.value = e.message; }
+      finally { busy.value = false; }
+    }
+    async function genSocial() {
+      busy.value = true; contentOut.value = '策划生成中，可能需要几十秒…';
+      try {
+        const r = await fetch('/api/content/social_plan', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ topic: socialTopic.value }),
+        });
+        const j = await r.json();
+        contentOut.value = [j.ideas, j.evaluation, j.plan].filter(Boolean).join('\n\n——\n\n') || j.error || JSON.stringify(j, null, 2);
+      } catch (e) { contentOut.value = e.message; }
+      finally { busy.value = false; }
+    }
+    async function genSlogan() {
+      busy.value = true; contentOut.value = '生成中…';
+      try {
+        const r = await fetch('/api/content/self_consistency?question=' + encodeURIComponent(sloganTask.value) + '&num=2');
+        const j = await r.json();
+        contentOut.value = '候选:\n' + (j.candidates || []).map((c, i) => `${i + 1}. ${c}`).join('\n') + '\n\n最佳: ' + (j.final || j.error || '');
+      } catch (e) { contentOut.value = e.message; }
+      finally { busy.value = false; }
+    }
+
+    function onPick(e) { ragFiles.value = Array.from(e.target.files || []); uploadMsg.value = `已选 ${ragFiles.value.length} 个文件`; }
+    async function uploadRag() {
+      if (!ragFiles.value.length) return;
+      busy.value = true; uploadMsg.value = '上传中…';
+      const fd = new FormData();
+      ragFiles.value.forEach(f => fd.append('files', f));
+      fd.append('splitter', ragSplitter.value);
+      try {
+        const r = await fetch('/api/rag/upload', { method: 'POST', body: fd });
+        const j = await r.json();
+        uploadMsg.value = r.ok ? `${j.message}，现有 ${j.total_documents} 条` : (j.detail || '失败');
+        ragFiles.value = [];
+        refreshHealth();
+      } catch (e) { uploadMsg.value = e.message; }
+      finally { busy.value = false; }
+    }
+    async function sendRag() {
+      const q = ragInput.value.trim();
+      if (!q || busy.value) return;
+      busy.value = true; ragInput.value = '';
+      ragMsgs.value.push({ role: 'user', text: q });
+      ragMsgs.value.push({ role: 'bot', text: '思考中…', sources: [] });
+      const bot = ragMsgs.value[ragMsgs.value.length - 1];
+      try {
+        let url = '/api/rag/ask', body = { question: q, k: 5, strategy: askStrategy.value };
+        if (ragMode.value === 'query') { url = '/api/rag/query'; body = { question: q, k: 5 }; }
+        if (ragMode.value === 'chat') { url = '/api/rag/chat'; body = { question: q, session_id: ragSession, k: 5 }; }
+        if (ragMode.value === 'search') { url = '/api/rag/search'; body = { query: q, k: 5 }; }
+        const r = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+        const j = await r.json();
+        if (!r.ok) { bot.text = j.detail || '失败'; }
+        else if (ragMode.value === 'search') {
+          bot.text = `找到 ${(j.results || []).length} 条：`;
+          bot.sources = j.results || [];
+        } else {
+          bot.text = j.answer || '无答案';
+          bot.sources = j.sources || [];
+        }
+      } catch (e) { bot.text = e.message; }
+      finally { busy.value = false; refreshHealth(); }
+    }
+
+    onMounted(() => { refreshHealth(); setInterval(refreshHealth, 15000); });
+
+    return {
+      tab, busy, health, titles,
+      basicMsgs, basicInput, sendBasic, clearBasic,
+      secureMsgs, secureInput, secureMode, sendSecure, resetSecure,
+      product, socialTopic, sloganTask, contentOut, genProduct, genSocial, genSlogan,
+      ragMsgs, ragInput, ragMode, askStrategy, ragSplitter, ragFiles, uploadMsg, ragStatus,
+      onPick, uploadRag, sendRag,
+    };
+  }
+}).mount('#app');
+</script>
+</body>
+</html>
