@@ -1,0 +1,159 @@
+03-检索中优化（Retrieval）
+今天修改
+
+
+稠密向量：每个维度都包含有意义的信息，向量中几乎没有零值。因此，存储时需要为每个维度分配空间。
+稀疏向量：大多数元素为零，只有少数几个维度有非零值。存储时，通常只记录有值的位置索引和对应的值，非常节省空间。
+核心一句话：
+稠密向量 = 「按意思翻译」的数字串；稀疏向量 = 「按关键词翻译」的数字串。同一份文档用两种翻译官转，就有了两种检索排名—— 这两种排名互补，合起来搜得更准。
+
+1.3 RRF 融合公式
+RRF（Reciprocal Rank Fusion）：倒数排名融合
+
+代码块
+Python
+复制
+
+1.4 代码
+
+代码块
+Python
+复制
+
+首次运行会自动下载 BGE 模型（约 1.2GB），如果网络慢可以换国内镜像：
+
+代码块
+Python
+复制
+# 在代码开头加这两行
+
+BM25 是经典的关键词匹配检索算法，核心逻辑是「统计每个词在文档里的出现频率（词频）」，而统计词频的前提是必须先分词。
+•
+BM25Retriever 默认用英文分词器（按空格/标点切分），对中文完全无效（中文没有天然空格，直接切会得到整句，无法拆成"词"来统计词频）；
+•
+所以必须通过 tokenizer 参数传入中文分词函数，让 BM25 能正确处理中文文本。
+
+代码块
+Python
+复制
+"""
+混合检索示例（Hybrid Search）- LlamaIndex 实现
+稠密向量（DashScope embedding）+ 稀疏 BM25 + RRF 融合
+全部交给 QueryFusionRetriever 完成
+"""
+
+import os
+import jieba
+
+from llama_index.core import Document, Settings, VectorStoreIndex
+from llama_index.core.node_parser import SentenceSplitter
+from llama_index.core.retrievers import QueryFusionRetriever
+from llama_index.embeddings.dashscope import DashScopeEmbedding
+from llama_index.retrievers.bm25 import BM25Retriever
+
+# ========== 1. 全局配置：embedding 模型 ==========
+# 与前面技术保持一致，使用 DashScope 的 text-embedding-v3
+Settings.embed_model = DashScopeEmbedding(
+    model_name="text-embedding-v3",
+    api_key=os.getenv("DASHSCOPE_API_KEY"),
+)
+
+
+03-检索中优化（Retrieval）
+
+
+稠密向量：每个维度都包含有意义的信息，向量中几乎没有零值。因此，存储时需要为每个维度分配空间。
+稠密向量：每个维度都包含有意义的信息，向量中几乎没有零值。因此，存储时需要为每个维度分配空间。
+稀疏向量：大多数元素为零，只有少数几个维度有非零值。存储时，通常只记录有值的位置索引和对应的值，非常节省空间。
+稀疏向量：大多数元素为零，只有少数几个维度有非零值。存储时，通常只记录有值的位置索引和对应的值，非常节省空间。
+核心一句话：
+核心一句话：
+稠密向量 = 「按意思翻译」的数字串；稀疏向量 = 「按关键词翻译」的数字串。同一份文档用两种翻译官转，就有了两种检索排名—— 这两种排名互补，合起来搜得更准。
+稠密向量 = 「按意思翻译」的数字串；稀疏向量 = 「按关键词翻译」的数字串。同一份文档用两种翻译官转，就有了两种检索排名—— 这两种排名互补，合起来搜得更准。
+
+
+1.3 RRF 融合公式
+1.3 RRF 融合公式
+RRF（Reciprocal Rank Fusion）：倒数排名融合
+RRF（Reciprocal Rank Fusion）：倒数排名融合
+
+代码块
+Python
+复制
+
+代码块
+1.4 代码
+1.4 代码
+
+代码块
+Python
+复制
+
+代码块
+首次运行会自动下载 BGE 模型（约 1.2GB），如果网络慢可以换国内镜像：
+首次运行会自动下载 BGE 模型（约 1.2GB），如果网络慢可以换国内镜像：
+
+代码块
+Python
+复制
+# 在代码开头加这两行
+
+代码块
+# 在代码开头加这两行
+BM25 是经典的关键词匹配检索算法，核心逻辑是「统计每个词在文档里的出现频率（词频）」，而统计词频的前提是必须先分词。
+BM25 是经典的关键词匹配检索算法，核心逻辑是「统计每个词在文档里的出现频率（词频）」，而统计词频的前提是必须先分词。
+•
+BM25Retriever 默认用英文分词器（按空格/标点切分），对中文完全无效（中文没有天然空格，直接切会得到整句，无法拆成"词"来统计词频）；
+BM25Retriever 默认用英文分词器（按空格/标点切分），对中文完全无效（中文没有天然空格，直接切会得到整句，无法拆成"词"来统计词频）；
+•
+所以必须通过 tokenizer 参数传入中文分词函数，让 BM25 能正确处理中文文本。
+所以必须通过 tokenizer 参数传入中文分词函数，让 BM25 能正确处理中文文本。
+
+代码块
+Python
+复制
+"""
+混合检索示例（Hybrid Search）- LlamaIndex 实现
+稠密向量（DashScope embedding）+ 稀疏 BM25 + RRF 融合
+全部交给 QueryFusionRetriever 完成
+"""
+
+import os
+import jieba
+
+from llama_index.core import Document, Settings, VectorStoreIndex
+from llama_index.core.node_parser import SentenceSplitter
+from llama_index.core.retrievers import QueryFusionRetriever
+from llama_index.embeddings.dashscope import DashScopeEmbedding
+from llama_index.retrievers.bm25 import BM25Retriever
+
+# ========== 1. 全局配置：embedding 模型 ==========
+# 与前面技术保持一致，使用 DashScope 的 text-embedding-v3
+Settings.embed_model = DashScopeEmbedding(
+    model_name="text-embedding-v3",
+    api_key=os.getenv("DASHSCOPE_API_KEY"),
+)
+
+
+代码块
+"""
+混合检索示例（Hybrid Search）- LlamaIndex 实现
+稠密向量（DashScope embedding）+ 稀疏 BM25 + RRF 融合
+全部交给 QueryFusionRetriever 完成
+"""
+
+import os
+import jieba
+
+from llama_index.core import Document, Settings, VectorStoreIndex
+from llama_index.core.node_parser import SentenceSplitter
+from llama_index.core.retrievers import QueryFusionRetriever
+from llama_index.embeddings.dashscope import DashScopeEmbedding
+from llama_index.retrievers.bm25 import BM25Retriever
+
+# ========== 1. 全局配置：embedding 模型 ==========
+# 与前面技术保持一致，使用 DashScope 的 text-embedding-v3
+Settings.embed_model = DashScopeEmbedding(
+model_name="text-embedding-v3",
+api_key=os.getenv("DASHSCOPE_API_KEY"),
+)

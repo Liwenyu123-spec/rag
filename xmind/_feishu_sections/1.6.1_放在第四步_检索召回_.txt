@@ -1,0 +1,221 @@
+03-检索中优化（Retrieval）
+今天修改
+
+lambda可以快速定义简单函数  语法糖
+
+
+代码块
+Python
+复制
+# 用 def 写（和 lambda 效果完全相同）
+def tokenize_text(text: str) -> list[str]:
+    return list(jieba.cut(text))
+
+bm25_retriever = BM25Retriever.from_defaults(
+    nodes=nodes,
+    similarity_top_k=5,
+    tokenizer=tokenize_text,  # 传函数本身，不是调用结果！
+)
+
+1.5、要点：
+
+
+1.6、混合检索的代码插入到RAG流程中的哪块
+混合检索（Hybrid Search）代码 → 放在 RAG 的【第 4 步：检索召回】。
+1.6.1、放在第四步（检索召回）
+标准 RAG 5 大步（你必须记住）
+1.
+加载文档（pdf/txt/csv）
+2.
+文档分块（chunk）
+3.
+向量化 + 存入向量库（千问 embedding）
+4.
+检索召回（用户提问 → 搜索相关块）✅ 混合检索代码就放这里！
+5.
+把召回的内容喂给大模型回答
+其实：混合检索就是------做一个更强、更准的检索召回。
+1.6.2、代码示例：
+
+代码块
+Python
+复制
+"""
+核心架构：
+1. Embedding: DashScope (text-embedding-v3)，自定义包装类以支持批量控制，避免 API 限流。
+2. 分块策略: SemanticSplitterNodeParser (语义分块)，基于嵌入相似度动态断点，保持语义完整性。
+3. 检索策略: 混合检索 (Hybrid Search)
+   - 路1: 向量检索 (Dense Vector)，捕捉语义相似性。
+   - 路2: BM25 检索 (Sparse Keyword)，捕捉精确关键词匹配，使用 jieba进行中文分词。
+4. 融合策略: RRF (Reciprocal Rank Fusion，倒数排名融合)，通过 QueryFusionRetriever 统一两路结果。
+5. 生成模型: Qwen3.7-max (DashScope)，用于最终的答案生成。
+"""
+import os
+import jieba
+
+from llama_index.core import (
+    Document,
+    Settings,
+    SimpleDirectoryReader,
+    VectorStoreIndex,
+)
+from llama_index.core.node_parser import SemanticSplitterNodeParser
+from llama_index.core.query_engine import RetrieverQueryEngine
+from llama_index.core.retrievers import QueryFusionRetriever
+from llama_index.embeddings.dashscope import DashScopeEmbedding
+from llama_index.llms.dashscope import DashScope
+from llama_index.retrievers.bm25 import BM25Retriever
+from llama_index.core.base.embeddings.base import BaseEmbedding
+from typing import List, Any
+from pydantic import PrivateAttr
+
+# ======================== 1. 全局配置 ========================
+# 从环境变量获取 DashScope API Key，确保密钥安全
+api_key = os.getenv("DASHSCOPE_API_KEY")
+
+# 自定义 DashScopeEmbedding 包装类
+# 目的：原生 DashScopeEmbedding 可能在大批量请求时触发 API 限制或超时。
+# 此类强制将文本列表分割为小批次（默认10条）串行处理，提高稳定性。
+class DashScopeEmbeddingWithBatch(BaseEmbedding):
+
+03-检索中优化（Retrieval）
+
+lambda可以快速定义简单函数  语法糖
+
+lambda可以快速定义简单函数  语法糖
+lambda可以快速定义简单函数  语法糖
+
+代码块
+Python
+复制
+# 用 def 写（和 lambda 效果完全相同）
+def tokenize_text(text: str) -> list[str]:
+    return list(jieba.cut(text))
+
+bm25_retriever = BM25Retriever.from_defaults(
+    nodes=nodes,
+    similarity_top_k=5,
+    tokenizer=tokenize_text,  # 传函数本身，不是调用结果！
+)
+
+代码块
+# 用 def 写（和 lambda 效果完全相同）
+def tokenize_text(text: str) -> list[str]:
+return list(jieba.cut(text))
+
+bm25_retriever = BM25Retriever.from_defaults(
+nodes=nodes,
+similarity_top_k=5,
+tokenizer=tokenize_text,  # 传函数本身，不是调用结果！
+)
+1.5、要点：
+1.5、要点：
+
+
+1.6、混合检索的代码插入到RAG流程中的哪块
+1.6、混合检索的代码插入到RAG流程中的哪块
+混合检索（Hybrid Search）代码 → 放在 RAG 的【第 4 步：检索召回】。
+混合检索（Hybrid Search）代码 → 放在 RAG 的【第 4 步：检索召回】。
+1.6.1、放在第四步（检索召回）
+1.6.1、放在第四步（检索召回）
+标准 RAG 5 大步（你必须记住）
+标准 RAG 5 大步（你必须记住）
+1.
+加载文档（pdf/txt/csv）
+加载文档（pdf/txt/csv）
+2.
+文档分块（chunk）
+文档分块（chunk）
+3.
+向量化 + 存入向量库（千问 embedding）
+向量化 + 存入向量库（千问 embedding）
+4.
+检索召回（用户提问 → 搜索相关块）✅ 混合检索代码就放这里！
+检索召回（用户提问 → 搜索相关块）✅ 混合检索代码就放这里！
+5.
+把召回的内容喂给大模型回答
+把召回的内容喂给大模型回答
+其实：混合检索就是------做一个更强、更准的检索召回。
+其实：混合检索就是------做一个更强、更准的检索召回。
+1.6.2、代码示例：
+1.6.2、代码示例：
+
+代码块
+Python
+复制
+"""
+核心架构：
+1. Embedding: DashScope (text-embedding-v3)，自定义包装类以支持批量控制，避免 API 限流。
+2. 分块策略: SemanticSplitterNodeParser (语义分块)，基于嵌入相似度动态断点，保持语义完整性。
+3. 检索策略: 混合检索 (Hybrid Search)
+   - 路1: 向量检索 (Dense Vector)，捕捉语义相似性。
+   - 路2: BM25 检索 (Sparse Keyword)，捕捉精确关键词匹配，使用 jieba进行中文分词。
+4. 融合策略: RRF (Reciprocal Rank Fusion，倒数排名融合)，通过 QueryFusionRetriever 统一两路结果。
+5. 生成模型: Qwen3.7-max (DashScope)，用于最终的答案生成。
+"""
+import os
+import jieba
+
+from llama_index.core import (
+    Document,
+    Settings,
+    SimpleDirectoryReader,
+    VectorStoreIndex,
+)
+from llama_index.core.node_parser import SemanticSplitterNodeParser
+from llama_index.core.query_engine import RetrieverQueryEngine
+from llama_index.core.retrievers import QueryFusionRetriever
+from llama_index.embeddings.dashscope import DashScopeEmbedding
+from llama_index.llms.dashscope import DashScope
+from llama_index.retrievers.bm25 import BM25Retriever
+from llama_index.core.base.embeddings.base import BaseEmbedding
+from typing import List, Any
+from pydantic import PrivateAttr
+
+# ======================== 1. 全局配置 ========================
+# 从环境变量获取 DashScope API Key，确保密钥安全
+api_key = os.getenv("DASHSCOPE_API_KEY")
+
+# 自定义 DashScopeEmbedding 包装类
+# 目的：原生 DashScopeEmbedding 可能在大批量请求时触发 API 限制或超时。
+# 此类强制将文本列表分割为小批次（默认10条）串行处理，提高稳定性。
+class DashScopeEmbeddingWithBatch(BaseEmbedding):
+
+代码块
+"""
+核心架构：
+1. Embedding: DashScope (text-embedding-v3)，自定义包装类以支持批量控制，避免 API 限流。
+2. 分块策略: SemanticSplitterNodeParser (语义分块)，基于嵌入相似度动态断点，保持语义完整性。
+3. 检索策略: 混合检索 (Hybrid Search)
+- 路1: 向量检索 (Dense Vector)，捕捉语义相似性。
+- 路2: BM25 检索 (Sparse Keyword)，捕捉精确关键词匹配，使用 jieba进行中文分词。
+4. 融合策略: RRF (Reciprocal Rank Fusion，倒数排名融合)，通过 QueryFusionRetriever 统一两路结果。
+5. 生成模型: Qwen3.7-max (DashScope)，用于最终的答案生成。
+"""
+import os
+import jieba
+
+from llama_index.core import (
+Document,
+Settings,
+SimpleDirectoryReader,
+VectorStoreIndex,
+)
+from llama_index.core.node_parser import SemanticSplitterNodeParser
+from llama_index.core.query_engine import RetrieverQueryEngine
+from llama_index.core.retrievers import QueryFusionRetriever
+from llama_index.embeddings.dashscope import DashScopeEmbedding
+from llama_index.llms.dashscope import DashScope
+from llama_index.retrievers.bm25 import BM25Retriever
+from llama_index.core.base.embeddings.base import BaseEmbedding
+from typing import List, Any
+from pydantic import PrivateAttr
+
+# ======================== 1. 全局配置 ========================
+# 从环境变量获取 DashScope API Key，确保密钥安全
+api_key = os.getenv("DASHSCOPE_API_KEY")
+
+# 自定义 DashScopeEmbedding 包装类
+# 目的：原生 DashScopeEmbedding 可能在大批量请求时触发 API 限制或超时。
+# 此类强制将文本列表分割为小批次（默认10条）串行处理，提高稳定性。
+class DashScopeEmbeddingWithBatch(BaseEmbedding):
