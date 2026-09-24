@@ -31,6 +31,10 @@ from app.config import HOST, PORT  # noqa: E402
 
 
 def main() -> None:
+    import os
+
+    os.chdir(PLATFORM_ROOT)
+
     def _open():
         time.sleep(2.0)
         webbrowser.open(f"http://{HOST}:{PORT}/")
