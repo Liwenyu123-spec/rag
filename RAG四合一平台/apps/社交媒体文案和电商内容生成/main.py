@@ -21,8 +21,10 @@ from llama_index.llms.deepseek import DeepSeek
 from pydantic import BaseModel, Field
 
 BASE_DIR = Path(__file__).resolve().parent
-REPO_ROOT = BASE_DIR.parent
+PLATFORM_ROOT = BASE_DIR.parents[1]  # RAG四合一平台
+REPO_ROOT = PLATFORM_ROOT.parent  # 原仓库（共享 .env）
 load_dotenv(REPO_ROOT / ".env", override=True)
+load_dotenv(PLATFORM_ROOT / ".env", override=True)
 load_dotenv(BASE_DIR / ".env", override=True)
 
 api_key = os.getenv("DEEPSEEK_API_KEY")

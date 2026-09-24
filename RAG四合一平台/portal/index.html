@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>RAG 四合一综合平台</title>
+  <style>
+    :root {
+      --bg: #0f172a;
+      --card: #1e293b;
+      --line: #334155;
+      --text: #e2e8f0;
+      --muted: #94a3b8;
+      --accent: #38bdf8;
+      --accent2: #a78bfa;
+      --ok: #34d399;
+      --bad: #f87171;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      min-height: 100vh;
+      font-family: "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+      color: var(--text);
+      background:
+        radial-gradient(900px 500px at 10% -10%, rgba(56,189,248,.18), transparent 55%),
+        radial-gradient(700px 400px at 100% 0%, rgba(167,139,250,.16), transparent 50%),
+        var(--bg);
+      padding: 40px 20px 60px;
+    }
+    .wrap { max-width: 1080px; margin: 0 auto; }
+    header { margin-bottom: 28px; }
+    header h1 {
+      font-size: 32px; font-weight: 700; letter-spacing: .2px;
+      background: linear-gradient(90deg, #fff, #7dd3fc);
+      -webkit-background-clip: text; background-clip: text; color: transparent;
+    }
+    header p { margin-top: 10px; color: var(--muted); line-height: 1.7; max-width: 720px; }
+    .note {
+      margin: 18px 0 28px; padding: 14px 16px; border-radius: 12px;
+      border: 1px solid var(--line); background: rgba(15,23,42,.55); color: var(--muted);
+      font-size: 14px; line-height: 1.7;
+    }
+    .grid {
+      display: grid; gap: 16px;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    }
+    .card {
+      display: flex; flex-direction: column; gap: 12px;
+      padding: 20px; border-radius: 16px;
+      border: 1px solid var(--line); background: rgba(30,41,59,.88);
+      text-decoration: none; color: inherit;
+      transition: transform .15s ease, border-color .15s ease, box-shadow .15s ease;
+    }
+    .card:hover {
+      transform: translateY(-3px);
+      border-color: rgba(56,189,248,.45);
+      box-shadow: 0 12px 30px rgba(0,0,0,.28);
+    }
+    .badge {
+      display: inline-flex; align-items: center; gap: 8px;
+      width: fit-content; padding: 4px 10px; border-radius: 999px;
+      font-size: 12px; background: rgba(148,163,184,.12); color: var(--muted);
+    }
+    .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--bad); }
+    .dot.on { background: var(--ok); box-shadow: 0 0 0 3px rgba(52,211,153,.15); }
+    .card h2 { font-size: 18px; }
+    .card p { color: var(--muted); font-size: 13px; line-height: 1.65; flex: 1; }
+    .card .port { color: var(--accent); font-size: 12px; font-family: ui-monospace, Consolas, monospace; }
+    footer { margin-top: 28px; color: #64748b; font-size: 12px; line-height: 1.7; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <h1>RAG 四合一综合平台</h1>
+      <p>
+        将「基础聊天」「安全校验聊天」「文案生成」「Chroma 文档管理 / Native RAG」
+        合并到同一入口。原四个项目目录未被覆盖，本平台为另存副本。
+      </p>
+    </header>
+
+    <div class="note">
+      启动命令：在仓库根目录执行 <code>python RAG四合一平台/run.py</code>。
+      门户本页为 <strong>8100</strong>；四个子服务分别为 8000 / 8001 / 8002 / 8003。
+      绿点表示该服务已就绪。
+    </div>
+
+    <div class="grid" id="cards"></div>
+
+    <footer>
+      源项目仍保留在仓库根目录：基础聊天机器人、带安全校验的聊天机器人、
+      社交媒体文案和电商内容生成、chroma文档管理。本目录为独立副本。
+    </footer>
+  </div>
+
+  <script>
+    const apps = [
+      {
+        id: "basic",
+        title: "基础聊天机器人",
+        desc: "DeepSeek 流式多轮对话，入门版聊天。",
+        port: 8000,
+        path: "/",
+      },
+      {
+        id: "secure",
+        title: "带安全校验的聊天机器人",
+        desc: "输入净化、强化 system、零样本/少样本/CoT/ToT。",
+        port: 8001,
+        path: "/",
+      },
+      {
+        id: "content",
+        title: "社交媒体文案与电商内容",
+        desc: "产品描述、ToT 策划、自我一致性口号评选。",
+        port: 8002,
+        path: "/",
+      },
+      {
+        id: "rag",
+        title: "Chroma 文档管理 / Native RAG",
+        desc: "上传文档、语义检索、问答，含检索前优化。",
+        port: 8003,
+        path: "/",
+      },
+    ];
+
+    const cards = document.getElementById("cards");
+    cards.innerHTML = apps.map((a) => `
+      <a class="card" href="http://127.0.0.1:${a.port}${a.path}" target="_blank" rel="noreferrer" data-id="${a.id}">
+        <span class="badge"><span class="dot" id="dot-${a.id}"></span><span id="st-${a.id}">检测中…</span></span>
+        <h2>${a.title}</h2>
+        <p>${a.desc}</p>
+        <div class="port">http://127.0.0.1:${a.port}</div>
+      </a>
+    `).join("");
+
+    async function ping(app) {
+      const dot = document.getElementById("dot-" + app.id);
+      const st = document.getElementById("st-" + app.id);
+      try {
+        const ctrl = new AbortController();
+        const t = setTimeout(() => ctrl.abort(), 2500);
+        const res = await fetch("http://127.0.0.1:" + app.port + "/health", {
+          signal: ctrl.signal,
+          mode: "cors",
+        }).catch(() => fetch("http://127.0.0.1:" + app.port + "/", { signal: ctrl.signal, mode: "no-cors" }));
+        clearTimeout(t);
+        // no-cors 时 res.type=opaque 也算通了
+        const ok = res && (res.ok || res.type === "opaque" || res.status === 200);
+        dot.classList.toggle("on", !!ok);
+        st.textContent = ok ? "服务就绪" : "未启动";
+      } catch (e) {
+        dot.classList.remove("on");
+        st.textContent = "未启动";
+      }
+    }
+
+    function refresh() { apps.forEach(ping); }
+    refresh();
+    setInterval(refresh, 5000);
+  </script>
+</body>
+</html>
