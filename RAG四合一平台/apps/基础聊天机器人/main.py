@@ -12,8 +12,10 @@ import winreg  # 从 Windows 注册表读用户/系统环境变量
 
 # 始终加载「本文件同目录」的 .env（不依赖 IDE 当前工作目录）
 BASE_DIR = Path(__file__).resolve().parent
-REPO_ROOT = BASE_DIR.parent
+PLATFORM_ROOT = BASE_DIR.parents[1]  # RAG四合一平台
+REPO_ROOT = PLATFORM_ROOT.parent  # 原仓库（共享 .env）
 load_dotenv(REPO_ROOT / ".env")
+load_dotenv(PLATFORM_ROOT / ".env")
 load_dotenv(BASE_DIR / ".env")
 
 

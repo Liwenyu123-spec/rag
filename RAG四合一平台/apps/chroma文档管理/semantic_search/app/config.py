@@ -8,10 +8,14 @@ from dotenv import load_dotenv  # 从 .env 文件加载键值到环境变量
 
 APP_DIR = Path(__file__).resolve().parent  # 当前文件所在目录：.../semantic_search/app
 PACKAGE_DIR = APP_DIR.parent  # 上一级：semantic_search 包目录
-# 包现在在 rag/chroma文档管理/semantic_search/，再上一级才是仓库根目录
-PROJECT_ROOT = PACKAGE_DIR.parent.parent  # rag 项目根目录（放 .env）
+# 副本路径：RAG四合一平台/apps/chroma文档管理/semantic_search
+# parents: app -> semantic_search -> chroma文档管理 -> apps -> RAG四合一平台
+PLATFORM_ROOT = PACKAGE_DIR.parents[2]
+PROJECT_ROOT = PLATFORM_ROOT  # 平台根（另存项目）
+REPO_ROOT = PLATFORM_ROOT.parent  # 原仓库根，用于共享 .env
 
-load_dotenv(PROJECT_ROOT / ".env")  # 优先加载仓库根目录 .env
+load_dotenv(REPO_ROOT / ".env")  # 原仓库 .env（密钥）
+load_dotenv(PLATFORM_ROOT / ".env")  # 平台级 .env（可选覆盖）
 load_dotenv(PACKAGE_DIR.parent / ".env")  # 项目目录 .env
 load_dotenv(PACKAGE_DIR / ".env")  # 包目录 .env
 

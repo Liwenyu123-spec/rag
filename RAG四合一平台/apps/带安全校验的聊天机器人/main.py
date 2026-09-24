@@ -28,9 +28,13 @@ from pydantic import BaseModel, Field
 
 
 BASE_DIR = Path(__file__).resolve().parent
-REPO_ROOT = BASE_DIR.parent
-FRONTEND_DIST = REPO_ROOT / "frontend" / "dist"
-load_dotenv(REPO_ROOT / ".env", override=True)
+# 四合一平台根目录：.../RAG四合一平台（另存副本，不改原项目）
+PLATFORM_ROOT = BASE_DIR.parents[1]
+REPO_ROOT = PLATFORM_ROOT
+FRONTEND_DIST = PLATFORM_ROOT / "frontend" / "dist"
+# 优先读原仓库 .env，再读平台目录 / 本模块目录
+load_dotenv(PLATFORM_ROOT.parent / ".env", override=True)
+load_dotenv(PLATFORM_ROOT / ".env", override=True)
 load_dotenv(BASE_DIR / ".env", override=True)
 
 api_key = os.getenv("DEEPSEEK_API_KEY")
