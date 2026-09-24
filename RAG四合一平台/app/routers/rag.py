@@ -5,7 +5,7 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
-from fastapi import APIRouter, File, Form, HTTPException, UploadFile
+from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile
 from pydantic import BaseModel, Field
 
 from app.config import CHROMA_APP_ROOT, DEEPSEEK_API_KEY
@@ -41,23 +41,11 @@ class RagChatBody(BaseModel):
     k: int = Field(5, ge=1, le=100)
 
 
-def _engine(request) -> SemanticSearchEngine:
+def _engine(request: Request) -> SemanticSearchEngine:
     engine = getattr(request.app.state, "rag_engine", None)
     if engine is None:
         raise HTTPException(status_code=503, detail="RAG 引擎未初始化，请检查 DEEPSEEK_API_KEY")
     return engine
-
-
-@router.get("/health")
-def rag_health(request):
-    from fastapi import Request
-
-    # FastAPI 会注入 Request；这里用显式依赖更稳
-    raise NotImplementedError
-
-
-# 用 Request 重写 health / 各接口
-from fastapi import Request  # noqa: E402
 
 
 @router.get("/status")
@@ -80,10 +68,7 @@ def rag_status(request: Request):
 
 @router.post("/search")
 def rag_search(request: Request, body: SearchBody):
-    return {
-        "query": body.query,
-        "results": _engine(request).search(body.query, body.k),
-    }
+    return {"query": body.query, "results": _engine(request).search(body.query, body.k)}
 
 
 @router.post("/query")
