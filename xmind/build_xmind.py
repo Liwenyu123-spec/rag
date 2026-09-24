@@ -3334,13 +3334,71 @@ TREE = topic(
                             ],
                         ),
                         topic(
-                            "代码要点（讲义）",
+                            "讲义代码逐行（混合检索）",
                             children=[
-                                topic("依赖：llama-index-core / embeddings-dashscope / retrievers-bm25 / jieba"),
-                                topic("两路必须同一 nodes，避免「向量一块、BM25 另一块」对不齐"),
-                                topic("tokenizer=lambda t: list(jieba.cut(t))；或 def tokenize 再传入（传函数本身）"),
-                                topic("可选 HF_ENDPOINT=hf-mirror.com（若本地还下 BGE 等模型）"),
-                                topic("进阶整包：语义分块 + DashScope 批处理包装 + RRF + Qwen 生成"),
+                                topic(
+                                    "Settings.embed_model = DashScopeEmbedding(text-embedding-v3)",
+                                    children=[
+                                        topic("意思：全局指定稠密向量模型，后面建索引会自动用它"),
+                                        topic("为什么：查询和文档必须同一套 Embedding，否则两路向量不在同一空间"),
+                                    ],
+                                ),
+                                topic(
+                                    "docs = [Document(text=t) for t in documents]",
+                                    children=[
+                                        topic("意思：把纯字符串包成 LlamaIndex 的 Document"),
+                                        topic("为什么：分块器和索引只认 Document/Node，不认裸字符串"),
+                                    ],
+                                ),
+                                topic(
+                                    "splitter = SentenceSplitter(chunk_size=200, chunk_overlap=20)",
+                                    children=[
+                                        topic("意思：按句子边界切块，每块约 200 token，相邻块重叠 20"),
+                                        topic("为什么：两路检索必须吃同一份 nodes，切一次就够"),
+                                    ],
+                                ),
+                                topic(
+                                    "nodes = splitter.get_nodes_from_documents(docs)",
+                                    children=[
+                                        topic("意思：得到检索的基本单位 Node 列表"),
+                                    ],
+                                ),
+                                topic(
+                                    "index = VectorStoreIndex(nodes)",
+                                    children=[
+                                        topic("意思：对每个 Node 调 embed_model，建成稠密向量索引"),
+                                    ],
+                                ),
+                                topic(
+                                    "vector_retriever = index.as_retriever(similarity_top_k=5)",
+                                    children=[
+                                        topic("意思：语义路只返回最像的 5 条，不做生成"),
+                                        topic("为什么：top_k 是「这一路的候选窗口」，后面还要和 BM25 融合"),
+                                    ],
+                                ),
+                                topic(
+                                    "bm25_retriever = BM25Retriever.from_defaults(nodes=nodes, similarity_top_k=5, tokenizer=...)",
+                                    children=[
+                                        topic("意思：用同一批 nodes 建关键词检索器，也取 5 条"),
+                                        topic("tokenizer=lambda text: list(jieba.cut(text))"),
+                                        topic("意思：先用 jieba 把中文切成词，BM25 才能按词频打分"),
+                                        topic("为什么：默认英文分词按空格切，中文整句会变成一个 token，BM25 失效"),
+                                    ],
+                                ),
+                                topic(
+                                    "QueryFusionRetriever(retrievers=[vector, bm25], mode='reciprocal_rerank')",
+                                    children=[
+                                        topic("意思：同一个问题同时问两路，再用 RRF 按名次合成一张榜"),
+                                        topic("为什么：cosine 分和 BM25 分不能直接相加，只比排名更稳"),
+                                    ],
+                                ),
+                                topic(
+                                    "RetrieverQueryEngine.from_args(retriever=...)",
+                                    children=[
+                                        topic("意思：融合后的片段再拼进 Prompt，交给 LLM 生成"),
+                                        topic("为什么：混合检索只替换第 4 步召回，第 5 步生成不变"),
+                                    ],
+                                ),
                             ],
                         ),
                         topic(
@@ -3437,11 +3495,62 @@ TREE = topic(
                             ],
                         ),
                         topic(
-                            "代码解读口诀",
+                            "讲义代码逐行（三路召回）",
                             children=[
-                                topic("分了 3 条独立通道，互不共享索引状态"),
-                                topic("标准流程：分库 → 分索引 → 分检索 → 去重融合 → 生成"),
-                                topic("先多路召回保覆盖，再融合排序保可用"),
+                                topic(
+                                    "Settings.embed_model / Settings.llm = DashScope(...)",
+                                    children=[
+                                        topic("意思：Embedding 负责检索向量，LLM（如 qwen）负责最后生成"),
+                                        topic("为什么：检索阶段可以不调 LLM；生成阶段才用 qwen3.7-max"),
+                                    ],
+                                ),
+                                topic(
+                                    'Document(..., metadata={"id": "...", "channel": "tech"})',
+                                    children=[
+                                        topic("意思：每条原文带上来源标签，检索结果能看出出自哪一路"),
+                                        topic("为什么：三路混在一起后，没有 channel 就无法排查是哪库答偏了"),
+                                    ],
+                                ),
+                                topic(
+                                    "tech_index = VectorStoreIndex.from_documents(tech_docs)",
+                                    children=[
+                                        topic("意思：技术文档单独建一个稠密索引，和 FAQ、社区互不共用"),
+                                        topic("为什么：多路召回的关键是「分库分索引」，不是把所有文档塞进一个库"),
+                                    ],
+                                ),
+                                topic(
+                                    "faq_retriever = BM25Retriever.from_defaults(nodes=faq_index.docstore...)",
+                                    children=[
+                                        topic("意思：FAQ 这一路不用向量，改用 BM25 抓短问答里的关键词"),
+                                        topic("docstore.docs.values() 意思：把索引里已经切好的 Node 拿出来给 BM25"),
+                                        topic("tokenizer=jieba 意思：中文 FAQ 也必须先分词"),
+                                    ],
+                                ),
+                                topic(
+                                    "community_retriever = community_index.as_retriever(similarity_top_k=3)",
+                                    children=[
+                                        topic("意思：社区口语再走稠密向量，每路先各取 3 条"),
+                                    ],
+                                ),
+                                topic(
+                                    "QueryFusionRetriever(retrievers=[tech, faq, community], retriever_weights=[1.0, 1.2, 0.8], mode='relative_score', num_queries=1, similarity_top_k=5)",
+                                    children=[
+                                        topic("retrievers 意思：三路检索器放进同一个融合器，一次 query 并发去搜"),
+                                        topic("weights 意思：FAQ 权重 1.2 略高，社区 0.8 略低——你更信哪路就抬哪路"),
+                                        topic("mode=relative_score 意思：先把每路分数 min-max 拉到同一尺度再加权"),
+                                        topic("为什么：cosine 大约 0~1，BM25 可以很大，不归一化 FAQ 会霸榜或被淹没"),
+                                        topic("num_queries=1 意思：这次不让模型再改写出多个问法，只用用户原句"),
+                                        topic("similarity_top_k=5 意思：三路合并去重后，最终只留 5 条给生成"),
+                                        topic("use_async=False 意思：教学示例用同步调用，方便单步调试"),
+                                    ],
+                                ),
+                                topic(
+                                    "query_engine.query(question) → response.source_nodes / response.response",
+                                    children=[
+                                        topic("source_nodes 意思：融合后真正喂给模型的片段，可打印 channel 和 id"),
+                                        topic("response 意思：模型根据这些片段写出的最终回答"),
+                                    ],
+                                ),
                             ],
                         ),
                         topic(
@@ -3502,6 +3611,44 @@ TREE = topic(
                                 topic("Step3 方案B：def tokenize_text(t): return list(jieba.cut(t)) 再传入"),
                                 topic("Step4 方案C（讲义推荐组合）：language='chinese', skip_stemming=True, 中英 token_pattern"),
                                 topic("Step5 自测：对含专名的短问，看 BM25 是否单独能命中"),
+                            ],
+                        ),
+                        topic(
+                            "代码逐行",
+                            children=[
+                                topic(
+                                    "def tokenize_text(text): return list(jieba.cut(text))",
+                                    children=[
+                                        topic("意思：输入一整句，输出词列表，例如「登录超时怎么处理」→ ['登录','超时','怎么','处理']"),
+                                    ],
+                                ),
+                                topic(
+                                    "tokenizer=tokenize_text",
+                                    children=[
+                                        topic("意思：把函数本身交给 BM25，让它在检索时自己去调用"),
+                                        topic("为什么：写成 tokenize_text() 会立刻执行，传进去的是词列表，检索时会报错"),
+                                    ],
+                                ),
+                                topic(
+                                    "language='chinese'",
+                                    children=[
+                                        topic("意思：停用词表用中文，去掉「的/了/吗」这类无信息词"),
+                                    ],
+                                ),
+                                topic(
+                                    "skip_stemming=True",
+                                    children=[
+                                        topic("意思：关闭英文词干还原（running→run）"),
+                                        topic("为什么：中文没有词干，开着会乱改字"),
+                                    ],
+                                ),
+                                topic(
+                                    'token_pattern=r"(?u)\\b\\w+\\b|[\\u4e00-\\u9fa5]"',
+                                    children=[
+                                        topic("意思：英文按单词切，中文至少按汉字切，避免整句粘成一块"),
+                                        topic("为什么：这是不用 jieba 时的保底切法；有 jieba 时优先用 jieba"),
+                                    ],
+                                ),
                             ],
                         ),
                         topic("输出：稀疏路真正按「词」计分，而不是整句一个 token"),

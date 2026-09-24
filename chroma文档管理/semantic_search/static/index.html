@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Native RAG 语义搜索</title>
+  <title>RAG 知识库问答</title>
   <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
   <style>
     :root {
@@ -245,6 +245,13 @@
       margin-top: 8px; border: 0; background: none;
       color: var(--blue); font-size: 12px; cursor: pointer;
     }
+    .pre-box {
+      margin-top: 10px; padding: 12px 14px; border-radius: 12px;
+      border: 1px dashed #c5d4f5; background: #f3f7ff;
+      color: #445062; font-size: 12px; line-height: 1.65;
+    }
+    .pre-box strong { color: var(--blue); }
+    .pre-box .pre-line { margin-top: 4px; word-break: break-word; }
     .input-area {
       padding: 16px 28px 22px; border-top: 1px solid var(--line); background: #fff;
       flex-shrink: 0;
@@ -292,8 +299,8 @@
       <div class="brand">
         <div class="brand-mark">⌕</div>
         <div>
-          <h1>Native RAG</h1>
-          <p>SEMANTIC SEARCH</p>
+          <h1>RAG 知识库</h1>
+          <p>BASIC + PRE-RETRIEVAL</p>
         </div>
       </div>
 
@@ -320,6 +327,14 @@
       <div class="mode-list">
         <button
           class="mode-btn"
+          :class="{ active: mode === 'ask' }"
+          @click="setMode('ask')"
+        >
+          知识库问答（作业）
+          <small>检索前优化 + 检索生成最终答案</small>
+        </button>
+        <button
+          class="mode-btn"
           :class="{ active: mode === 'chat' }"
           @click="setMode('chat')"
         >
@@ -332,7 +347,7 @@
           @click="setMode('query')"
         >
           一次性问答
-          <small>检索后生成，并展示来源片段</small>
+          <small>基础 RAG，展示来源片段</small>
         </button>
         <button
           class="mode-btn"
@@ -342,6 +357,17 @@
           语义搜索
           <small>只检索相似文档，不调用大模型</small>
         </button>
+      </div>
+
+      <div class="side-label" v-if="mode === 'ask'">检索前策略</div>
+      <div class="upload-card" v-if="mode === 'ask'">
+        <select v-model="askStrategy">
+          <option value="rewrite">清洗 + 查询重写（推荐）</option>
+          <option value="hyde">清洗 + HyDE 假想文档</option>
+          <option value="clean">仅查询清洗</option>
+          <option value="none">不做优化</option>
+        </select>
+        <div class="upload-msg">改写/HyDE 会多调一次大模型，再检索知识库生成答案</div>
       </div>
 
       <div class="side-label">导入文档</div>
@@ -414,6 +440,15 @@
           <div class="avatar">{{ msg.role === 'user' ? '你' : '⌕' }}</div>
           <div class="bubble-wrap">
             <div class="bubble">{{ msg.content || (msg.role === 'bot' ? '正在检索与生成...' : '') }}</div>
+            <div class="pre-box" v-if="msg.preRetrieval">
+              <strong>检索前优化 · {{ strategyLabel(msg.preRetrieval.strategy) }}</strong>
+              <div class="pre-line" v-if="msg.preRetrieval.clean_query">清洗：{{ msg.preRetrieval.clean_query }}</div>
+              <div class="pre-line" v-if="msg.preRetrieval.rewritten_query">重写：{{ msg.preRetrieval.rewritten_query }}</div>
+              <div class="pre-line" v-if="msg.preRetrieval.hyde_doc">HyDE：{{ msg.preRetrieval.hyde_doc }}</div>
+              <div class="pre-line" v-if="msg.preRetrieval.retrieval_queries?.length">
+                检索句：{{ msg.preRetrieval.retrieval_queries.join(' ｜ ') }}
+              </div>
+            </div>
             <div class="sources" v-if="msg.sources && msg.sources.length">
               <div
                 class="source-card"
@@ -463,11 +498,12 @@
 
     createApp({
       setup() {
-        const mode = ref('chat');
+        const mode = ref('ask');
         const inputText = ref('');
         const messages = ref([]);
         const loading = ref(false);
         const topK = ref(5);
+        const askStrategy = ref('rewrite');
         const health = ref(null);
         const messagesEl = ref(null);
         const sessionId = ref('web-' + Math.random().toString(36).slice(2, 10));
@@ -478,6 +514,13 @@
         const uploadError = ref(false);
 
         const modeMeta = {
+          ask: {
+            title: 'RAG 知识库问答',
+            subtitle: '检索前优化 → 向量检索 → 大模型生成最终答案',
+            emptyTitle: '向知识库提问',
+            emptyDesc: '默认先清洗+重写问题，再检索并生成答案。',
+            placeholder: '例如：嗯那个帮我看看请假咋扣钱啊???',
+          },
           chat: {
             title: '多轮知识库问答',
             subtitle: '结合向量检索与大模型，同一会话会记住上下文',
@@ -501,11 +544,18 @@
           },
         };
 
+        const strategyNames = {
+          none: '无优化',
+          clean: '仅清洗',
+          rewrite: '清洗+重写',
+          hyde: '清洗+HyDE',
+        };
+
         const suggestions = [
+          '嗯那个帮我看看请假咋扣钱啊???',
           '迟到怎么扣钱',
+          '年假怎么算',
           '什么是向量数据库',
-          'FAISS 有什么特点',
-          'Chroma 适合做什么',
         ];
 
         const modeTitle = computed(() => modeMeta[mode.value].title);
@@ -519,6 +569,8 @@
           const parts = name.split('/');
           return parts[parts.length - 1];
         });
+
+        const strategyLabel = (s) => strategyNames[s] || s;
 
         const autoResize = (e) => {
           e.target.style.height = 'auto';
@@ -631,6 +683,16 @@
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ query: question, k: topK.value }),
               });
+            } else if (mode.value === 'ask') {
+              res = await fetch('/ask', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  question,
+                  k: topK.value,
+                  strategy: askStrategy.value,
+                }),
+              });
             } else if (mode.value === 'query') {
               res = await fetch('/query', {
                 method: 'POST',
@@ -661,6 +723,7 @@
             } else {
               botMsg.content = data.answer || '没有生成回答。';
               botMsg.sources = data.sources || [];
+              botMsg.preRetrieval = data.pre_retrieval || null;
             }
           } catch (err) {
             botMsg.content = '请求失败：' + (err.message || String(err));
@@ -682,6 +745,7 @@
           messages,
           loading,
           topK,
+          askStrategy,
           health,
           messagesEl,
           suggestions,
@@ -691,6 +755,7 @@
           emptyDesc,
           placeholder,
           shortModel,
+          strategyLabel,
           autoResize,
           formatScore,
           toggleSource,

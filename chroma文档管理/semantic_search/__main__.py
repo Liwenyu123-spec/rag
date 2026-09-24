@@ -9,7 +9,7 @@ def main() -> None:  # 启动入口函数
     uvicorn.run(  # 阻塞运行，直到 Ctrl+C
         "semantic_search.app.main:app",  # 用字符串导入 FastAPI 应用实例
         host=HOST,  # 监听主机，默认 127.0.0.1
-        port=PORT,  # 监听端口，默认 8001
+        port=PORT,  # 监听端口，默认 8003
         reload=False,  # 关闭热重载，避免重复加载大模型
     )
 

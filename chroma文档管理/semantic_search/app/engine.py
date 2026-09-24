@@ -32,13 +32,13 @@ from semantic_search.app.config import (  # 导入运行时配置常量
 )
 
 SAMPLE_DOCUMENTS = [  # 空库时写入的示例知识，方便一启动就能搜
-    "FAISS是Meta开发的向量搜索库，支持大规模向量检索，具有高性能和丰富的索引类型",
-    "Chroma是开源的向量数据库，专为LLM应用设计，支持多种嵌入模型和元数据过滤",
-    "倒排索引是搜索引擎的核心数据结构，通过词到文档的映射实现快速全文检索",
-    "向量数据库通过存储和检索高维向量实现语义搜索，是RAG应用的关键组件",
-    "深度学习模型如BERT、RoBERTa可以生成高质量的文本嵌入向量，捕捉语义信息",
-    "阿里云千问提供text-embedding系列模型，支持文档和查询向量的差异编码",
-    "FAISS索引IVFFlat通过聚类技术将向量空间划分，大幅提升大规模检索效率",
+    "FAISS是Meta开发的向量搜索库，支持大规模向量检索，具有高性能和丰富的索引类型",  # 示例：FAISS
+    "Chroma是开源的向量数据库，专为LLM应用设计，支持多种嵌入模型和元数据过滤",  # 示例：Chroma
+    "倒排索引是搜索引擎的核心数据结构，通过词到文档的映射实现快速全文检索",  # 示例：倒排索引
+    "向量数据库通过存储和检索高维向量实现语义搜索，是RAG应用的关键组件",  # 示例：向量库概念
+    "深度学习模型如BERT、RoBERTa可以生成高质量的文本嵌入向量，捕捉语义信息",  # 示例：Embedding 模型
+    "阿里云千问提供text-embedding系列模型，支持文档和查询向量的差异编码",  # 示例：千问 Embedding
+    "FAISS索引IVFFlat通过聚类技术将向量空间划分，大幅提升大规模检索效率",  # 示例：IVFFlat
 ]
 
 SUPPORTED_EXTS = [".pdf", ".txt", ".md", ".csv", ".docx", ".html", ".ipynb"]  # SimpleDirectoryReader 允许的扩展名
@@ -51,7 +51,7 @@ def clean_empty_text(documents: List[Document]) -> List[Document]:  # 过滤空�
         text = (doc.text or "").strip()  # 去掉首尾空白
         if text:  # 有实质内容才保留
             clean_docs.append(Document(text=text, metadata=doc.metadata))  # 重建 Document，保留元数据
-    return clean_docs
+    return clean_docs  # 返回过滤后的文档列表
 
 
 def chinese_sentence_splitter(text: str) -> List[str]:  # 语义分块用的中文分句函数
@@ -64,11 +64,11 @@ class SemanticSearchEngine:  # Native RAG 引擎主体
     """LlamaIndex + Chroma 的 Native RAG 引擎，默认用 Windows 环境里的 DeepSeek。"""
 
     def __init__(  # 初始化：Embedding、LLM、Chroma、索引
-        self,
+        self,  # 引擎实例自身
         persist_dir: str = CHROMA_PERSIST_DIR,  # 向量库持久化路径
         collection_name: str = COLLECTION_NAME,  # 集合名
         model_name: str = EMBEDDING_MODEL,  # Embedding 模型名
-    ):
+    ):  # 构造函数签名结束
         self.model_name = model_name  # 记下 Embedding 模型，供 /stats 展示
         self.persist_dir = persist_dir  # 记下持久化目录
         self.collection_name = collection_name  # 记下集合名
@@ -87,9 +87,9 @@ class SemanticSearchEngine:  # Native RAG 引擎主体
         self.storage_context = StorageContext.from_defaults(vector_store=self.vector_store)  # 存储上下文
         self.index = self._load_or_create_index()  # 有数据则加载，无数据则建空索引
         print(  # 启动日志
-            f"搜索引擎已初始化，Embedding: {EMBEDDING_PROVIDER}/{model_name}，"
-            f"LLM: {LLM_PROVIDER}/{self.llm_model}，持久化目录: {persist_dir}"
-        )
+            f"搜索引擎已初始化，Embedding: {EMBEDDING_PROVIDER}/{model_name}，"  # Embedding 提供方与模型
+            f"LLM: {LLM_PROVIDER}/{self.llm_model}，持久化目录: {persist_dir}"  # LLM 与 Chroma 路径
+        )  # print 结束
 
     def _init_embed_model(self):  # 按配置选择 Embedding 实现
         """DeepSeek 不做向量化；优先本地 HuggingFace，有千问 Key 时仍可用千问。"""
@@ -97,7 +97,7 @@ class SemanticSearchEngine:  # Native RAG 引擎主体
             from llama_index.embeddings.dashscope import DashScopeEmbedding  # 延迟导入，避免无关依赖报错
 
             if not DASHSCOPE_API_KEY:  # 选了千问却没 Key
-                raise RuntimeError("EMBEDDING_PROVIDER=dashscope 但未找到 DASHSCOPE_API_KEY")
+                raise RuntimeError("EMBEDDING_PROVIDER=dashscope 但未找到 DASHSCOPE_API_KEY")  # 配置冲突直接报错
             return DashScopeEmbedding(  # 创建千问向量化客户端
                 model_name=self.model_name,  # 如 text-embedding-v3
                 api_key=DASHSCOPE_API_KEY,  # 鉴权
@@ -110,20 +110,20 @@ class SemanticSearchEngine:  # Native RAG 引擎主体
         return HuggingFaceEmbedding(model_name=self.model_name)  # 如 BAAI/bge-small-zh-v1.5
 
     def _init_llm(self):  # 按配置选择大模型；失败则返回 None
-        """默认使用 Windows 环境变量里的 DEEPSEEK_API_KEY。"""
+        """默认使用 Windows 环境变量里的 DEEPSEEK_API_KEY。"""  # 方法说明
         if LLM_PROVIDER == "dashscope":  # 千问对话
-            from llama_index.llms.dashscope import DashScope
+            from llama_index.llms.dashscope import DashScope  # 延迟导入千问 LLM
 
             if not DASHSCOPE_API_KEY:  # 没 Key：搜索还能用，问答不可用
-                print("警告: 未设置 DASHSCOPE_API_KEY，/query 和 /chat 将不可用")
-                return None
+                print("警告: 未设置 DASHSCOPE_API_KEY，/query 和 /chat 将不可用")  # 提示缺 Key
+                return None  # LLM 置空，仅检索可用
             return DashScope(model_name=LLM_MODEL, api_key=DASHSCOPE_API_KEY, max_tokens=2048)  # 创建千问 LLM
 
         from llama_index.llms.deepseek import DeepSeek  # DeepSeek 对话
 
         if not DEEPSEEK_API_KEY:  # 没 Key
-            print("警告: 未找到 DEEPSEEK_API_KEY（进程/.env/Windows 用户变量），/query 和 /chat 将不可用")
-            return None
+            print("警告: 未找到 DEEPSEEK_API_KEY（进程/.env/Windows 用户变量），/query 和 /chat 将不可用")  # 提示缺 Key
+            return None  # LLM 置空
         return DeepSeek(  # 创建 DeepSeek LLM
             model=LLM_MODEL,  # 模型名
             api_key=DEEPSEEK_API_KEY,  # 鉴权
@@ -132,7 +132,7 @@ class SemanticSearchEngine:  # Native RAG 引擎主体
         )
 
     def _sentence_splitter(self) -> SentenceSplitter:  # 按句子/标点分块（默认）
-        return SentenceSplitter(
+        return SentenceSplitter(  # 构造默认分块器
             chunk_size=CHUNK_SIZE,  # 块大小
             chunk_overlap=CHUNK_OVERLAP,  # 块重叠
             paragraph_separator="\n\n\n",  # 段落分隔符
@@ -140,10 +140,10 @@ class SemanticSearchEngine:  # Native RAG 引擎主体
         )
 
     def _token_splitter(self) -> TokenTextSplitter:  # 按 token 数分块
-        return TokenTextSplitter(chunk_size=CHUNK_SIZE, chunk_overlap=CHUNK_OVERLAP)
+        return TokenTextSplitter(chunk_size=CHUNK_SIZE, chunk_overlap=CHUNK_OVERLAP)  # 严格按 token 控制长度
 
     def _semantic_splitter(self) -> SemanticSplitterNodeParser:  # 按语义断点分块（更慢更准）
-        return SemanticSplitterNodeParser(
+        return SemanticSplitterNodeParser(  # 构造语义分块器
             buffer_size=1,  # 断点检测窗口
             breakpoint_percentile_threshold=95,  # 相似度百分位阈值
             sentence_splitter=chinese_sentence_splitter,  # 先用中文分句
@@ -151,10 +151,10 @@ class SemanticSearchEngine:  # Native RAG 引擎主体
         )
 
     def _splitter(self, mode: str = "sentence"):  # 根据模式名返回对应分块器
-        if mode == "token":
-            return self._token_splitter()
-        if mode == "semantic":
-            return self._semantic_splitter()
+        if mode == "token":  # 按 token 切
+            return self._token_splitter()  # TokenTextSplitter
+        if mode == "semantic":  # 按语义断点切
+            return self._semantic_splitter()  # SemanticSplitterNodeParser
         return self._sentence_splitter()  # 默认 sentence
 
     def _load_or_create_index(self) -> VectorStoreIndex:  # 有存量向量则挂载，否则建空索引
@@ -163,17 +163,17 @@ class SemanticSearchEngine:  # Native RAG 引擎主体
         return VectorStoreIndex(nodes=[], storage_context=self.storage_context)  # 空索引，后续 insert
 
     def _reset_chat_engines(self) -> None:  # 知识库变更后清掉旧 chat_engine，避免用过期上下文
-        self._chat_engines.clear()
+        self._chat_engines.clear()  # 清空缓存字典
 
     def _require_llm(self) -> None:  # 问答前检查 LLM 是否可用
-        if Settings.llm is None:
-            raise RuntimeError("大模型未初始化，请检查 LLM_PROVIDER 与对应 API Key")
+        if Settings.llm is None:  # 全局 LLM 未初始化
+            raise RuntimeError("大模型未初始化，请检查 LLM_PROVIDER 与对应 API Key")  # 交给路由转 503
 
     def add_documents(self, texts: List[str], splitter: str = "sentence") -> int:  # 追加纯文本并索引
-        """把纯文本写成 Document，切分后写入向量库。"""
+        """把纯文本写成 Document，切分后写入向量库。"""  # 方法说明
         if not texts:  # 空列表直接返回
-            print("没有文档需要添加")
-            return 0
+            print("没有文档需要添加")  # 提示跳过
+            return 0  # 当前不做写入
 
         documents = clean_empty_text([Document(text=text) for text in texts])  # 文本 → Document 并去空
         nodes = self._splitter(splitter).get_nodes_from_documents(documents)  # 切成节点（chunk）
@@ -213,9 +213,9 @@ class SemanticSearchEngine:  # Native RAG 引擎主体
         total = self.collection.count()
         print(f"向量化和存储完成，文档数: {total}")
         return {  # 返回统计给 API
-            "loaded_documents": len(documents),
-            "nodes": len(nodes),
-            "total_documents": total,
+            "loaded_documents": len(documents),  # 本次加载文档数
+            "nodes": len(nodes),  # 本次切出的节点数
+            "total_documents": total,  # 写入后集合总量
         }
 
     def seed_if_empty(self, texts: List[str] | None = None) -> int:  # 启动时若库空则灌入示例 + data
@@ -251,13 +251,13 @@ class SemanticSearchEngine:  # Native RAG 引擎主体
             score = float(item.score or 0.0)  # LlamaIndex 分数
             similarity = round(score, 4)  # 当作相似度展示
             distance = round(max(1.0 - score, 0.0), 4) if 0.0 <= score <= 1.0 else round(1 / (1 + score), 4)  # 近似距离
-            formatted_results.append(
+            formatted_results.append(  # 追加一条结构化结果
                 {
                     "rank": i + 1,  # 排名
                     "index": i,  # 下标
                     "document": item.node.get_content(),  # 文本内容
-                    "similarity": similarity,
-                    "distance": distance,
+                    "similarity": similarity,  # 相似度
+                    "distance": distance,  # 近似距离
                 }
             )
         return formatted_results
@@ -269,14 +269,14 @@ class SemanticSearchEngine:  # Native RAG 引擎主体
         response = engine.query(question)  # 执行问答
         sources = []  # 收集引用来源
         for i, item in enumerate(getattr(response, "source_nodes", []) or []):  # 遍历命中节点
-            score = float(item.score or 0.0)
-            sources.append(
+            score = float(item.score or 0.0)  # 取出分数
+            sources.append(  # 追加来源卡片字段
                 {
-                    "rank": i + 1,
-                    "index": i,
-                    "document": item.node.get_content(),
-                    "similarity": round(score, 4),
-                    "distance": round(max(1.0 - score, 0.0), 4) if 0.0 <= score <= 1.0 else round(1 / (1 + score), 4),
+                    "rank": i + 1,  # 排名
+                    "index": i,  # 下标
+                    "document": item.node.get_content(),  # 原文片段
+                    "similarity": round(score, 4),  # 相似度
+                    "distance": round(max(1.0 - score, 0.0), 4) if 0.0 <= score <= 1.0 else round(1 / (1 + score), 4),  # 近似距离
                 }
             )
         return {"question": question, "answer": str(response), "sources": sources}  # 问题、答案、来源
@@ -297,27 +297,27 @@ class SemanticSearchEngine:  # Native RAG 引擎主体
                 system_prompt=RAG_SYSTEM_PROMPT,  # 系统角色
             )
         response = self._chat_engines[key].chat(question)  # 发本轮消息
-        return {
+        return {  # 组装多轮响应
             "session_id": session_id,  # 回显会话
-            "question": question,
-            "answer": str(response),
+            "question": question,  # 本轮问题
+            "answer": str(response),  # 本轮回答
         }
 
     def get_stats(self) -> dict:  # 供 /stats、/health 使用
         """返回文档数量、模型名称和持久化路径等状态。"""
-        return {
+        return {  # 供 /stats、/health 展示
             "total_documents": self.collection.count(),  # 集合条数
             "dimension": "auto",  # 维度由 Embedding 模型决定
             "model_name": self.model_name,  # Embedding 模型
-            "embedding_provider": EMBEDDING_PROVIDER,
-            "llm_provider": LLM_PROVIDER,
-            "llm_model": self.llm_model,
-            "persist_dir": self.persist_dir,
-            "collection_name": self.collection_name,
-            "index_type": "LlamaIndex + ChromaDB",
-            "chunk_size": CHUNK_SIZE,
-            "chunk_overlap": CHUNK_OVERLAP,
-            "data_dir": DATA_DIR,
+            "embedding_provider": EMBEDDING_PROVIDER,  # Embedding 提供方
+            "llm_provider": LLM_PROVIDER,  # LLM 提供方
+            "llm_model": self.llm_model,  # LLM 模型名
+            "persist_dir": self.persist_dir,  # Chroma 持久化目录
+            "collection_name": self.collection_name,  # 集合名
+            "index_type": "LlamaIndex + ChromaDB",  # 索引类型说明
+            "chunk_size": CHUNK_SIZE,  # 分块大小
+            "chunk_overlap": CHUNK_OVERLAP,  # 分块重叠
+            "data_dir": DATA_DIR,  # 默认数据目录
         }
 
     def clear_documents(self) -> None:  # 清空知识库

@@ -56,3 +56,28 @@ class ChatResponse(BaseModel):  # /chat 的响应体
     session_id: str  # 回显会话 ID
     question: str  # 本轮问题
     answer: str  # 本轮回答
+
+
+class PreRetrievalInfo(BaseModel):  # 检索前优化中间产物（便于作业演示）
+    strategy: str  # none / clean / rewrite / hyde
+    original_query: str  # 用户原问题
+    clean_query: str  # 清洗后
+    rewritten_query: str | None = None  # 重写句（rewrite 策略）
+    hyde_doc: str | None = None  # 假想文档（hyde 策略，仅用于检索）
+    retrieval_queries: List[str] = Field(default_factory=list)  # 实际用于检索的查询列表
+
+
+class AskRequest(BaseModel):  # POST /ask：基础 RAG + 检索前优化
+    question: str = Field(..., description="用户问题", min_length=1)  # 必填用户问题
+    k: int = Field(5, description="检索条数", ge=1, le=100)  # 最终返回来源条数
+    strategy: str = Field(  # 检索前策略名
+        "rewrite",  # 默认：清洗 + 重写双路检索
+        description="检索前策略: none / clean / rewrite / hyde",  # OpenAPI 说明
+    )  # 策略字段结束
+
+
+class AskResponse(BaseModel):  # /ask 的响应体
+    question: str  # 原问题
+    answer: str  # 检索后由模型生成的最终答案
+    sources: List[DocumentResponse] = Field(default_factory=list)  # 真实知识库引用来源
+    pre_retrieval: PreRetrievalInfo  # 检索前优化过程信息

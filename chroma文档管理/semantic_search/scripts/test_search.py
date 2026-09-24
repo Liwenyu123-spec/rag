@@ -7,7 +7,7 @@ import sys  # 请求失败时用非 0 退出码结束进程
 import requests  # 发 HTTP 请求调用本地服务
 
 HOST = os.getenv("SEARCH_HOST", "127.0.0.1")  # 服务地址，默认本机
-PORT = int(os.getenv("SEARCH_PORT", "8001"))  # 服务端口，默认 8001
+PORT = int(os.getenv("SEARCH_PORT", "8003"))  # 服务端口，默认 8003（与 config 一致）
 BASE_URL = f"http://{HOST}:{PORT}"  # 拼出接口根 URL
 
 

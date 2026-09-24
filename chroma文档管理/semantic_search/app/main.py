@@ -7,9 +7,9 @@ from contextlib import asynccontextmanager  # 提供异步上下文管理器装�
 from pathlib import Path  # 用面向对象方式拼接文件路径
 
 # 支持 IDE 直接运行本文件。包在 chroma文档管理/semantic_search/，需把「chroma文档管理」加入 path
-_PACKAGE_PARENT = Path(__file__).resolve().parents[2]  # .../chroma文档管理
-if str(_PACKAGE_PARENT) not in sys.path:
-    sys.path.insert(0, str(_PACKAGE_PARENT))
+_PACKAGE_PARENT = Path(__file__).resolve().parents[2]  # .../chroma文档管理（semantic_search 的父目录）
+if str(_PACKAGE_PARENT) not in sys.path:  # 路径尚未加入时
+    sys.path.insert(0, str(_PACKAGE_PARENT))  # 插到最前，保证能 import semantic_search
 
 from fastapi import FastAPI, File, Form, HTTPException, Query, UploadFile  # FastAPI 应用、上传、查询参数
 from fastapi.responses import FileResponse  # 直接把本地文件（前端 HTML）作为响应返回
@@ -23,20 +23,24 @@ from semantic_search.app.config import (  # 从配置模块导入密钥、模型
     HOST,  # 服务监听地址，默认 127.0.0.1
     LLM_MODEL,  # 大模型名称，如 deepseek-v4-flash
     LLM_PROVIDER,  # 大模型提供方：deepseek 或 dashscope
-    PORT,  # 服务端口，默认 8001
+    PORT,  # 服务端口，默认 8003
 )
 from semantic_search.app.engine import SUPPORTED_EXTS, SemanticSearchEngine  # 引擎 + 允许的文件扩展名
 from semantic_search.app.schemas import (  # Pydantic 请求/响应模型，给接口做校验和文档
     AddDocumentsRequest,  # 追加纯文本文档的请求体
+    AskRequest,  # 检索前优化 + RAG 问答请求体
+    AskResponse,  # 检索前优化 + RAG 问答响应体
     ChatRequest,  # 多轮对话请求体
     ChatResponse,  # 多轮对话响应体
     DocumentResponse,  # 单条检索结果（文档片段 + 相似度）
     IngestRequest,  # 从本地文件/目录导入的请求体
+    PreRetrievalInfo,  # 检索前优化中间信息
     QueryRequest,  # 一次性问答请求体
     QueryResponse,  # 一次性问答响应体（含来源）
     SearchRequest,  # 语义搜索请求体
     SearchResponse,  # 语义搜索响应体
 )
+from semantic_search.app.service import RagAskService  # 业务编排：pre-retrieval → 检索 → 生成
 
 STATIC_DIR = Path(__file__).resolve().parent.parent / "static"  # static 目录：放前端页面
 INDEX_HTML = STATIC_DIR / "index.html"  # 前端入口 HTML 的完整路径
@@ -68,7 +72,7 @@ async def lifespan(app: FastAPI):  # FastAPI 启动和关闭时都会走到这�
     else:  # 缺密钥：服务能起来，但检索/问答接口会 503
         app.state.search_engine = None  # 明确标记引擎不可用
         if LLM_PROVIDER == "deepseek":  # 按当前提供方打印对应提示
-            print("错误: 未找到 DEEPSEEK_API_KEY（进程 / .env / Windows 用户环境变量）")
+            print("错误: 未找到 DEEPSEEK_API_KEY（进程 / .env / Windows 用户环境变量）")  # DeepSeek 缺 Key
         else:
             print("错误: 未找到 DASHSCOPE_API_KEY")  # 千问密钥缺失提示
 
@@ -79,8 +83,8 @@ async def lifespan(app: FastAPI):  # FastAPI 启动和关闭时都会走到这�
 
 app = FastAPI(  # 创建 FastAPI 应用实例
     title="Native RAG 语义搜索引擎",  # 出现在 /docs 顶部的标题
-    description="LlamaIndex + DeepSeek + Chroma：加载、分块、向量化、检索生成",  # API 文档说明
-    version="2.0.0",  # 接口版本号
+    description="LlamaIndex + DeepSeek + Chroma：基础 RAG + 检索前优化（清洗/重写/HyDE）",  # API 文档说明
+    version="2.1.0",  # 接口版本号
     lifespan=lifespan,  # 绑定上面的启动/关闭钩子
 )
 
@@ -91,10 +95,10 @@ async def root():  # 返回前端问答 / 搜索页面
     if not INDEX_HTML.is_file():  # 前端文件不存在时避免返回空白错误
         raise HTTPException(status_code=404, detail="前端页面缺失：semantic_search/static/index.html")  # 404 提示缺文件
     return FileResponse(  # 把 index.html 返回给浏览器，并禁止缓存以免改样式不生效
-        INDEX_HTML,
-        headers={
-            "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
-            "Pragma": "no-cache",
+        INDEX_HTML,  # 前端入口文件路径
+        headers={  # 响应头：禁止浏览器缓存旧页面
+            "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",  # HTTP/1.1 禁缓存
+            "Pragma": "no-cache",  # 兼容旧代理
         },
     )
 
@@ -109,9 +113,45 @@ async def api_info():  # 方便程序或调试查看有哪些入口
         "health": "/health",  # 健康检查
         "search": "/search?q=你的查询内容",  # GET 搜索示例
         "query": "/query?q=根据知识库回答问题",  # GET 问答示例
+        "ask": "POST /ask",  # 检索前优化 + RAG 最终答案（作业主接口）
         "chat": "POST /chat",  # 多轮对话接口
         "ingest": "POST /ingest",  # 本地文件导入接口
     }
+
+
+@app.post("/ask", response_model=AskResponse)  # 作业主接口：提问 → 检索前优化 → 检索 → 生成
+async def ask(request: AskRequest):  # 请求体含 question / k / strategy
+    """基础 RAG + 检索前优化：返回知识库检索后模型生成的最终答案。  # OpenAPI 长说明
+
+    strategy 可选：
+    - none: 不做优化，原问题直接检索
+    - clean: 仅查询清洗
+    - rewrite: 清洗 + 查询重写（默认，双路检索）
+    - hyde: 清洗 + HyDE 假想文档检索（双路，假想文不当引用）
+    """  # docstring 结束
+    strategy = (request.strategy or "rewrite").strip().lower()  # 默认 rewrite，统一小写
+    if strategy not in {"none", "clean", "rewrite", "hyde"}:  # 非法策略直接 400
+        raise HTTPException(  # 参数错误
+            status_code=400,  # Bad Request
+            detail="strategy 只能是 none / clean / rewrite / hyde",  # 提示合法取值
+        )
+    try:  # 业务异常转 HTTP 状态码
+        payload = RagAskService(_require_engine(app)).ask(  # 编排层：优化→检索→生成
+            request.question,  # 用户原问题
+            k=request.k,  # Top-K
+            strategy=strategy,  # 检索前策略
+        )
+    except ValueError as exc:  # 如空问题
+        raise HTTPException(status_code=400, detail=str(exc)) from exc  # 转 400
+    except RuntimeError as exc:  # 如缺 LLM
+        raise HTTPException(status_code=503, detail=str(exc)) from exc  # 转 503
+
+    return AskResponse(  # 组装带 pre_retrieval 的完整响应
+        question=payload["question"],  # 原问题
+        answer=payload["answer"],  # 最终答案
+        sources=[DocumentResponse(**item) for item in payload["sources"]],  # 真实引用来源
+        pre_retrieval=PreRetrievalInfo(**payload["pre_retrieval"]),  # 检索前优化过程
+    )
 
 
 @app.get("/search", response_model=SearchResponse)  # GET 语义搜索，响应按 SearchResponse 校验
@@ -164,9 +204,9 @@ async def query_post(request: QueryRequest):  # JSON 体：question + k
     except RuntimeError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc  # LLM 不可用时返回 503
     return QueryResponse(  # 返回问题、答案、来源
-        question=payload["question"],
-        answer=payload["answer"],
-        sources=[DocumentResponse(**item) for item in payload["sources"]],
+        question=payload["question"],  # 原问题
+        answer=payload["answer"],  # 模型答案
+        sources=[DocumentResponse(**item) for item in payload["sources"]],  # 引用来源
     )
 
 
@@ -208,63 +248,63 @@ async def ingest_documents(request: IngestRequest):  # 可传 input_files 或 in
 
 
 @app.post("/upload")  # 前端上传文件：保存到 data 目录后自动分块入库
-async def upload_documents(
-    files: list[UploadFile] = File(..., description="要导入的文件，可多选"),
-    splitter: str = Form("sentence", description="切分方式: sentence / token / semantic"),
-):
-    """浏览器上传文件 → 落盘到 DATA_DIR → SimpleDirectoryReader 分块索引。"""
+async def upload_documents(  # multipart：files + splitter
+    files: list[UploadFile] = File(..., description="要导入的文件，可多选"),  # 上传文件列表
+    splitter: str = Form("sentence", description="切分方式: sentence / token / semantic"),  # 分块策略表单字段
+):  # 函数签名结束
+    """浏览器上传文件 → 落盘到 DATA_DIR → SimpleDirectoryReader 分块索引。"""  # 接口说明
     if not files:  # 一个文件都没选
-        raise HTTPException(status_code=400, detail="请至少选择一个文件")
+        raise HTTPException(status_code=400, detail="请至少选择一个文件")  # 参数错误
     if splitter not in {"sentence", "token", "semantic"}:  # 限制合法分块模式
-        raise HTTPException(status_code=400, detail="splitter 只能是 sentence / token / semantic")
+        raise HTTPException(status_code=400, detail="splitter 只能是 sentence / token / semantic")  # 非法策略
 
     upload_dir = Path(DATA_DIR)  # 与讲义 data 目录一致
     upload_dir.mkdir(parents=True, exist_ok=True)  # 确保目录存在
 
     saved_paths: list[str] = []  # 本次成功保存的绝对路径
     skipped: list[str] = []  # 扩展名不支持而跳过的文件名
-    for item in files:
+    for item in files:  # 逐个处理上传文件
         name = Path(item.filename or "upload.bin").name  # 只用文件名，防止路径穿越
         suffix = Path(name).suffix.lower()  # 扩展名小写
         if suffix not in SUPPORTED_EXTS:  # 不在白名单则跳过
-            skipped.append(name)
-            continue
+            skipped.append(name)  # 记录跳过的文件名
+            continue  # 处理下一个上传文件
         target = upload_dir / name  # 落盘路径：semantic_search/data/xxx
         content = await item.read()  # 读上传内容
         target.write_bytes(content)  # 写入磁盘
         saved_paths.append(str(target.resolve()))  # 记录绝对路径给 ingest
 
     if not saved_paths:  # 全都跳过了
-        raise HTTPException(
-            status_code=400,
-            detail=f"没有可导入的文件。支持扩展名: {', '.join(SUPPORTED_EXTS)}；已跳过: {skipped}",
+        raise HTTPException(  # 没有可入库文件
+            status_code=400,  # Bad Request
+            detail=f"没有可导入的文件。支持扩展名: {', '.join(SUPPORTED_EXTS)}；已跳过: {skipped}",  # 说明原因
         )
 
     engine = _require_engine(app)  # 拿到引擎
     result = engine.ingest_files(input_files=saved_paths, splitter=splitter)  # 加载→分块→向量化
-    return {
-        "message": "上传并索引完成",
-        "saved_files": [Path(p).name for p in saved_paths],
-        "skipped_files": skipped,
-        "splitter": splitter,
-        **result,
+    return {  # 上传结果摘要
+        "message": "上传并索引完成",  # 操作说明
+        "saved_files": [Path(p).name for p in saved_paths],  # 成功保存的文件名
+        "skipped_files": skipped,  # 扩展名不支持而跳过的
+        "splitter": splitter,  # 本次使用的分块策略
+        **result,  # 合并 loaded_documents / nodes / total_documents
     }
 
 
 @app.get("/stats")  # 查看知识库与模型配置统计
-async def get_stats():
-    """返回文档数量、模型与存储路径。"""
+async def get_stats():  # 统计接口
+    """返回文档数量、模型与存储路径。"""  # 接口说明
     return _require_engine(app).get_stats()  # 直接返回引擎统计字典
 
 
 @app.get("/health")  # 健康检查：前端侧栏会轮询这个接口
-async def health_check():
-    """健康检查，用于确认服务与配置是否可用。"""
+async def health_check():  # 健康检查接口
+    """健康检查，用于确认服务与配置是否可用。"""  # 接口说明
     engine = getattr(app.state, "search_engine", None)  # 不强制抛错，方便前端显示状态
     if engine is None:  # 引擎没起来
         return {  # 返回 error 状态而不是抛异常
-            "status": "error",
-            "message": "搜索引擎未初始化，请在 Windows 用户环境变量中配置 DEEPSEEK_API_KEY",
+            "status": "error",  # 前端侧栏显示红点
+            "message": "搜索引擎未初始化，请在 Windows 用户环境变量中配置 DEEPSEEK_API_KEY",  # 缺 Key 提示
         }
 
     stats = engine.get_stats()  # 读取运行时统计
@@ -280,8 +320,8 @@ async def health_check():
 
 
 @app.delete("/documents")  # 清空向量集合（危险操作，调试用）
-async def clear_documents():
-    """清空集合中的全部文档。"""
+async def clear_documents():  # 清空接口
+    """清空集合中的全部文档。"""  # 接口说明
     _require_engine(app).clear_documents()  # 删除集合内全部向量与文档
     return {"message": "所有文档已清空"}  # 确认清空成功
 
