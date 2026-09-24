@@ -406,5 +406,6 @@ class CompareBody(BaseModel):
 if __name__ == "__main__":
     import uvicorn
 
-    threading.Timer(1.5, lambda: webbrowser.open("http://127.0.0.1:8002")).start()
+    if os.getenv("RAG_PLATFORM_NO_BROWSER") != "1":
+        threading.Timer(1.5, lambda: webbrowser.open("http://127.0.0.1:8002")).start()
     uvicorn.run(app, host="127.0.0.1", port=8002)

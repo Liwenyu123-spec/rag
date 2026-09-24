@@ -113,8 +113,9 @@ if __name__ == "__main__":  # 只有直接运行本文件时才执行下面代�
             pass
 
         # 方法3：兜底打开系统默认浏览器（保证你一定能看到页面）
-        time.sleep(0.5)
-        webbrowser.open(url)
+        if os.getenv("RAG_PLATFORM_NO_BROWSER") != "1":
+            time.sleep(0.5)
+            webbrowser.open(url)
 
     threading.Thread(target=open_page, daemon=True).start()  # 后台去打开页面
     uvicorn.run(app, host="0.0.0.0", port=8000)  # 启动服务：端口 8000
