@@ -32,6 +32,7 @@ from semantic_search.app.config import (  # 导入运行时配置常量
     RAG_SYSTEM_PROMPT,  # 对话系统提示词
     REORDER_ENABLED,
     RERANK_ENABLED,
+    RERANK_PROVIDER,
     SIMILARITY_TOP_K,  # 默认 Top-K
 )
 from semantic_search.app.service.retrieval_optimize import (
@@ -104,7 +105,7 @@ class SemanticSearchEngine:  # Native RAG 引擎主体
         )  # print 结束
         print(
             "检索优化: "
-            f"hybrid={HYBRID_ENABLED}, rerank={RERANK_ENABLED}, "
+            f"hybrid={HYBRID_ENABLED}, rerank={RERANK_ENABLED}/{RERANK_PROVIDER}, "
             f"compress={COMPRESS_ENABLED}, reorder={REORDER_ENABLED}"
         )
 

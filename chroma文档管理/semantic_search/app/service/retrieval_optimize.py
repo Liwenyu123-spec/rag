@@ -17,6 +17,7 @@ from semantic_search.app.config import (
     REORDER_ENABLED,
     RERANK_ENABLED,
     RERANK_MODEL,
+    RERANK_PROVIDER,
     RERANK_TOP_N,
     RETRIEVE_CANDIDATES,
     SIMILARITY_TOP_K,
@@ -123,27 +124,48 @@ def build_hybrid_retriever(
         return vector_retriever
 
 
+def _build_reranker(top_n: int) -> Any | None:
+    """构建重排器：默认本地 bge；仅 RERANK_PROVIDER=dashscope 时用千问。"""
+    provider = (RERANK_PROVIDER or "local").strip().lower()
+
+    if provider in {"dashscope", "qwen", "aliyun"}:
+        if not DASHSCOPE_API_KEY:
+            print("警告: RERANK_PROVIDER=dashscope 但未配置 DASHSCOPE_API_KEY，跳过重排")
+            return None
+        try:
+            from llama_index.postprocessor.dashscope_rerank import DashScopeRerank
+
+            print(f"重排: DashScopeRerank({RERANK_MODEL}), top_n={top_n}")
+            return DashScopeRerank(
+                model=RERANK_MODEL,
+                top_n=top_n,
+                api_key=DASHSCOPE_API_KEY,
+            )
+        except Exception as exc:  # noqa: BLE001
+            print(f"警告: 初始化 DashScopeRerank 失败，跳过重排: {exc}")
+            return None
+
+    # 默认：本地 Cross-Encoder，不需要千问 Key
+    try:
+        from llama_index.core.postprocessor import SentenceTransformerRerank
+
+        model_name = RERANK_MODEL or "BAAI/bge-reranker-base"
+        print(f"重排: 本地 SentenceTransformerRerank({model_name}), top_n={top_n}")
+        return SentenceTransformerRerank(model=model_name, top_n=top_n)
+    except Exception as exc:  # noqa: BLE001
+        print(f"警告: 本地重排初始化失败（可 pip install sentence-transformers）: {exc}")
+        return None
+
+
 def build_node_postprocessors(final_k: int) -> List["BaseNodePostprocessor"]:
     """按配置组装：重排 → 压缩 → 长上下文重排。"""
     processors: List[Any] = []
     top_n = rerank_top_n(final_k)
 
-    if RERANK_ENABLED:
-        if not DASHSCOPE_API_KEY:
-            print("警告: RERANK_ENABLED 但未找到 DASHSCOPE_API_KEY，跳过重排")
-        else:
-            try:
-                from llama_index.postprocessor.dashscope_rerank import DashScopeRerank
-
-                processors.append(
-                    DashScopeRerank(
-                        model=RERANK_MODEL,
-                        top_n=top_n,
-                        api_key=DASHSCOPE_API_KEY,
-                    )
-                )
-            except Exception as exc:  # noqa: BLE001
-                print(f"警告: 初始化 DashScopeRerank 失败，跳过重排: {exc}")
+    if RERANK_ENABLED and RERANK_PROVIDER not in {"", "none", "off", "false"}:
+        reranker = _build_reranker(top_n)
+        if reranker is not None:
+            processors.append(reranker)
 
     if COMPRESS_ENABLED:
         try:

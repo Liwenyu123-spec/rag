@@ -109,8 +109,13 @@ def _env_bool(name: str, default: bool) -> bool:
 HYBRID_ENABLED = _env_bool("HYBRID_ENABLED", True)  # 同库：向量 + BM25 融合
 HYBRID_FUSION_MODE = os.getenv("HYBRID_FUSION_MODE", "reciprocal_rerank").strip()  # 或 relative_score
 RETRIEVE_CANDIDATES = int(os.getenv("RETRIEVE_CANDIDATES", "20"))  # 粗排候选数（给精排留窗口）
-RERANK_ENABLED = _env_bool("RERANK_ENABLED", True)  # DashScope 重排
-RERANK_MODEL = os.getenv("RERANK_MODEL", "qwen3-rerank").strip()  # 重排模型名
+# 重排：默认本地 bge，不依赖千问；provider=dashscope 才需要 DASHSCOPE_API_KEY
+RERANK_ENABLED = _env_bool("RERANK_ENABLED", True)
+RERANK_PROVIDER = os.getenv("RERANK_PROVIDER", "local").strip().lower()  # local | dashscope | none
+RERANK_MODEL = os.getenv(
+    "RERANK_MODEL",
+    "BAAI/bge-reranker-base" if os.getenv("RERANK_PROVIDER", "local").strip().lower() != "dashscope" else "qwen3-rerank",
+).strip()
 RERANK_TOP_N = int(os.getenv("RERANK_TOP_N", "0"))  # 0 表示跟 SIMILARITY_TOP_K / 请求 k 一致
 COMPRESS_ENABLED = _env_bool("COMPRESS_ENABLED", True)  # 句子级上下文压缩
 COMPRESS_PERCENTILE = float(os.getenv("COMPRESS_PERCENTILE", "0.5"))  # 每片段保留相关句比例
