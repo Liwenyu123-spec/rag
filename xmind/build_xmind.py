@@ -3777,52 +3777,61 @@ TREE = topic(
                             ],
                         ),
                         topic(
-                            "讲义代码逐行",
+                            "讲义代码逐行（重排序）",
                             children=[
                                 topic(
-                                    "依赖",
+                                    "pip：方式A dashscope-rerank / 方式B sentence-transformers",
                                     children=[
-                                        topic("方式A API：llama-index-postprocessor-dashscope-rerank"),
-                                        topic("方式B 本地：sentence-transformers + SentenceTransformerRerank"),
+                                        topic("意思：A 走 API 重排；B 本机加载 Cross-Encoder"),
+                                        topic("为什么：有网用 A 省事；内网/离线用 B"),
                                     ],
                                 ),
                                 topic(
                                     "Settings.embed_model = DashScopeEmbedding(text-embedding-v3)",
                                     children=[
-                                        topic("意思：粗排仍用本章同一套 embedding"),
+                                        topic("意思：第 1 阶段粗排仍用同一套稠密向量模型"),
+                                        topic("为什么：查询向量和库里文档向量必须同一空间"),
+                                    ],
+                                ),
+                                topic(
+                                    "index = VectorStoreIndex.from_documents(docs)",
+                                    children=[
+                                        topic("意思：建库时就把每条 Document 向量化进索引"),
                                     ],
                                 ),
                                 topic(
                                     "retriever = index.as_retriever(similarity_top_k=6)",
                                     children=[
-                                        topic("意思：第 1 阶段多召回一些，给精排留候选空间"),
-                                        topic("为什么：top_k 太小，精排没有可选余地"),
+                                        topic("意思：Bi-Encoder 粗排，先捞 6 条候选（教学示例；生产常 20~50）"),
+                                        topic("为什么：要给第 2 阶段留「可选余地」，不能一上来就只留 3 条"),
                                     ],
                                 ),
                                 topic(
-                                    'DashScopeRerank(model="qwen3-rerank", top_n=3)',
+                                    'DashScopeRerank(model="qwen3-rerank", top_n=3, api_key=...)',
                                     children=[
-                                        topic("意思：用通义重排模型对候选二次打分，只留 Top-3"),
-                                        topic("注意：讲义提到旧名 gte-rerank 可能下线，以当前可用模型名为准"),
+                                        topic("意思：把粗排候选交给重排模型，query+doc 交互打分，只留 Top-3"),
+                                        topic("top_n 意思：精排后的截断长度，也是最终进 Prompt 的条数上限"),
+                                        topic("注意：讲义旧名 gte-rerank 可能下线，以控制台当前模型名为准"),
                                     ],
                                 ),
                                 topic(
-                                    "SentenceTransformerRerank（本地备选）",
+                                    "SentenceTransformerRerank(model=..., top_n=3)",
                                     children=[
-                                        topic("意思：离线 Cross-Encoder，不依赖重排 API"),
-                                        topic("为什么：内网/无外网时用方式 B"),
+                                        topic("意思：本地 Cross-Encoder 替代 API，接口同样挂到 node_postprocessors"),
+                                        topic("为什么：无外网、要控数据不出域时用"),
                                     ],
                                 ),
                                 topic(
-                                    "as_query_engine(..., node_postprocessors=[reranker])",
+                                    "as_query_engine(similarity_top_k=6, node_postprocessors=[reranker])",
                                     children=[
-                                        topic("意思：检索后先过 reranker，再把精排结果拼进 Prompt 生成"),
+                                        topic("意思：引擎内部先 retrieve(6) → 再跑 reranker → 再拼 Prompt 调 LLM"),
+                                        topic("为什么：重排是「后处理器」，不改索引，只改召回结果名单"),
                                     ],
                                 ),
                                 topic(
-                                    "response.source_nodes",
+                                    "for n in response.source_nodes: print(n.score, n.text)",
                                     children=[
-                                        topic("意思：打印精排后真正用于生成的片段与 score"),
+                                        topic("意思：看精排后的分数与正文，确认噪声是否被挤出 Top"),
                                     ],
                                 ),
                             ],
@@ -3870,26 +3879,40 @@ TREE = topic(
                             ],
                         ),
                         topic(
-                            "讲义代码逐行",
+                            "讲义代码逐行（上下文压缩）",
                             children=[
                                 topic(
-                                    "SentenceEmbeddingOptimizer(percentile_cutoff=0.5)",
+                                    "故意造「长片段+噪声」Document",
                                     children=[
-                                        topic("意思：每个片段只留相关度排名前 50% 的句子"),
-                                        topic("也可 threshold_cutoff=0.7：按绝对相似度门槛裁"),
+                                        topic("意思：同一段里混入显存要点和「天气/CI/CD」废话，方便观察裁剪效果"),
                                     ],
                                 ),
                                 topic(
-                                    "chinese_sentence_splitter = re.split(r'[。！？；\\n!?；]', text)",
+                                    "def chinese_sentence_splitter(text): re.split(...); return [s.strip() for s in ... if s.strip()]",
                                     children=[
-                                        topic("意思：按中英文句号问号感叹号分号换行切句"),
-                                        topic("为什么：默认英文切句对中文不友好"),
+                                        topic("意思：按。！？；和换行把中文切成句子列表"),
+                                        topic("为什么：默认英文切句器遇中文常切不动或切错"),
                                     ],
                                 ),
                                 topic(
-                                    "node_postprocessors=[..., optimizer]",
+                                    "SentenceEmbeddingOptimizer(embed_model=..., percentile_cutoff=0.5, tokenizer_fn=chinese_sentence_splitter)",
                                     children=[
-                                        topic("意思：压缩器作为后处理链一环，常放在 rerank 之后"),
+                                        topic("意思：每句与查询算 embedding 相似度，只留排名前 50% 的句子"),
+                                        topic("percentile_cutoff 意思：按相对名次裁；threshold_cutoff 意思：按绝对分数裁"),
+                                        topic("tokenizer_fn 意思：告诉优化器用你的中文切句函数"),
+                                    ],
+                                ),
+                                topic(
+                                    "as_query_engine(..., node_postprocessors=[optimizer])",
+                                    children=[
+                                        topic("意思：召回后先裁句，再把瘦身后的片段喂给 LLM"),
+                                        topic("为什么：不改索引内容，只改「这一次」送给模型的文本"),
+                                    ],
+                                ),
+                                topic(
+                                    "对比打印压缩前 retrieve() vs 压缩后 source_nodes",
+                                    children=[
+                                        topic("意思：肉眼检查「天气不错」等噪声句是否被删掉"),
                                     ],
                                 ),
                             ],
@@ -3938,25 +3961,39 @@ TREE = topic(
                             ],
                         ),
                         topic(
-                            "讲义代码逐行",
+                            "讲义代码逐行（长上下文重排）",
                             children=[
                                 topic(
-                                    "reranker = DashScopeRerank(..., top_n=5)",
+                                    "from llama_index.core.postprocessor import LongContextReorder",
                                     children=[
-                                        topic("意思：先精排出 Top-5（高→低）"),
+                                        topic("意思：导入「只改顺序、不改内容」的后处理器"),
+                                    ],
+                                ),
+                                topic(
+                                    "reranker = DashScopeRerank(model=\"qwen3-rerank\", top_n=5, api_key=api_key)",
+                                    children=[
+                                        topic("意思：先精排出 Top-5，默认相关度从高到低"),
                                     ],
                                 ),
                                 topic(
                                     "reorder = LongContextReorder()",
                                     children=[
-                                        topic("意思：实例化排版器，无需传参"),
+                                        topic("意思：实例化排版器，构造函数无参数"),
+                                        topic("为什么：策略固定——最相关放首尾，次相关塞中间"),
                                     ],
                                 ),
                                 topic(
                                     "as_query_engine(similarity_top_k=8, node_postprocessors=[reranker, reorder])",
                                     children=[
-                                        topic("意思：先粗召回 8 → 精排留 5 → 再首尾重排版"),
-                                        topic("列表顺序就是执行顺序，不能颠倒乱挂"),
+                                        topic("意思：粗召回 8 → rerank 留 5 → reorder 重排版 → 再生成"),
+                                        topic("列表顺序=执行顺序：必须先精排再排版，不能写反"),
+                                    ],
+                                ),
+                                topic(
+                                    "观察 source_nodes 顺序",
+                                    children=[
+                                        topic("意思：最高分应出现在列表头部和尾部，中间是次相关"),
+                                        topic("为什么：对抗 Lost in the Middle，让模型更吃首尾信息"),
                                     ],
                                 ),
                             ],
@@ -3983,6 +4020,50 @@ TREE = topic(
                             children=[
                                 topic("node_postprocessors=[reranker, compressor, reorder]"),
                                 topic("口诀：先选块 → 再削句 → 最后排版"),
+                            ],
+                        ),
+                        topic(
+                            "讲义代码逐行（三件套完整链）",
+                            children=[
+                                topic(
+                                    "Settings.embed_model / Settings.llm = DashScope(...)",
+                                    children=[
+                                        topic("意思：embedding 服务检索与压缩相似度；llm 只负责最后生成"),
+                                    ],
+                                ),
+                                topic(
+                                    "reranker = DashScopeRerank(..., top_n=5)",
+                                    children=[
+                                        topic("意思：第 1 环——决定哪些块留下、谁更相关"),
+                                    ],
+                                ),
+                                topic(
+                                    "compressor = SentenceEmbeddingOptimizer(percentile_cutoff=0.5, tokenizer_fn=...)",
+                                    children=[
+                                        topic("意思：第 2 环——块内去噪声句，缩短上下文"),
+                                    ],
+                                ),
+                                topic(
+                                    "reorder = LongContextReorder()",
+                                    children=[
+                                        topic("意思：第 3 环——把高相关块挪到首尾"),
+                                    ],
+                                ),
+                                topic(
+                                    "as_query_engine(similarity_top_k=20, node_postprocessors=[reranker, compressor, reorder])",
+                                    children=[
+                                        topic("意思：一次 query 走完：粗召回→精排→裁句→排版→生成"),
+                                        topic("为什么写这个顺序：先决定「要哪些块」，再「削句子」，最后「摆位置」"),
+                                        topic("写反会怎样：先 reorder 再 rerank＝排版结果又被打乱；先压缩再 rerank＝在噪声块上白算相似度"),
+                                    ],
+                                ),
+                                topic(
+                                    "response.source_nodes / response.response",
+                                    children=[
+                                        topic("source_nodes 意思：最终真正进 Prompt 的片段（已精排+已压缩+已排版）"),
+                                        topic("response 意思：模型基于这条加工后的上下文写出的答案"),
+                                    ],
+                                ),
                             ],
                         ),
                         topic(
