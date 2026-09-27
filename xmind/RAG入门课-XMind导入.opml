@@ -1568,22 +1568,33 @@
           </outline>
         </outline>
         <outline text="三、检索后优化（Post-retrieval）">
-          <outline text="重排序 Re-ranking（性价比之王）">
-            <outline text="召回：双塔/向量，快，但 query-doc 没深度交互"/>
-            <outline text="精排：交叉编码器，query+doc 一起进模型打分，慢但准"/>
-            <outline text="标准流程：召回 Top-20~50 → rerank → 只留 Top-3/5 给 LLM"/>
-            <outline text="常用：bge-reranker、Cohere Rerank；也可用 LLM 当裁判（更贵）"/>
-            <outline text="口述口诀：先广撒网，再精挑细选"/>
+          <outline text="位置与入口">
+            <outline text="标准 5 步：加载→分块→入库→检索召回 →【本章】→ 喂给大模型"/>
+            <outline text="LlamaIndex：统一用 Node Postprocessor，串在 node_postprocessors=[...]"/>
+            <outline text="多个后处理器按列表顺序逐级加工召回 nodes"/>
           </outline>
-          <outline text="上下文压缩 / 去重 / 动态 Top-K">
-            <outline text="压缩：块里只有一两句有用，抽句段，别整块硬塞"/>
-            <outline text="去重：重复块、过期块、低分块丢掉"/>
-            <outline text="动态 K：高分很少就少送，别为了凑满 5 条硬塞噪声"/>
+          <outline text="重排序 Re-ranking（粗排+精排）">
+            <outline text="定义：对召回候选再用更准更贵的模型二次打分，把最相关顶到前面"/>
+            <outline text="超市口诀：先快速抓一车，再仔细挑最好的放最上面"/>
+            <outline text="Bi-Encoder 双塔粗排：快，文档向量可预计算，精度一般"/>
+            <outline text="Cross-Encoder 交叉精排：query+doc 一起进模型，准但慢，只打几十~几百条"/>
+            <outline text="工业标配：Top-20~100 粗召回 → rerank → Top-3/5 给 LLM"/>
+            <outline text="讲义实现：DashScopeRerank(qwen3-rerank) 或本地 SentenceTransformerRerank"/>
           </outline>
-          <outline text="生成侧约束">
-            <outline text="Prompt：仅根据下列资料回答；没有依据就说不知道"/>
-            <outline text="引用：资料编号，答案里标注来源，抑制瞎编"/>
-            <outline text="这是「最后一道闸」，检索错了它救不了 100%，但能少胡说八道"/>
+          <outline text="上下文压缩 Contextual Compression">
+            <outline text="问题：片段里往往只有一两句有用，整段硬塞浪费 token 还易幻觉"/>
+            <outline text="一句话：重排管「哪些片段」；压缩管「片段里留哪几句」"/>
+            <outline text="LlamaIndex：SentenceEmbeddingOptimizer（按句与查询算相似度裁剪）"/>
+            <outline text="常用：percentile_cutoff=0.5 或 threshold_cutoff；中文可自定义切句"/>
+          </outline>
+          <outline text="长上下文重排 Long-Context Reorder">
+            <outline text="Lost in the Middle：模型对首尾记得清，中间易丢"/>
+            <outline text="做法：最相关放头尾，次相关塞中间——只改顺序不改内容与选集"/>
+            <outline text="LlamaIndex：LongContextReorder()，通常接在 reranker 之后"/>
+          </outline>
+          <outline text="三件套串联">
+            <outline text="① Rerank 精排 → ② SentenceEmbeddingOptimizer 压缩 → ③ LongContextReorder 排版"/>
+            <outline text="生成侧仍要：仅依据资料回答 + 引用编号（最后一道闸）"/>
           </outline>
         </outline>
         <outline text="四、进阶范式对比（别混）">
@@ -1621,10 +1632,11 @@
           <outline text="⑥ 比较/多跳题：子查询分解"/>
           <outline text="⑦ 本仓库现状：仍是 Native；最值得先加改写或 bge-reranker"/>
         </outline>
-        <outline text="六、和本仓库 / 第 08、09 章的关系">
+        <outline text="六、和本仓库 / 第 08、09、10 章的关系">
           <outline text="第 07 章：Advanced 全景（前/中/后 + 进阶范式）"/>
-          <outline text="第 08 章：把「检索前」拆开练：策略选择 + LlamaIndex 落地"/>
-          <outline text="第 09 章：把「检索中」拆开练：混合检索 / 多路召回 / RRF + 代码落点"/>
+          <outline text="第 08 章：检索前专训（改写/HyDE/分块…）"/>
+          <outline text="第 09 章：检索中专训（混合/多路/RRF）"/>
+          <outline text="第 10 章：检索后专训（Rerank/压缩/长上下文重排）"/>
           <outline text="chroma文档管理 项目 = Native 底座；Advanced 是往上叠模块"/>
         </outline>
       </outline>
@@ -2216,7 +2228,7 @@
           <outline text="标准 RAG 五步中的位置">
             <outline text="1 加载 2 分块 3 向量化入库 —— 不变"/>
             <outline text="4 检索召回 —— 替换为 Hybrid / Multi-channel / 嵌套"/>
-            <outline text="5 喂给大模型 —— 可再接第 07 章重排与压缩"/>
+            <outline text="5 喂给大模型之前 —— 接第 10 章 node_postprocessors 三件套"/>
           </outline>
           <outline text="和本仓库">
             <outline text="当前 chroma文档管理 ≈ 单路稠密 Native"/>
@@ -2226,7 +2238,189 @@
           <outline text="和第 08 章衔接">
             <outline text="先 Pre：清洗/重写/HyDE 得到更好 query"/>
             <outline text="再 Mid：用本章方法去查"/>
-            <outline text="再 Post：rerank + 约束生成"/>
+            <outline text="再 Post：第 10 章 rerank → 压缩 → 长上下文重排 → 约束生成"/>
+          </outline>
+        </outline>
+      </outline>
+      <outline text="10 检索后优化（Post-retrieval）">
+        <outline text="〇、总览：方法地图">
+          <outline text="目标：召回结果送入 LLM 前，做重排 + 精简 + 重排版，抬生成质量"/>
+          <outline text="位置：第 4 步检索召回之后、第 5 步喂模型之前"/>
+          <outline text="入口：node_postprocessors=[...]，按列表顺序串行加工 nodes"/>
+          <outline text="三件套：Rerank → SentenceEmbeddingOptimizer → LongContextReorder"/>
+          <outline text="和第 08/09 章：前改问句、中改召回；本章改「怎么用召回结果」"/>
+        </outline>
+        <outline text="方法1：两阶段检索与重排序 Re-ranking">
+          <outline text="适用：粗召回有相关材料，但 Top-3/5 常被「沾边噪声」占坑"/>
+          <outline text="输入">
+            <outline text="用户问题 + 粗排候选（如 similarity_top_k=20~100）"/>
+            <outline text="精排模型：API（DashScopeRerank）或本地 Cross-Encoder"/>
+          </outline>
+          <outline text="分步分解">
+            <outline text="Step1 Bi-Encoder/向量检索：快，从海量库捞 Top-N 候选"/>
+            <outline text="Step2 Cross-Encoder/Rerank：query+doc 一起打分，只精排候选"/>
+            <outline text="Step3 截断 top_n（常 3/5）交给生成"/>
+            <outline text="Step4（可选）后面再接压缩与长上下文重排"/>
+          </outline>
+          <outline text="输出">
+            <outline text="按精排分排序的短名单；精确率↑，喂给模型的噪声↓"/>
+          </outline>
+          <outline text="完整例子（超市红烧肉）">
+            <outline text="粗排：五花肉、酱油…也抓回红烧牛肉面、红烧鱼料——快但乱"/>
+            <outline text="精排：逐个判断，真正做红烧肉必备的顶到最前"/>
+            <outline text="口诀：先广撒网，再精挑细选"/>
+          </outline>
+          <outline text="原理口述">
+            <outline text="Bi-Encoder：查询/文档各自编码再比余弦，文档可离线预计算"/>
+            <outline text="Cross-Encoder：拼接后深层交互直接出相关性分，准但慢"/>
+            <outline text="只用双塔：Top-5 易混入沾边货；只用交叉：百万库打不动"/>
+            <outline text="两阶段 = 工业标准粗召回 + 精排"/>
+          </outline>
+          <outline text="讲义代码逐行">
+            <outline text="依赖">
+              <outline text="方式A API：llama-index-postprocessor-dashscope-rerank"/>
+              <outline text="方式B 本地：sentence-transformers + SentenceTransformerRerank"/>
+            </outline>
+            <outline text="Settings.embed_model = DashScopeEmbedding(text-embedding-v3)">
+              <outline text="意思：粗排仍用本章同一套 embedding"/>
+            </outline>
+            <outline text="retriever = index.as_retriever(similarity_top_k=6)">
+              <outline text="意思：第 1 阶段多召回一些，给精排留候选空间"/>
+              <outline text="为什么：top_k 太小，精排没有可选余地"/>
+            </outline>
+            <outline text="DashScopeRerank(model=&quot;qwen3-rerank&quot;, top_n=3)">
+              <outline text="意思：用通义重排模型对候选二次打分，只留 Top-3"/>
+              <outline text="注意：讲义提到旧名 gte-rerank 可能下线，以当前可用模型名为准"/>
+            </outline>
+            <outline text="SentenceTransformerRerank（本地备选）">
+              <outline text="意思：离线 Cross-Encoder，不依赖重排 API"/>
+              <outline text="为什么：内网/无外网时用方式 B"/>
+            </outline>
+            <outline text="as_query_engine(..., node_postprocessors=[reranker])">
+              <outline text="意思：检索后先过 reranker，再把精排结果拼进 Prompt 生成"/>
+            </outline>
+            <outline text="response.source_nodes">
+              <outline text="意思：打印精排后真正用于生成的片段与 score"/>
+            </outline>
+          </outline>
+          <outline text="翻车点">
+            <outline text="粗排 top_k=3 再 rerank：精排几乎无事可做"/>
+            <outline text="对全库跑 Cross-Encoder：延迟炸裂"/>
+            <outline text="把 RRF 融合和 Cross-Encoder 精排当成同一步"/>
+          </outline>
+        </outline>
+        <outline text="方法2：上下文压缩 SentenceEmbeddingOptimizer">
+          <outline text="适用：相关片段很长，里面夹杂天气/CI/CD/闲聊等噪声句"/>
+          <outline text="输入">
+            <outline text="已召回（最好已重排）的 nodes + 同一查询"/>
+          </outline>
+          <outline text="分步分解">
+            <outline text="Step1 把每个片段拆成句子（中文可用正则按。！？；切）"/>
+            <outline text="Step2 每句与查询算 embedding 相似度"/>
+            <outline text="Step3 percentile_cutoff / threshold_cutoff 丢掉低分句"/>
+            <outline text="Step4 只把保留句子拼回片段，再喂 LLM"/>
+          </outline>
+          <outline text="输出">
+            <outline text="更短、更贴题的上下文；token↓、噪声↓、幻觉风险↓"/>
+          </outline>
+          <outline text="完整例子">
+            <outline text="压缩前：显存要求夹在「办公自动化」「今天天气不错」中间"/>
+            <outline text="压缩后：只留「Qwen2.5 最低 16GB 显存…」等相关句"/>
+          </outline>
+          <outline text="讲义代码逐行">
+            <outline text="SentenceEmbeddingOptimizer(percentile_cutoff=0.5)">
+              <outline text="意思：每个片段只留相关度排名前 50% 的句子"/>
+              <outline text="也可 threshold_cutoff=0.7：按绝对相似度门槛裁"/>
+            </outline>
+            <outline text="chinese_sentence_splitter = re.split(r'[。！？；\n!?；]', text)">
+              <outline text="意思：按中英文句号问号感叹号分号换行切句"/>
+              <outline text="为什么：默认英文切句对中文不友好"/>
+            </outline>
+            <outline text="node_postprocessors=[..., optimizer]">
+              <outline text="意思：压缩器作为后处理链一环，常放在 rerank 之后"/>
+            </outline>
+          </outline>
+          <outline text="和重排的关系">
+            <outline text="重排：选哪些块、谁排前"/>
+            <outline text="压缩：块里留哪几句"/>
+            <outline text="常配合：先重排，再压缩"/>
+          </outline>
+          <outline text="翻车点：cutoff 过严，相关句也被裁光；过松等于没压缩"/>
+        </outline>
+        <outline text="方法3：长上下文重排 LongContextReorder">
+          <outline text="适用：喂给模型的片段较多/较长，担心中间内容被忽略"/>
+          <outline text="输入">
+            <outline text="已排序的 nodes（通常来自 reranker，相关度从高到低）"/>
+          </outline>
+          <outline text="分步分解">
+            <outline text="Step1 认识 Lost in the Middle：首尾易记、中间易丢"/>
+            <outline text="Step2 调用 LongContextReorder()（无构造参数）"/>
+            <outline text="Step3 把最相关挪到列表头尾，次相关塞中间"/>
+            <outline text="Step4 不改文本内容、不改选集，只改排列"/>
+          </outline>
+          <outline text="输出">
+            <outline text="同一批片段，但顺序更贴合 LLM 注意力分布"/>
+          </outline>
+          <outline text="完整例子">
+            <outline text="rerank 后：1&gt;2&gt;3&gt;4&gt;5 相关度递减"/>
+            <outline text="reorder 后：最高分在首尾，较低分在中间"/>
+          </outline>
+          <outline text="讲义代码逐行">
+            <outline text="reranker = DashScopeRerank(..., top_n=5)">
+              <outline text="意思：先精排出 Top-5（高→低）"/>
+            </outline>
+            <outline text="reorder = LongContextReorder()">
+              <outline text="意思：实例化排版器，无需传参"/>
+            </outline>
+            <outline text="as_query_engine(similarity_top_k=8, node_postprocessors=[reranker, reorder])">
+              <outline text="意思：先粗召回 8 → 精排留 5 → 再首尾重排版"/>
+              <outline text="列表顺序就是执行顺序，不能颠倒乱挂"/>
+            </outline>
+          </outline>
+          <outline text="翻车点：片段很少（≤3）时收益有限；别指望它能「救回」没召回的内容"/>
+        </outline>
+        <outline text="方法4：三件套串成完整检索后链">
+          <outline text="适用：要上工业级 Post-retrieval 默认链路时"/>
+          <outline text="分步分解">
+            <outline text="Step1 粗召回 similarity_top_k 调大（如 8~50）"/>
+            <outline text="Step2 DashScopeRerank / Cross-Encoder → top_n"/>
+            <outline text="Step3 SentenceEmbeddingOptimizer 裁句"/>
+            <outline text="Step4 LongContextReorder 首尾排版"/>
+            <outline text="Step5 LLM 生成；Prompt 约束仅依据资料 + 引用"/>
+          </outline>
+          <outline text="推荐挂法">
+            <outline text="node_postprocessors=[reranker, compressor, reorder]"/>
+            <outline text="口诀：先选块 → 再削句 → 最后排版"/>
+          </outline>
+          <outline text="输出">
+            <outline text="短、准、好读的上下文，生成更稳、更省 token"/>
+          </outline>
+          <outline text="翻车点">
+            <outline text="三件套一次全开却不评测：延迟↑费用↑，先只上 rerank"/>
+            <outline text="顺序挂反：先 reorder 再 rerank 失去精排意义"/>
+          </outline>
+        </outline>
+        <outline text="方法怎么串起来（推荐顺序）">
+          <outline text="诊断">
+            <outline text="相关材料在后面几名 → 方法1 重排"/>
+            <outline text="材料对但废话多/超窗口 → 方法2 压缩"/>
+            <outline text="片段多、答案漏中间要点 → 方法3 长上下文重排"/>
+            <outline text="要完整工业链 → 方法4 三件套"/>
+          </outline>
+          <outline text="和本仓库">
+            <outline text="Native 查询引擎默认无 node_postprocessors"/>
+            <outline text="最小改法：as_query_engine(..., node_postprocessors=[DashScopeRerank(...)])"/>
+            <outline text="再视情况加 SentenceEmbeddingOptimizer 与 LongContextReorder"/>
+          </outline>
+          <outline text="和第 08/09 章衔接">
+            <outline text="Pre（08）改问句 → Mid（09）混合/多路召回 → Post（10）三件套 → 生成"/>
+            <outline text="召回上限由 08/09 决定；本章抬的是「已召回材料的利用率」"/>
+          </outline>
+          <outline text="五、小结（讲义）">
+            <outline text="重排：抬精确率"/>
+            <outline text="压缩：降噪声与 token"/>
+            <outline text="长上下文重排：对抗 Lost in the Middle"/>
+            <outline text="三者都通过 node_postprocessors 接入，是工业级 RAG 标准检索后手段"/>
           </outline>
         </outline>
       </outline>
