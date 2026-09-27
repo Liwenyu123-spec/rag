@@ -1,0 +1,222 @@
+04-检索后优化（Post-retrieval）
+9月15日修改
+
+代码块
+Python
+复制
+"""
+长上下文重排（Long-Context Reorder）- LlamaIndex 实现
+LongContextReorder：把最相关片段放到首尾，规避 "Lost in the Middle"
+通常接在重排器之后，作为后处理链的最后一环
+"""
+
+import os
+
+from llama_index.core import Document, Settings, VectorStoreIndex
+from llama_index.core.postprocessor import LongContextReorder
+from llama_index.embeddings.dashscope import DashScopeEmbedding
+from llama_index.llms.dashscope import DashScope
+from llama_index.postprocessor.dashscope_rerank import DashScopeRerank
+
+# ====================== 1. 全局配置 ======================
+api_key = os.getenv("DASHSCOPE_API_KEY")
+Settings.embed_model = DashScopeEmbedding(
+    model_name="text-embedding-v3",
+    api_key=api_key,
+)
+Settings.llm = DashScope(
+    model_name="qwen3.7-max",
+    api_key=api_key,
+    temperature=0.1,
+)
+
+# ====================== 2. 文档与索引 ======================
+documents = [
+    "Qwen2.5 最低需要 16GB 显存，推荐 24GB 以上。",
+    "vLLM 安装命令：pip install vllm，需要 CUDA 11.8。",
+    "Mac M 系列可以跑 Qwen，但速度较慢，建议量化。",
+    "OOM 报错解决：减小 batch size，使用量化模型。",
+    "3090 24G 可以跑 Qwen-14B，int8 量化更稳。",
+    "A100 80G 可直接跑 Qwen-72B，无需量化。",
+    "Docker 部署大模型可以隔离环境，简化依赖。",
+    "量化技术 AWQ/GPTQ 可降低 50% 显存占用。",
+]
+index = VectorStoreIndex.from_documents([Document(text=t) for t in documents])
+
+# ====================== 3. 后处理链：先重排，再长上下文重排版 ======================
+# LongContextReorder 不接受构造参数，直接实例化即可
+reranker = DashScopeRerank(model="qwen3-rerank", top_n=5, api_key=api_key)
+reorder = LongContextReorder()
+
+# node_postprocessors 按列表顺序执行：
+#   1) reranker 先把候选精排成 Top-5（按相关度从高到低）
+#   2) reorder 再把最相关的挪到首尾、次相关的塞中间
+query_engine = index.as_query_engine(
+    similarity_top_k=8,
+    node_postprocessors=[reranker, reorder],
+)
+
+# ====================== 4. 测试：观察重排版后的片段顺序 ======================
+if __name__ == "__main__":
+    question = "Qwen 部署需要多少显存？"
+    response = query_engine.query(question)
+
+    print("=" * 60)
+    print(f"用户问题：{question}")
+    print("=" * 60)
+    print("\n经长上下文重排后，喂给 LLM 的片段顺序（最相关的在首尾）：")
+    for i, n in enumerate(response.source_nodes, 1):
+        print(f"  {i}. [{n.score:.4f}] {n.text}")
+
+
+观察： reranker 输出是"相关度从高到低"的顺序，经过 LongContextReorder 后，得分最高的片段会被放到列表的头部和尾部，得分较低的被放到中间——这正是为了对抗 LLM "迷失在中间"的特性。
+
+四、检索后优化三件套：组合成完整流程
+三个后处理器各管一件事，可以串成一条完整的"检索后优化链"：
+
+代码块
+Bash
+复制
+
+
+代码块
+Python
+复制
+04-检索后优化（Post-retrieval）
+代码块
+Python
+复制
+"""
+长上下文重排（Long-Context Reorder）- LlamaIndex 实现
+LongContextReorder：把最相关片段放到首尾，规避 "Lost in the Middle"
+通常接在重排器之后，作为后处理链的最后一环
+"""
+
+import os
+
+from llama_index.core import Document, Settings, VectorStoreIndex
+from llama_index.core.postprocessor import LongContextReorder
+from llama_index.embeddings.dashscope import DashScopeEmbedding
+from llama_index.llms.dashscope import DashScope
+from llama_index.postprocessor.dashscope_rerank import DashScopeRerank
+
+# ====================== 1. 全局配置 ======================
+api_key = os.getenv("DASHSCOPE_API_KEY")
+Settings.embed_model = DashScopeEmbedding(
+    model_name="text-embedding-v3",
+    api_key=api_key,
+)
+Settings.llm = DashScope(
+    model_name="qwen3.7-max",
+    api_key=api_key,
+    temperature=0.1,
+)
+
+# ====================== 2. 文档与索引 ======================
+documents = [
+    "Qwen2.5 最低需要 16GB 显存，推荐 24GB 以上。",
+    "vLLM 安装命令：pip install vllm，需要 CUDA 11.8。",
+    "Mac M 系列可以跑 Qwen，但速度较慢，建议量化。",
+    "OOM 报错解决：减小 batch size，使用量化模型。",
+    "3090 24G 可以跑 Qwen-14B，int8 量化更稳。",
+    "A100 80G 可直接跑 Qwen-72B，无需量化。",
+    "Docker 部署大模型可以隔离环境，简化依赖。",
+    "量化技术 AWQ/GPTQ 可降低 50% 显存占用。",
+]
+index = VectorStoreIndex.from_documents([Document(text=t) for t in documents])
+
+# ====================== 3. 后处理链：先重排，再长上下文重排版 ======================
+# LongContextReorder 不接受构造参数，直接实例化即可
+reranker = DashScopeRerank(model="qwen3-rerank", top_n=5, api_key=api_key)
+reorder = LongContextReorder()
+
+# node_postprocessors 按列表顺序执行：
+#   1) reranker 先把候选精排成 Top-5（按相关度从高到低）
+#   2) reorder 再把最相关的挪到首尾、次相关的塞中间
+query_engine = index.as_query_engine(
+    similarity_top_k=8,
+    node_postprocessors=[reranker, reorder],
+)
+
+# ====================== 4. 测试：观察重排版后的片段顺序 ======================
+if __name__ == "__main__":
+    question = "Qwen 部署需要多少显存？"
+    response = query_engine.query(question)
+
+    print("=" * 60)
+    print(f"用户问题：{question}")
+    print("=" * 60)
+    print("\n经长上下文重排后，喂给 LLM 的片段顺序（最相关的在首尾）：")
+    for i, n in enumerate(response.source_nodes, 1):
+        print(f"  {i}. [{n.score:.4f}] {n.text}")
+代码块
+"""
+长上下文重排（Long-Context Reorder）- LlamaIndex 实现
+LongContextReorder：把最相关片段放到首尾，规避 "Lost in the Middle"
+通常接在重排器之后，作为后处理链的最后一环
+"""
+import os
+from llama_index.core import Document, Settings, VectorStoreIndex
+from llama_index.core.postprocessor import LongContextReorder
+from llama_index.embeddings.dashscope import DashScopeEmbedding
+from llama_index.llms.dashscope import DashScope
+from llama_index.postprocessor.dashscope_rerank import DashScopeRerank
+# ====================== 1. 全局配置 ======================
+api_key = os.getenv("DASHSCOPE_API_KEY")
+Settings.embed_model = DashScopeEmbedding(
+model_name="text-embedding-v3",
+api_key=api_key,
+)
+Settings.llm = DashScope(
+model_name="qwen3.7-max",
+api_key=api_key,
+temperature=0.1,
+)
+# ====================== 2. 文档与索引 ======================
+documents = [
+"Qwen2.5 最低需要 16GB 显存，推荐 24GB 以上。",
+"vLLM 安装命令：pip install vllm，需要 CUDA 11.8。",
+"Mac M 系列可以跑 Qwen，但速度较慢，建议量化。",
+"OOM 报错解决：减小 batch size，使用量化模型。",
+"3090 24G 可以跑 Qwen-14B，int8 量化更稳。",
+"A100 80G 可直接跑 Qwen-72B，无需量化。",
+"Docker 部署大模型可以隔离环境，简化依赖。",
+"量化技术 AWQ/GPTQ 可降低 50% 显存占用。",
+]
+index = VectorStoreIndex.from_documents([Document(text=t) for t in documents])
+# ====================== 3. 后处理链：先重排，再长上下文重排版 ======================
+# LongContextReorder 不接受构造参数，直接实例化即可
+reranker = DashScopeRerank(model="qwen3-rerank", top_n=5, api_key=api_key)
+reorder = LongContextReorder()
+# node_postprocessors 按列表顺序执行：
+#   1) reranker 先把候选精排成 Top-5（按相关度从高到低）
+#   2) reorder 再把最相关的挪到首尾、次相关的塞中间
+query_engine = index.as_query_engine(
+similarity_top_k=8,
+node_postprocessors=[reranker, reorder],
+)
+# ====================== 4. 测试：观察重排版后的片段顺序 ======================
+if __name__ == "__main__":
+question = "Qwen 部署需要多少显存？"
+response = query_engine.query(question)
+print("=" * 60)
+print(f"用户问题：{question}")
+print("=" * 60)
+print("\n经长上下文重排后，喂给 LLM 的片段顺序（最相关的在首尾）：")
+for i, n in enumerate(response.source_nodes, 1):
+print(f"  {i}. [{n.score:.4f}] {n.text}")
+观察： reranker 输出是"相关度从高到低"的顺序，经过 LongContextReorder 后，得分最高的片段会被放到列表的头部和尾部，得分较低的被放到中间——这正是为了对抗 LLM "迷失在中间"的特性。
+观察： reranker 输出是"相关度从高到低"的顺序，经过 LongContextReorder 后，得分最高的片段会被放到列表的头部和尾部，得分较低的被放到中间——这正是为了对抗 LLM "迷失在中间"的特性。
+观察： reranker 输出是"相关度从高到低"的顺序，经过 LongContextReorder 后，得分最高的片段会被放到列表的头部和尾部，得分较低的被放到中间——这正是为了对抗 LLM "迷失在中间"的特性。
+四、检索后优化三件套：组合成完整流程
+四、检索后优化三件套：组合成完整流程
+三个后处理器各管一件事，可以串成一条完整的"检索后优化链"：
+三个后处理器各管一件事，可以串成一条完整的"检索后优化链"：
+代码块
+Bash
+复制
+代码块
+代码块
+Python
+复制
+代码块

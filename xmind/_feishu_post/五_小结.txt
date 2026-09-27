@@ -1,0 +1,20 @@
+04-检索后优化（Post-retrieval）
+9月15日修改
+
+代码块
+Python
+复制
+
+五、小结
+
+
+三者都通过 node_postprocessors=[...] 接入，发生在【检索召回】之后、【喂给 LLM】之前，是工业级 RAG 提升生成质量的标准检索后优化手段。
+04-检索后优化（Post-retrieval）
+代码块
+Python
+复制
+代码块
+五、小结
+五、小结
+三者都通过 node_postprocessors=[...] 接入，发生在【检索召回】之后、【喂给 LLM】之前，是工业级 RAG 提升生成质量的标准检索后优化手段。
+三者都通过 node_postprocessors=[...] 接入，发生在【检索召回】之后、【喂给 LLM】之前，是工业级 RAG 提升生成质量的标准检索后优化手段。

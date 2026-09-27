@@ -1,0 +1,229 @@
+04-检索后优化（Post-retrieval）
+9月15日修改
+
+代码块
+Python
+复制
+
+# ====================== 5. 测试 ======================
+if __name__ == "__main__":
+    question = "Qwen 部署需要多少显存？"
+    response = query_engine.query(question)
+
+    print("=" * 60)
+    print(f"用户问题：{question}")
+    print("=" * 60)
+    print("\n重排后用于生成的参考片段：")
+    for i, n in enumerate(response.source_nodes, 1):
+        print(f"  {i}. [{n.score:.4f}] {n.text}")
+    print("\n最终回答：")
+    print(response.response)
+
+
+
+二、上下文压缩（Contextual Compression）
+1、核心概念
+问题：召回的片段里往往只有一两句真正相关，其余是噪声。直接整段喂给 LLM 会：
+•
+占用大量 token（成本高、易超长）
+•
+噪声干扰生成，诱发幻觉
+上下文压缩 = 在召回之后、生成之前，把每个片段里与问题无关的句子裁掉，只留下真正相关的内容。
+
+一句话：重排序解决"哪些片段排前面"，上下文压缩解决"每个片段里留哪几句"。两者常配合使用：先重排，再压缩。
+
+2、LlamaIndex 实现：SentenceEmbeddingOptimizer
+LlamaIndex 内置 SentenceEmbeddingOptimizer：它把召回片段拆成句子，逐句和查询算 embedding 相似度，只保留相似度高的句子，实现"句子级"的上下文裁剪。
+依赖安装：
+
+代码块
+Bash
+复制
+pip install llama-index-core llama-index-embeddings-dashscope llama-index-llms-dashscope
+
+
+代码块
+Python
+复制
+"""
+上下文压缩（Contextual Compression）- LlamaIndex 实现
+SentenceEmbeddingOptimizer：召回后按句子相关度裁剪，只把"有用的句子"喂给 LLM
+"""
+import os
+
+from llama_index.core import Document, Settings, VectorStoreIndex
+from llama_index.core.postprocessor import SentenceEmbeddingOptimizer
+from llama_index.embeddings.dashscope import DashScopeEmbedding
+from llama_index.llms.dashscope import DashScope
+from llama_index.llms.openai import OpenAI as LlamaOpenAI
+# ====================== 1. 全局配置 ======================
+api_key = os.getenv("DASHSCOPE_API_KEY")
+Settings.embed_model = DashScopeEmbedding(
+    model_name="text-embedding-v3",
+    api_key=api_key,
+)
+Settings.llm = DashScope(
+    model_name="qwen3.7-max",
+    # model_name="xiaomi/mimo-v2.5-pro",   # 坑货，llamaindex不支持
+    api_key=api_key,
+    temperature=0.1,
+)
+
+# ====================== 2. 故意造"长片段 + 含噪声"的文档 ======================
+# 每段里只有少量句子和"Qwen 显存"真正相关，其余是无关背景，方便观察压缩效果
+documents = [
+    Document(text=(
+        "大模型生态近年来发展迅速，开源社区非常活跃。"
+        "Qwen2.5 最低需要 16GB 显存，推荐 24GB 以上以获得更好的吞吐。"
+        "很多公司也在探索把大模型用于办公自动化。"
+        "此外，模型评测榜单层出不穷，更新很快。"
+    )),
+    Document(text=(
+        "Docker 在云原生领域应用广泛，方便环境隔离。"
+        "AWQ/GPTQ 量化可以把显存占用降低约 50%，让消费级显卡也能跑中等规模模型。"
+        "持续集成与持续部署是现代软件工程的常见实践。"
+    )),
+    Document(text=(
+        "今天天气不错，适合散步。"
+04-检索后优化（Post-retrieval）
+代码块
+Python
+复制
+
+# ====================== 5. 测试 ======================
+if __name__ == "__main__":
+    question = "Qwen 部署需要多少显存？"
+    response = query_engine.query(question)
+
+    print("=" * 60)
+    print(f"用户问题：{question}")
+    print("=" * 60)
+    print("\n重排后用于生成的参考片段：")
+    for i, n in enumerate(response.source_nodes, 1):
+        print(f"  {i}. [{n.score:.4f}] {n.text}")
+    print("\n最终回答：")
+    print(response.response)
+代码块
+# ====================== 5. 测试 ======================
+if __name__ == "__main__":
+question = "Qwen 部署需要多少显存？"
+response = query_engine.query(question)
+print("=" * 60)
+print(f"用户问题：{question}")
+print("=" * 60)
+print("\n重排后用于生成的参考片段：")
+for i, n in enumerate(response.source_nodes, 1):
+print(f"  {i}. [{n.score:.4f}] {n.text}")
+print("\n最终回答：")
+print(response.response)
+二、上下文压缩（Contextual Compression）
+二、上下文压缩（Contextual Compression）
+1、核心概念
+1、核心概念
+问题：召回的片段里往往只有一两句真正相关，其余是噪声。直接整段喂给 LLM 会：
+问题：召回的片段里往往只有一两句真正相关，其余是噪声。直接整段喂给 LLM 会：
+•
+占用大量 token（成本高、易超长）
+占用大量 token（成本高、易超长）
+•
+噪声干扰生成，诱发幻觉
+噪声干扰生成，诱发幻觉
+上下文压缩 = 在召回之后、生成之前，把每个片段里与问题无关的句子裁掉，只留下真正相关的内容。
+上下文压缩 = 在召回之后、生成之前，把每个片段里与问题无关的句子裁掉，只留下真正相关的内容。
+一句话：重排序解决"哪些片段排前面"，上下文压缩解决"每个片段里留哪几句"。两者常配合使用：先重排，再压缩。
+一句话：重排序解决"哪些片段排前面"，上下文压缩解决"每个片段里留哪几句"。两者常配合使用：先重排，再压缩。
+一句话：重排序解决"哪些片段排前面"，上下文压缩解决"每个片段里留哪几句"。两者常配合使用：先重排，再压缩。
+2、LlamaIndex 实现：SentenceEmbeddingOptimizer
+2、LlamaIndex 实现：SentenceEmbeddingOptimizer
+LlamaIndex 内置 SentenceEmbeddingOptimizer：它把召回片段拆成句子，逐句和查询算 embedding 相似度，只保留相似度高的句子，实现"句子级"的上下文裁剪。
+LlamaIndex 内置 SentenceEmbeddingOptimizer：它把召回片段拆成句子，逐句和查询算 embedding 相似度，只保留相似度高的句子，实现"句子级"的上下文裁剪。
+依赖安装：
+依赖安装：
+代码块
+Bash
+复制
+pip install llama-index-core llama-index-embeddings-dashscope llama-index-llms-dashscope
+代码块
+pip install llama-index-core llama-index-embeddings-dashscope llama-index-llms-dashscope
+代码块
+Python
+复制
+"""
+上下文压缩（Contextual Compression）- LlamaIndex 实现
+SentenceEmbeddingOptimizer：召回后按句子相关度裁剪，只把"有用的句子"喂给 LLM
+"""
+import os
+
+from llama_index.core import Document, Settings, VectorStoreIndex
+from llama_index.core.postprocessor import SentenceEmbeddingOptimizer
+from llama_index.embeddings.dashscope import DashScopeEmbedding
+from llama_index.llms.dashscope import DashScope
+from llama_index.llms.openai import OpenAI as LlamaOpenAI
+# ====================== 1. 全局配置 ======================
+api_key = os.getenv("DASHSCOPE_API_KEY")
+Settings.embed_model = DashScopeEmbedding(
+    model_name="text-embedding-v3",
+    api_key=api_key,
+)
+Settings.llm = DashScope(
+    model_name="qwen3.7-max",
+    # model_name="xiaomi/mimo-v2.5-pro",   # 坑货，llamaindex不支持
+    api_key=api_key,
+    temperature=0.1,
+)
+
+# ====================== 2. 故意造"长片段 + 含噪声"的文档 ======================
+# 每段里只有少量句子和"Qwen 显存"真正相关，其余是无关背景，方便观察压缩效果
+documents = [
+    Document(text=(
+        "大模型生态近年来发展迅速，开源社区非常活跃。"
+        "Qwen2.5 最低需要 16GB 显存，推荐 24GB 以上以获得更好的吞吐。"
+        "很多公司也在探索把大模型用于办公自动化。"
+        "此外，模型评测榜单层出不穷，更新很快。"
+    )),
+    Document(text=(
+        "Docker 在云原生领域应用广泛，方便环境隔离。"
+        "AWQ/GPTQ 量化可以把显存占用降低约 50%，让消费级显卡也能跑中等规模模型。"
+        "持续集成与持续部署是现代软件工程的常见实践。"
+    )),
+    Document(text=(
+        "今天天气不错，适合散步。"
+代码块
+"""
+上下文压缩（Contextual Compression）- LlamaIndex 实现
+SentenceEmbeddingOptimizer：召回后按句子相关度裁剪，只把"有用的句子"喂给 LLM
+"""
+import os
+from llama_index.core import Document, Settings, VectorStoreIndex
+from llama_index.core.postprocessor import SentenceEmbeddingOptimizer
+from llama_index.embeddings.dashscope import DashScopeEmbedding
+from llama_index.llms.dashscope import DashScope
+from llama_index.llms.openai import OpenAI as LlamaOpenAI
+# ====================== 1. 全局配置 ======================
+api_key = os.getenv("DASHSCOPE_API_KEY")
+Settings.embed_model = DashScopeEmbedding(
+model_name="text-embedding-v3",
+api_key=api_key,
+)
+Settings.llm = DashScope(
+model_name="qwen3.7-max",
+# model_name="xiaomi/mimo-v2.5-pro",   # 坑货，llamaindex不支持
+api_key=api_key,
+temperature=0.1,
+)
+# ====================== 2. 故意造"长片段 + 含噪声"的文档 ======================
+# 每段里只有少量句子和"Qwen 显存"真正相关，其余是无关背景，方便观察压缩效果
+documents = [
+Document(text=(
+"大模型生态近年来发展迅速，开源社区非常活跃。"
+"Qwen2.5 最低需要 16GB 显存，推荐 24GB 以上以获得更好的吞吐。"
+"很多公司也在探索把大模型用于办公自动化。"
+"此外，模型评测榜单层出不穷，更新很快。"
+)),
+Document(text=(
+"Docker 在云原生领域应用广泛，方便环境隔离。"
+"AWQ/GPTQ 量化可以把显存占用降低约 50%，让消费级显卡也能跑中等规模模型。"
+"持续集成与持续部署是现代软件工程的常见实践。"
+)),
+Document(text=(
+"今天天气不错，适合散步。"
