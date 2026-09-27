@@ -94,7 +94,27 @@ DATA_DIR = os.getenv("RAG_DATA_DIR", str(PACKAGE_DIR / "data"))  # 默认知识�
 
 CHUNK_SIZE = int(os.getenv("CHUNK_SIZE", "512"))  # 分块大小
 CHUNK_OVERLAP = int(os.getenv("CHUNK_OVERLAP", "128"))  # 分块重叠，减轻切断语义
-SIMILARITY_TOP_K = int(os.getenv("SIMILARITY_TOP_K", "5"))  # 默认检索返回条数
+SIMILARITY_TOP_K = int(os.getenv("SIMILARITY_TOP_K", "5"))  # 最终返回/精排后条数
+
+
+def _env_bool(name: str, default: bool) -> bool:
+    """读布尔环境变量：1/true/yes/on 为真。"""
+    raw = os.getenv(name)
+    if raw is None or not str(raw).strip():
+        return default
+    return str(raw).strip().lower() in {"1", "true", "yes", "on", "y"}
+
+
+# ----- 检索中 / 检索后优化（可用环境变量开关）-----
+HYBRID_ENABLED = _env_bool("HYBRID_ENABLED", True)  # 同库：向量 + BM25 融合
+HYBRID_FUSION_MODE = os.getenv("HYBRID_FUSION_MODE", "reciprocal_rerank").strip()  # 或 relative_score
+RETRIEVE_CANDIDATES = int(os.getenv("RETRIEVE_CANDIDATES", "20"))  # 粗排候选数（给精排留窗口）
+RERANK_ENABLED = _env_bool("RERANK_ENABLED", True)  # DashScope 重排
+RERANK_MODEL = os.getenv("RERANK_MODEL", "qwen3-rerank").strip()  # 重排模型名
+RERANK_TOP_N = int(os.getenv("RERANK_TOP_N", "0"))  # 0 表示跟 SIMILARITY_TOP_K / 请求 k 一致
+COMPRESS_ENABLED = _env_bool("COMPRESS_ENABLED", True)  # 句子级上下文压缩
+COMPRESS_PERCENTILE = float(os.getenv("COMPRESS_PERCENTILE", "0.5"))  # 每片段保留相关句比例
+REORDER_ENABLED = _env_bool("REORDER_ENABLED", True)  # 长上下文首尾重排版
 
 HOST = os.getenv("SEARCH_HOST", "127.0.0.1")  # Web 服务监听地址
 PORT = int(os.getenv("SEARCH_PORT", "8003"))  # 默认 8003，避免和「带安全校验的聊天机器人」8001 冲突

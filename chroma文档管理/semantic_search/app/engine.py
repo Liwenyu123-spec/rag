@@ -19,16 +19,27 @@ from semantic_search.app.config import (  # 导入运行时配置常量
     CHUNK_OVERLAP,  # 分块重叠
     CHUNK_SIZE,  # 分块大小
     COLLECTION_NAME,  # 集合名
+    COMPRESS_ENABLED,
     DASHSCOPE_API_KEY,  # 千问 Key
     DATA_DIR,  # 默认数据目录
     DEEPSEEK_API_KEY,  # DeepSeek Key
     DEEPSEEK_BASE_URL,  # DeepSeek API 地址
     EMBEDDING_MODEL,  # Embedding 模型名
     EMBEDDING_PROVIDER,  # Embedding 提供方
+    HYBRID_ENABLED,
     LLM_MODEL,  # 大模型名
     LLM_PROVIDER,  # 大模型提供方
     RAG_SYSTEM_PROMPT,  # 对话系统提示词
+    REORDER_ENABLED,
+    RERANK_ENABLED,
     SIMILARITY_TOP_K,  # 默认 Top-K
+)
+from semantic_search.app.service.retrieval_optimize import (
+    apply_postprocessors,
+    build_hybrid_retriever,
+    build_node_postprocessors,
+    candidate_top_k,
+    nodes_from_index,
 )
 
 SAMPLE_DOCUMENTS = [  # 空库时写入的示例知识，方便一启动就能搜
@@ -75,6 +86,7 @@ class SemanticSearchEngine:  # Native RAG 引擎主体
         self.llm_model = LLM_MODEL  # 记下当前 LLM 模型名
         self._memories: dict[str, ChatMemoryBuffer] = {}  # session_id → 对话记忆
         self._chat_engines: dict[str, object] = {}  # session+k → chat_engine 缓存
+        self._bm25_nodes_cache: list | None = None  # BM25 语料缓存，入库变更时清空
 
         Settings.embed_model = self._init_embed_model()  # 设置全局 Embedding
         Settings.llm = self._init_llm()  # 设置全局 LLM（可能为 None）
@@ -90,6 +102,11 @@ class SemanticSearchEngine:  # Native RAG 引擎主体
             f"搜索引擎已初始化，Embedding: {EMBEDDING_PROVIDER}/{model_name}，"  # Embedding 提供方与模型
             f"LLM: {LLM_PROVIDER}/{self.llm_model}，持久化目录: {persist_dir}"  # LLM 与 Chroma 路径
         )  # print 结束
+        print(
+            "检索优化: "
+            f"hybrid={HYBRID_ENABLED}, rerank={RERANK_ENABLED}, "
+            f"compress={COMPRESS_ENABLED}, reorder={REORDER_ENABLED}"
+        )
 
     def _init_embed_model(self):  # 按配置选择 Embedding 实现
         """DeepSeek 不做向量化；优先本地 HuggingFace，有千问 Key 时仍可用千问。"""
@@ -165,6 +182,30 @@ class SemanticSearchEngine:  # Native RAG 引擎主体
     def _reset_chat_engines(self) -> None:  # 知识库变更后清掉旧 chat_engine，避免用过期上下文
         self._chat_engines.clear()  # 清空缓存字典
 
+    def _invalidate_retrieval_cache(self) -> None:
+        """入库变更后清空 BM25 语料与对话引擎缓存。"""
+        self._bm25_nodes_cache = None
+        self._reset_chat_engines()
+
+    def _bm25_nodes(self) -> list:
+        """懒加载 BM25 节点列表。"""
+        if self._bm25_nodes_cache is None:
+            self._bm25_nodes_cache = nodes_from_index(self.index, self.collection)
+        return self._bm25_nodes_cache
+
+    def _build_retriever(self, k: int = SIMILARITY_TOP_K):
+        """检索中：按配置构建纯向量或 向量+BM25 融合检索器。"""
+        return build_hybrid_retriever(
+            self.index,
+            final_k=k,
+            collection=self.collection,
+            nodes_cache=self._bm25_nodes() if HYBRID_ENABLED else None,
+        )
+
+    def _build_postprocessors(self, k: int = SIMILARITY_TOP_K) -> list:
+        """检索后：重排 → 压缩 → 长上下文重排。"""
+        return build_node_postprocessors(k)
+
     def _require_llm(self) -> None:  # 问答前检查 LLM 是否可用
         if Settings.llm is None:  # 全局 LLM 未初始化
             raise RuntimeError("大模型未初始化，请检查 LLM_PROVIDER 与对应 API Key")  # 交给路由转 503
@@ -182,7 +223,7 @@ class SemanticSearchEngine:  # Native RAG 引擎主体
             return self.collection.count()
 
         self.index.insert_nodes(nodes)  # 向量化并写入 Chroma
-        self._reset_chat_engines()  # 索引变了，重建对话引擎
+        self._invalidate_retrieval_cache()  # 索引变了，重建 BM25 / 对话引擎
         total = self.collection.count()  # 当前总量
         print(f"成功添加 {len(texts)} 个文档 / {len(nodes)} 个节点，总计 {total} 个")
         return total
@@ -209,7 +250,7 @@ class SemanticSearchEngine:  # Native RAG 引擎主体
         print(f"切分为 {len(nodes)} 个节点")
         if nodes:  # 有节点才写入
             self.index.insert_nodes(nodes)  # Embedding + 存 Chroma
-            self._reset_chat_engines()
+            self._invalidate_retrieval_cache()
         total = self.collection.count()
         print(f"向量化和存储完成，文档数: {total}")
         return {  # 返回统计给 API
