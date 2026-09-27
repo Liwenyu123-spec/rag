@@ -12,3 +12,7 @@ llama-index-embeddings-huggingface
 llama-index-llms-deepseek
 llama-index-vector-stores-chroma
 llama-index-readers-file
+llama-index-retrievers-bm25
+llama-index-postprocessor-dashscope-rerank
+jieba
+rank-bm25

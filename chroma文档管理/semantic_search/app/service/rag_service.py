@@ -1,4 +1,4 @@
-"""RAG 问答服务：检索前优化 → 多路检索融合 → 大模型生成最终答案。"""  # 模块说明：作业主链路编排
+"""RAG 问答服务：检索前 → 检索中（混合）→ 多查询 RRF → 检索后 → 生成。"""  # 模块说明：作业主链路编排
 
 from __future__ import annotations  # 允许前向类型注解
 
@@ -11,6 +11,7 @@ from llama_index.core.schema import NodeWithScore  # 带相似度分数的检索
 
 from semantic_search.app.config import RAG_SYSTEM_PROMPT, SIMILARITY_TOP_K  # 系统提示与默认 Top-K
 from semantic_search.app.service.pre_retrieval import prepare_retrieval_queries  # 检索前优化入口
+from semantic_search.app.service.retrieval_optimize import apply_postprocessors  # 检索后三件套
 
 ASK_QA_PROMPT = PromptTemplate(  # /ask 专用：强制依据上下文、不懂就说不知道
     f"{RAG_SYSTEM_PROMPT}。只依据给定上下文回答；上下文没有的信息请明确说不知道。\n\n"  # 角色 + 约束
@@ -114,15 +115,20 @@ class RagAskService:  # 面向 /ask 的业务编排类
         prep = prepare_retrieval_queries(question, strategy, llm=Settings.llm)  # 执行检索前优化
         queries = prep["retrieval_queries"] or [question]  # 若列表空则退回原问题
 
-        # 每路各取 Top-K，再 RRF 融合
+        # 检索中：对每个（改写后的）查询用混合检索器召回，再做查询间 RRF
         ranked_lists: list[list[NodeWithScore]] = []  # 收集每一路召回结果
-        retriever = self.engine.index.as_retriever(similarity_top_k=k)  # 创建向量检索器
+        retriever = self.engine._build_retriever(k)  # 向量 或 向量+BM25 融合
         for q in queries:  # 对每个检索查询各跑一路
             ranked_lists.append(list(retriever.retrieve(q)))  # 保存该路命中列表
 
-        fused = merge_nodes_rrf(ranked_lists, k=k) if len(ranked_lists) > 1 else (  # 多路才融合
-            ranked_lists[0][:k] if ranked_lists else []  # 单路直接截断；无结果则空
+        # 候选窗口略放大，留给检索后精排；最终仍截到 k
+        fuse_k = max(k, min(total, k * 2))
+        fused = merge_nodes_rrf(ranked_lists, k=fuse_k) if len(ranked_lists) > 1 else (
+            ranked_lists[0][:fuse_k] if ranked_lists else []
         )
+
+        # 检索后：重排 → 压缩 → 长上下文重排（用用户原问题打分/裁句）
+        fused = apply_postprocessors(fused, question, k)
 
         if not fused:  # 检索为空
             return {  # 告诉用户换问法或检查库

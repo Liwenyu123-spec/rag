@@ -275,8 +275,8 @@ class SemanticSearchEngine:  # Native RAG 引擎主体
             self.ingest_files(input_dir=str(data_dir))
         return self.collection.count()
 
-    def search(self, query: str, k: int = SIMILARITY_TOP_K) -> List[dict]:  # 只检索，不生成
-        """只检索，不调用大模型。"""
+    def search(self, query: str, k: int = SIMILARITY_TOP_K) -> List[dict]:  # 只检索，不调用大模型
+        """只检索：混合召回 + 可选检索后处理，不调用大模型。"""
         total = self.collection.count()  # 库里有多少条
         if total == 0 or not query or not query.strip():  # 空库或空查询
             return []
@@ -285,8 +285,9 @@ class SemanticSearchEngine:  # Native RAG 引擎主体
         if k == 0:
             return []
 
-        retriever = self.index.as_retriever(similarity_top_k=k)  # 创建检索器
-        results = retriever.retrieve(query)  # 向量相似度检索
+        retriever = self._build_retriever(k)  # 检索中：向量 / 混合
+        results = list(retriever.retrieve(query))  # 粗排候选
+        results = apply_postprocessors(results, query, k)  # 检索后：重排/压缩/排版
         formatted_results = []  # 转成 API 友好结构
         for i, item in enumerate(results):  # 逐条格式化
             score = float(item.score or 0.0)  # LlamaIndex 分数
@@ -304,9 +305,17 @@ class SemanticSearchEngine:  # Native RAG 引擎主体
         return formatted_results
 
     def query(self, question: str, k: int = SIMILARITY_TOP_K) -> dict:  # 一次性 RAG：检索 + 生成
-        """一次性问答：检索 + 生成。"""
+        """一次性问答：混合召回 + 检索后三件套 + 生成。"""
         self._require_llm()  # 没 LLM 就抛错
-        engine = self.index.as_query_engine(similarity_top_k=k)  # 查询引擎（内部会检索再生成）
+        from llama_index.core.query_engine import RetrieverQueryEngine
+
+        retriever = self._build_retriever(k)
+        postprocessors = self._build_postprocessors(k)
+        # RetrieverQueryEngine：自定义 retriever + node_postprocessors
+        engine = RetrieverQueryEngine.from_args(
+            retriever=retriever,
+            node_postprocessors=postprocessors or None,
+        )
         response = engine.query(question)  # 执行问答
         sources = []  # 收集引用来源
         for i, item in enumerate(getattr(response, "source_nodes", []) or []):  # 遍历命中节点
@@ -323,20 +332,34 @@ class SemanticSearchEngine:  # Native RAG 引擎主体
         return {"question": question, "answer": str(response), "sources": sources}  # 问题、答案、来源
 
     def chat(self, question: str, session_id: str = "default", k: int = SIMILARITY_TOP_K) -> dict:  # 多轮 RAG
-        """多轮对话：带 ChatMemoryBuffer。"""
+        """多轮对话：带 ChatMemoryBuffer；检索侧与 query 共用混合/后处理。"""
         self._require_llm()
-        key = f"{session_id}:{k}"  # 同一会话 + 同一 k 共用一个 chat_engine
+        # 缓存键带上优化开关，改配置后会重建引擎
+        key = (
+            f"{session_id}:{k}:h{int(HYBRID_ENABLED)}:r{int(RERANK_ENABLED)}"
+            f":c{int(COMPRESS_ENABLED)}:o{int(REORDER_ENABLED)}"
+        )
         if key not in self._chat_engines:  # 首次创建
             memory = self._memories.setdefault(  # 按 session_id 复用记忆
                 session_id,
                 ChatMemoryBuffer.from_defaults(token_limit=10000),  # 记忆 token 上限
             )
-            self._chat_engines[key] = self.index.as_chat_engine(  # 压缩问题 + 检索上下文
-                chat_mode="condense_plus_context",  # 先改写问题再检索
-                memory=memory,  # 挂上多轮记忆
-                similarity_top_k=k,  # 每轮检索条数
-                system_prompt=RAG_SYSTEM_PROMPT,  # 系统角色
+            # condense_plus_context 主要吃 similarity_top_k；后处理尽量挂上
+            chat_kwargs = dict(
+                chat_mode="condense_plus_context",
+                memory=memory,
+                similarity_top_k=candidate_top_k(k),
+                system_prompt=RAG_SYSTEM_PROMPT,
             )
+            postprocessors = self._build_postprocessors(k)
+            if postprocessors:
+                chat_kwargs["node_postprocessors"] = postprocessors
+            try:
+                self._chat_engines[key] = self.index.as_chat_engine(**chat_kwargs)
+            except TypeError:
+                # 旧版 LlamaIndex 若不支持 node_postprocessors，降级为仅调大候选
+                chat_kwargs.pop("node_postprocessors", None)
+                self._chat_engines[key] = self.index.as_chat_engine(**chat_kwargs)
         response = self._chat_engines[key].chat(question)  # 发本轮消息
         return {  # 组装多轮响应
             "session_id": session_id,  # 回显会话
@@ -359,6 +382,10 @@ class SemanticSearchEngine:  # Native RAG 引擎主体
             "chunk_size": CHUNK_SIZE,  # 分块大小
             "chunk_overlap": CHUNK_OVERLAP,  # 分块重叠
             "data_dir": DATA_DIR,  # 默认数据目录
+            "hybrid_enabled": HYBRID_ENABLED,
+            "rerank_enabled": RERANK_ENABLED,
+            "compress_enabled": COMPRESS_ENABLED,
+            "reorder_enabled": REORDER_ENABLED,
         }
 
     def clear_documents(self) -> None:  # 清空知识库
@@ -369,4 +396,4 @@ class SemanticSearchEngine:  # Native RAG 引擎主体
         self.storage_context = StorageContext.from_defaults(vector_store=self.vector_store)  # 新存储上下文
         self.index = VectorStoreIndex(nodes=[], storage_context=self.storage_context)  # 空索引
         self._memories.clear()  # 清对话记忆
-        self._reset_chat_engines()  # 清 chat_engine 缓存
+        self._invalidate_retrieval_cache()  # 清 BM25 / chat_engine 缓存
