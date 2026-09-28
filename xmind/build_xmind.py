@@ -34,6 +34,25 @@ TREE = topic(
             note="飞书文档：01-认知阶段（大模型介绍，调用，RAG）",
             children=[
                 topic(
+                    "术语定义（本章必背）",
+                    children=[
+                        topic("AI（人工智能）：让机器模拟人类智能的总称，含规则系统、搜索、机器学习等"),
+                        topic("机器学习 ML：从数据自动学习规律，而不是纯手工写规则"),
+                        topic("深度学习 DL：用深层神经网络自动提取特征的一类机器学习"),
+                        topic("大模型 / LLM：参数规模极大、多基于 Transformer 的语言模型（如 GPT、DeepSeek）"),
+                        topic("生成式 AI（GAI）：按提示生成文本/图像/音频/视频/代码等新内容"),
+                        topic("AGI（通用人工智能）：能像人一样完成任意智力任务的假想系统，目前未实现"),
+                        topic("Transformer：主流大模型骨干架构，核心是注意力机制"),
+                        topic("Token：模型处理文本的基本单位（子词/字等），计费与窗口常按 token 计"),
+                        topic("上下文窗口 Context Window：一次能读入的最大 token 长度"),
+                        topic("幻觉 Hallucination：生成看似合理但无依据或与事实不符的内容"),
+                        topic("微调 Fine-tuning：在预训练模型上用领域数据继续训练以适配任务"),
+                        topic("Prompt / 提示词：给模型的指令与上下文输入（详见第 02 章）"),
+                        topic("API 调用：通过网络接口把 Prompt 发给云端/本地模型并取回结果"),
+                        topic("RAG：检索增强生成，先查外部知识再生成（详见第 03 章）"),
+                    ],
+                ),
+                topic(
                     "一、人工智能介绍",
                     children=[
                         topic(
@@ -738,6 +757,25 @@ TREE = topic(
             note="飞书文档：01-提示词。Prompt 是指令，Prompt Engineering 是优化指令的技术。",
             children=[
                 topic(
+                    "术语定义（本章必背）",
+                    children=[
+                        topic("Prompt（提示词）：给大模型的自然语言指令与上下文"),
+                        topic("Prompt Engineering（提示工程）：系统化设计、测试、优化提示词的方法"),
+                        topic("角色 Role：在提示里规定 AI 身份与专业立场"),
+                        topic("任务 Task：明确要求模型完成什么"),
+                        topic("规则 Constraints：边界、禁止事项、判断标准"),
+                        topic("输出格式 Output：长度、结构、示例、JSON 等"),
+                        topic("CLEAR 原则：Context / Length / Examples / Audience / Requirements 的提示设计口诀"),
+                        topic("Few-shot：在提示中给少量示例，引导输出风格与格式"),
+                        topic("Zero-shot：不给示例，只给任务说明"),
+                        topic("Chain-of-Thought（CoT）：要求模型逐步推理再给结论"),
+                        topic("温度 Temperature：控制随机性；低更稳，高更发散"),
+                        topic("系统提示 System Prompt：对话里长期生效的人设与规则（相对单次用户消息）"),
+                        topic("提示注入 / Jailbreak：用恶意提示绕过安全规则的攻击手法"),
+                        topic("防护：输入过滤、输出校验、权限隔离、拒绝越权指令"),
+                    ],
+                ),
+                topic(
                     "一、概述",
                     children=[
                         topic("把 AI 当能力强但缺经验的新助手，指令清不清楚决定成果质量"),
@@ -1114,6 +1152,24 @@ TREE = topic(
             note="飞书文档：01-RAG整体认知。2020年 Facebook AI 提出，解决大模型答得快但不够准、不够新。",
             children=[
                 topic(
+                    "术语定义（本章必背）",
+                    children=[
+                        topic("RAG：Retrieval-Augmented Generation，检索增强生成"),
+                        topic("Retriever（检索器）：根据问题从知识库找出相关文档/片段"),
+                        topic("Generator（生成器）：基于检索上下文与问题生成最终回答的 LLM"),
+                        topic("知识库 / Corpus：可检索的外部文档集合（可更新，不必重训模型）"),
+                        topic("Query：用户自然语言问题（可能口语、指代不明）"),
+                        topic("Embedding：把文本变成向量，便于语义相似度计算"),
+                        topic("Retrieval：在向量库/倒排索引中召回 Top-K 相关片段"),
+                        topic("Context：拼进 Prompt 的检索结果与约束说明"),
+                        topic("引用 / Citation：答案标明来源片段，便于核查"),
+                        topic("参数化知识：模型训练时写进权重的知识；RAG 额外使用非参数化外部知识"),
+                        topic("Native RAG：最简「检索→生成」流水线（见第 06 章）"),
+                        topic("Advanced RAG：在检索前/中/后系统优化（见第 07 章起）"),
+                        topic("开卷考试比喻：模型是考生，RAG 是可翻的参考书"),
+                    ],
+                ),
+                topic(
                     "1 RAG 介绍",
                     children=[
                         topic(
@@ -1380,6 +1436,23 @@ TREE = topic(
             note="飞书文档：02-大模型应用基础--Embeddings",
             children=[
                 topic(
+                    "术语定义（本章必背）",
+                    children=[
+                        topic("向量 Vector：有大小和方向的数学对象，可写成一组有序数字"),
+                        topic("Embedding（嵌入）：用稠密数值向量表示对象（词/句/文档/图片等）"),
+                        topic("维度 Dimension：向量有多少个数；常见 384/768/1024/1536 等"),
+                        topic("词频向量：按词表统计出现次数的稀疏表示（教学用，现代多用神经网络嵌入）"),
+                        topic("余弦相似度 Cosine Similarity：用夹角衡量方向像不像，约在 -1~1，越近 1 越像"),
+                        topic("点积 Dot Product：对应维相乘再求和；是余弦公式的分子部分"),
+                        topic("模长 / L2 范数：向量「长度」，各分量平方和再开方"),
+                        topic("语义相似度：意思接近的文本，在嵌入空间里距离更近"),
+                        topic("Embedding 模型：专门把文本编码成向量的模型（如 bge、text-embedding-v3）"),
+                        topic("MTEB：衡量文本嵌入质量的公开榜单"),
+                        topic("同空间原则：入库与查询必须用同一套 Embedding 模型，否则不可比"),
+                        topic("本仓库常用：本地 BAAI/bge-small-zh-v1.5 或云端 text-embedding-v3"),
+                    ],
+                ),
+                topic(
                     "1 什么是 Embedding",
                     children=[
                         topic(
@@ -1614,6 +1687,25 @@ TREE = topic(
             "05 向量数据库",
             note="飞书文档：03-大模型应用基础--向量数据库",
             children=[
+                topic(
+                    "术语定义（本章必背）",
+                    children=[
+                        topic("向量数据库：专为高维向量存储与近邻检索优化的数据库"),
+                        topic("向量检索 / 语义搜索：按向量相似度找「意思接近」的内容，而非纯关键词匹配"),
+                        topic("KNN / 精确近邻：对全部向量算距离再取最近，准但慢 O(N)"),
+                        topic("ANN（Approximate Nearest Neighbor）：近似近邻，牺牲少量精度换大幅速度"),
+                        topic("HNSW：基于多层小世界图的常见 ANN 索引结构"),
+                        topic("IVF：倒排文件式向量索引，先粗分桶再在桶内精查"),
+                        topic("Latency（延迟）：单次查询响应时间"),
+                        topic("Throughput / QPS：每秒能处理的查询数"),
+                        topic("Recall@K：返回的前 K 个里包含真正近邻的比例"),
+                        topic("FAISS：Meta 开源的向量相似度检索库（偏算法引擎）"),
+                        topic("Chroma：开发友好的向量库，本项目默认持久化方案"),
+                        topic("Collection：向量库里的一个命名集合/表"),
+                        topic("持久化 Persist：把索引落盘，重启不丢"),
+                        topic("元数据过滤：检索时可按文档属性（来源、时间等）硬过滤"),
+                    ],
+                ),
                 topic(
                     "第一部分 向量检索基础",
                     children=[
@@ -1985,6 +2077,26 @@ TREE = topic(
             "06 Native RAG（基础RAG）",
             note="飞书文档：01-Native_RAG（基础RAG）https://ecnwvcdzorsp.feishu.cn/docx/WAyydkEX2o81xAxFkn1cJRqqnnY",
             children=[
+                topic(
+                    "术语定义（本章必背）",
+                    children=[
+                        topic("Native RAG：基础 RAG 流水线——加载→分块→向量化入库→检索 Top-K→拼 Prompt→生成"),
+                        topic("Indexing（索引/入库）：文档切块并 Embedding 后写入向量库"),
+                        topic("Search / Retrieval：问题向量化后召回最相关块"),
+                        topic("Generate：把检索块作为上下文，由 LLM 生成回答"),
+                        topic("Chunk / 分块：把长文档切成适合检索的小段"),
+                        topic("SentenceSplitter：按句子/长度切块（本仓库默认之一）"),
+                        topic("TokenTextSplitter：按 token 数切块"),
+                        topic("SemanticSplitter：按语义相似度变化点切块"),
+                        topic("LlamaIndex：本课程主用的 RAG 编排框架"),
+                        topic("VectorStoreIndex：LlamaIndex 中基于向量库的索引对象"),
+                        topic("RetrieverQueryEngine：检索器 + 响应合成器组成的问答引擎"),
+                        topic("ChatEngine：带多轮记忆的 RAG 对话引擎"),
+                        topic("Top-K / similarity_top_k：返回相似度最高的前 K 条"),
+                        topic("数据质量：垃圾进垃圾出——脏文档会直接拖垮 RAG 效果"),
+                        topic("本项目入口：python chroma文档管理/run.py → http://127.0.0.1:8003/"),
+                    ],
+                ),
                 topic(
                     "一、技术原理",
                     children=[
