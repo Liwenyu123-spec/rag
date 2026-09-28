@@ -575,36 +575,214 @@ def chapters(topic):
                 ],
             ),
             topic(
-                "九、和本仓库 chroma文档管理 的对齐",
+                "九、对照 chroma文档管理：代码级走读",
+                note="主路径：RagAskService.ask → apply_crag → synthesize。启动 python chroma文档管理/run.py → :8003",
                 children=[
                     topic(
-                        "实现：semantic_search/app/service/crag.py",
+                        "在 /ask 流水线中的精确位置",
                         children=[
-                            topic("对齐课上 demo01 基础版：库内修正，不联网、不依赖千问 rerank"),
-                            topic("评估/改写：Settings.llm（如 DeepSeek）"),
-                            topic("filter_relevant_nodes：逐篇 RELEVANT/IRRELEVANT"),
-                            topic("全无关 → rewrite_query_for_retrieval → retrieve_fn 再走混合+后处理"),
-                            topic("只再来一轮，避免死循环"),
+                            topic("① prepare_retrieval_queries（Pre）"),
+                            topic("② 每路 _build_retriever：向量+BM25 QueryFusion（Mid）"),
+                            topic("③ 多 query 时 merge_nodes_rrf（查询间融合）"),
+                            topic("④ apply_postprocessors：rerank→压缩→LongContextReorder（Post）"),
+                            topic("⑤ apply_crag（本章）← 过滤无关；全无关则改写后 _retrieve_pipeline 再跑一遍 Mid+Post"),
+                            topic("⑥ get_response_synthesizer(compact)+ASK_QA_PROMPT 生成；sources 用用户原问题对应的真实块"),
                         ],
                     ),
                     topic(
-                        "接入位置",
+                        "crag.py 函数对照讲义",
                         children=[
-                            topic("rag_service.ask：Pre → Mid(hybrid) → Post(三件套) → CRAG → 生成"),
-                            topic("配置：CRAG_ENABLED / CRAG_VERBOSE（.env）"),
-                            topic("响应：AskResponse.crag 带回评估明细与是否改写重试"),
+                            topic("_is_relevant ≈ 讲义 Retrieval Evaluator（二值 RELEVANT/IRRELEVANT）"),
+                            topic("filter_relevant_nodes ≈ 基础版 _filter_relevant + verbose 打印"),
+                            topic("rewrite_query_for_retrieval ≈ 讲义 REWRITE_PROMPT（全无关才触发）"),
+                            topic("apply_crag ≈ CorrectiveRAGQueryEngine.custom_query 的评估+修正段"),
+                            topic("retrieve_fn 注入：保证重试仍走混合检索+三件套，不是裸向量"),
+                            topic("无 LLM 时 _is_relevant 直接 True：避免把结果滤空"),
                         ],
                     ),
                     topic(
-                        "与完整版差距 / 可选演进",
+                        "crag 响应字段（前端 index.html 会展示）",
                         children=[
-                            topic("已有：评估过滤 + 改写重检索（内部）"),
-                            topic("未接：Tavily Web、三档路径、Knowledge Refinement 拆 strip"),
-                            topic("下一步：Ambiguous 时合并外搜；或先上 strip 级精炼"),
+                            topic("enabled / message：是否开启、走了哪条分支"),
+                            topic("before_count → after_count：过滤前后篇数"),
+                            topic("retried + rewritten_query：是否纠错改写及新问句"),
+                            topic("eval[]：每篇 rank/relevant/preview，便于作业演示与排障"),
+                            topic("message 取值：filtered / rewrote_and_filtered / no_relevant_after_retry / …"),
                         ],
                     ),
+                    topic(
+                        "开关与默认",
+                        children=[
+                            topic("CRAG_ENABLED=true（默认开）"),
+                            topic("CRAG_VERBOSE=true：终端打印 [CRAG] 文档 i：相关/无关"),
+                            topic("评估模型=Settings.llm（与问答同一套，如 DeepSeek），非单独小评估器"),
+                        ],
+                    ),
+                    topic(
+                        "与讲义完整版（Workflow+Tavily）差距",
+                        children=[
+                            topic("已落地：库内评估过滤 + 一轮改写重检索（demo01 路线）"),
+                            topic("未落地：Correct/Ambiguous/Incorrect 三档分流"),
+                            topic("未落地：Knowledge Refinement 拆 strip→滤→重组"),
+                            topic("未落地：Tavily / Web 外搜；Ambiguous 时 k_in+k_ex"),
+                            topic("演进优先级：① strip 精炼 ② 三档 ③ 可选外搜（注意内网/合规）"),
+                        ],
+                    ),
+                    topic(
+                        "排障口诀（结合本项目）",
+                        children=[
+                            topic("after_count=0：看 eval 是否全 IRRELEVANT → 问法/库覆盖/阈值过严"),
+                            topic("retried=true 仍空：改写句是否偏离；检查混合检索是否回退成纯向量"),
+                            topic("相关篇被误杀：看 LLM 是否稳定；可临时 CRAG_ENABLED=0 对比"),
+                            topic("延迟高：CRAG 每篇一次 complete；可先减小 k / RETRIEVE_CANDIDATES"),
+                        ],
+                    ),
+                    topic("全文件/API 对照见第 13 章"),
                 ],
             ),
         ],
     )
-    return [ch11, ch12]
+
+    ch13 = topic(
+        "13 chroma文档管理：项目全链路对照",
+        note=(
+            "把第 08~12 章方法映射到本仓库搜索引擎。"
+            "根目录：chroma文档管理/；包：semantic_search/；启动：python chroma文档管理/run.py → http://127.0.0.1:8003/"
+        ),
+        children=[
+            topic(
+                "〇、一张总图：用户问一句会发生什么",
+                children=[
+                    topic("浏览器 static/index.html → POST /ask {question,k,strategy}"),
+                    topic("main.ask → RagAskService.ask（编排层）"),
+                    topic("Pre：pre_retrieval.prepare_retrieval_queries"),
+                    topic("Mid：engine._build_retriever → 向量±BM25；多 query 则 merge_nodes_rrf"),
+                    topic("Post：retrieval_optimize.apply_postprocessors 三件套"),
+                    topic("CRAG：crag.apply_crag（可改写重跑 Mid+Post）"),
+                    topic("Gen：response_synthesizer + ASK_QA_PROMPT；返回 answer/sources/pre_retrieval/crag"),
+                ],
+            ),
+            topic(
+                "一、目录与职责（打开代码用）",
+                children=[
+                    topic("run.py：启动入口，挂 sys.path 后调 semantic_search.__main__"),
+                    topic("app/main.py：FastAPI 路由 /ask /search /query /chat /ingest /upload …"),
+                    topic("app/engine.py：Embedding/LLM/Chroma/分块/索引；_build_retriever / query / chat"),
+                    topic("app/config.py：模型、分块、HYBRID/RERANK/COMPRESS/REORDER/CRAG 开关"),
+                    topic("app/schemas.py：AskRequest/AskResponse、PreRetrievalInfo、CragInfo"),
+                    topic("app/service/pre_retrieval.py：清洗 / 重写 / HyDE"),
+                    topic("app/service/retrieval_optimize.py：混合召回 + 后处理三件套"),
+                    topic("app/service/crag.py：Corrective RAG 库内修正"),
+                    topic("app/service/rag_service.py：/ask 专用编排（Pre→Mid→Post→CRAG→Gen）"),
+                    topic("static/index.html：问答 UI，展示策略过程、CRAG 过滤、来源卡片"),
+                    topic("data/：默认灌库 md/txt；chroma_db/：向量持久化"),
+                ],
+            ),
+            topic(
+                "二、章节 ↔ 模块映射",
+                children=[
+                    topic(
+                        "第 08 检索前 → pre_retrieval.py + /ask?strategy=",
+                        children=[
+                            topic("none：原句单路"),
+                            topic("clean：去口语填充 + 术语表（电脑→笔记本电脑 等）"),
+                            topic("rewrite（默认）：清洗句 + 改写句双路，防改歪"),
+                            topic("hyde：清洗句 + 假想说明文双路；假想文只检索不当引用"),
+                            topic("前端：pre_retrieval 盒子展示 original/clean/rewritten/hyde_doc"),
+                        ],
+                    ),
+                    topic(
+                        "第 09 检索中 → retrieval_optimize.build_hybrid_retriever",
+                        children=[
+                            topic("HYBRID_ENABLED：向量 as_retriever + BM25(jieba) → QueryFusionRetriever"),
+                            topic("默认 mode=reciprocal_rerank（RRF）；失败回退纯向量"),
+                            topic("粗排窗口：RETRIEVE_CANDIDATES（默认 20）给精排留余量"),
+                            topic("/ask 多 query：路内融合后再 merge_nodes_rrf 做查询间融合"),
+                        ],
+                    ),
+                    topic(
+                        "第 10 检索后 → build_node_postprocessors / apply_postprocessors",
+                        children=[
+                            topic("Rerank：默认本地 SentenceTransformerRerank(bge-reranker-base)"),
+                            topic("RERANK_PROVIDER=dashscope 才走千问 qwen3-rerank"),
+                            topic("压缩：SentenceEmbeddingOptimizer + 中文切句 + COMPRESS_PERCENTILE"),
+                            topic("排版：LongContextReorder 对抗 Lost in the Middle"),
+                            topic("query/chat：挂在 RetrieverQueryEngine / chat_engine 的 node_postprocessors"),
+                        ],
+                    ),
+                    topic(
+                        "第 11 Self-RAG → 尚未成独立模块",
+                        children=[
+                            topic("缺口：Retrieve 门控、ISSUP 验据、ISUSE 打分"),
+                            topic("可借用：CRAG 的相关性过滤 ≈ ISREL"),
+                            topic("落地建议见第 11 章第九节"),
+                        ],
+                    ),
+                    topic(
+                        "第 12 CRAG → crag.py + rag_service 第⑤步",
+                        children=[
+                            topic("默认开启；全无关改写后 _retrieve_pipeline 重跑"),
+                            topic("不联网：无 Tavily，属讲义基础版路线"),
+                        ],
+                    ),
+                ],
+            ),
+            topic(
+                "三、API 怎么选",
+                children=[
+                    topic("/ask：作业主链路，带 strategy + pre_retrieval + crag（推荐演示）"),
+                    topic("/search：只检索不生成，看混合/后处理召回效果"),
+                    topic("/query：一次性 RAG，有后处理，无 Pre 多策略、无 CRAG 编排"),
+                    topic("/chat：多轮记忆；后处理挂引擎，会话键含 hybrid/rerank 标志"),
+                    topic("/ingest /upload：灌库；会 _invalidate_retrieval_cache 重建 BM25"),
+                    topic("/stats /health：看库规模与 hybrid_enabled/rerank_enabled 等"),
+                ],
+            ),
+            topic(
+                "四、环境变量开关速查（config.py）",
+                children=[
+                    topic("HYBRID_ENABLED / HYBRID_FUSION_MODE / RETRIEVE_CANDIDATES"),
+                    topic("RERANK_ENABLED / RERANK_PROVIDER(local|dashscope|none) / RERANK_MODEL / RERANK_TOP_N"),
+                    topic("COMPRESS_ENABLED / COMPRESS_PERCENTILE"),
+                    topic("REORDER_ENABLED"),
+                    topic("CRAG_ENABLED / CRAG_VERBOSE"),
+                    topic("CHUNK_SIZE / CHUNK_OVERLAP / SIMILARITY_TOP_K"),
+                    topic("EMBEDDING_* / LLM（DeepSeek 等）/ DASHSCOPE_API_KEY（仅千问路径需要）"),
+                    topic("SEARCH_HOST / SEARCH_PORT（默认 8003）"),
+                ],
+            ),
+            topic(
+                "五、和讲义 Advanced 闭环四问对照",
+                children=[
+                    topic("查什么 → strategy 重写/HyDE（第 08）"),
+                    topic("去哪查 → 同库向量+BM25（第 09）；未做多目录多路 channel"),
+                    topic("查得准 → 本地 bge rerank（第 10）"),
+                    topic("怎么用 → 压缩+长上下文重排+引用约束；错了再 CRAG 纠（第 10/12）"),
+                    topic("查不查 → Self-RAG Retrieve 尚未接（第 11 缺口）"),
+                ],
+            ),
+            topic(
+                "六、效果不好时：按本项目排查",
+                children=[
+                    topic("① /stats 库是否为空；分块是否切断关键句"),
+                    topic("② 换 strategy：rewrite↔hyde↔clean，看 pre_retrieval 双路是否合理"),
+                    topic("③ 专名搜不到：确认 HYBRID_ENABLED 与 jieba/bm25 依赖"),
+                    topic("④ 相关在后面：确认 RERANK_ENABLED 与本地 bge 是否加载成功"),
+                    topic("⑤ 答案飘：看压缩是否过猛；Prompt 是否仍「仅依据上下文」"),
+                    topic("⑥ CRAG 滤光：看 crag.eval；必要时 CRAG_VERBOSE 对照终端"),
+                    topic("⑦ 延迟：降 k/候选；关 CRAG 或压缩做 A/B"),
+                ],
+            ),
+            topic(
+                "七、建议的下一刀改造（优先级）",
+                children=[
+                    topic("P0：Self-RAG Retrieve 门控（闲聊不查）"),
+                    topic("P1：生成后 ISSUP 验据 + 不足则重写"),
+                    topic("P2：CRAG strip 级 Knowledge Refinement（对齐论文 Correct 路径）"),
+                    topic("P3：可选 Web 补充（仅公网场景；内网知识库慎开）"),
+                    topic("P4：多目录多路召回 + channel 元数据（第 09 进阶）"),
+                ],
+            ),
+        ],
+    )
+    return [ch11, ch12, ch13]
