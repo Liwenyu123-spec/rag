@@ -32,6 +32,7 @@ from semantic_search.app.schemas import (  # Pydantic 请求/响应模型，给�
     AskResponse,  # 检索前优化 + RAG 问答响应体
     ChatRequest,  # 多轮对话请求体
     ChatResponse,  # 多轮对话响应体
+    CragInfo,  # Corrective RAG 过程信息
     DocumentResponse,  # 单条检索结果（文档片段 + 相似度）
     IngestRequest,  # 从本地文件/目录导入的请求体
     PreRetrievalInfo,  # 检索前优化中间信息
@@ -146,11 +147,12 @@ async def ask(request: AskRequest):  # 请求体含 question / k / strategy
     except RuntimeError as exc:  # 如缺 LLM
         raise HTTPException(status_code=503, detail=str(exc)) from exc  # 转 503
 
-    return AskResponse(  # 组装带 pre_retrieval 的完整响应
+    return AskResponse(  # 组装带 pre_retrieval / crag 的完整响应
         question=payload["question"],  # 原问题
         answer=payload["answer"],  # 最终答案
         sources=[DocumentResponse(**item) for item in payload["sources"]],  # 真实引用来源
         pre_retrieval=PreRetrievalInfo(**payload["pre_retrieval"]),  # 检索前优化过程
+        crag=CragInfo(**(payload.get("crag") or {})),  # Corrective RAG 过程
     )
 
 

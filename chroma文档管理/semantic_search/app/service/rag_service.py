@@ -1,4 +1,4 @@
-"""RAG 问答服务：检索前 → 检索中（混合）→ 多查询 RRF → 检索后 → 生成。"""  # 模块说明：作业主链路编排
+"""RAG 问答服务：检索前 → 检索中 → 检索后 → Corrective RAG → 生成。"""  # 模块说明：作业主链路编排
 
 from __future__ import annotations  # 允许前向类型注解
 
@@ -10,6 +10,7 @@ from llama_index.core.response_synthesizers import get_response_synthesizer  # �
 from llama_index.core.schema import NodeWithScore  # 带相似度分数的检索节点
 
 from semantic_search.app.config import RAG_SYSTEM_PROMPT, SIMILARITY_TOP_K  # 系统提示与默认 Top-K
+from semantic_search.app.service.crag import apply_crag  # Corrective RAG（库内修正）
 from semantic_search.app.service.pre_retrieval import prepare_retrieval_queries  # 检索前优化入口
 from semantic_search.app.service.retrieval_optimize import apply_postprocessors  # 检索后三件套
 
@@ -78,22 +79,38 @@ def merge_nodes_rrf(  # Reciprocal Rank Fusion：多路召回融合
 
 
 class RagAskService:  # 面向 /ask 的业务编排类
-    """面向作业接口的编排层：pre-retrieval + retrieve + generate。"""  # 类说明
+    """面向作业接口的编排层：pre + mid + post + CRAG + generate。"""  # 类说明
 
     def __init__(self, engine: SemanticSearchEngine):  # 注入已初始化的搜索引擎
         self.engine = engine  # 保存引擎引用，复用 index / collection
 
-    def ask(  # 主流程：提问 → 检索前优化 → 检索融合 → 生成
+    def _retrieve_pipeline(self, query: str, k: int) -> list[NodeWithScore]:
+        """单查询：混合召回 + 检索后处理（供 CRAG 重试复用）。"""
+        retriever = self.engine._build_retriever(k)
+        nodes = list(retriever.retrieve(query))
+        return apply_postprocessors(nodes, query, k)
+
+    def ask(  # 主流程：提问 → 检索前优化 → 检索融合 → CRAG → 生成
         self,  # 服务实例
         question: str,  # 用户原问题
         k: int = SIMILARITY_TOP_K,  # 最终返回的来源条数
         strategy: str = "rewrite",  # 检索前策略
-    ) -> dict:  # 返回 question/answer/sources/pre_retrieval
-        """接收用户提问 → 检索前优化 → 知识库检索 → 模型生成最终答案。"""  # 方法说明
+    ) -> dict:  # 返回 question/answer/sources/pre_retrieval/crag
+        """接收用户提问 → 检索前优化 → 知识库检索 → CRAG → 模型生成。"""  # 方法说明
         self.engine._require_llm()  # 没有大模型则直接报错（问答依赖 LLM）
         question = (question or "").strip()  # 规范化问题
         if not question:  # 空问题不允许
             raise ValueError("问题不能为空")  # 交给路由转成 400
+
+        empty_crag = {
+            "enabled": False,
+            "rewritten_query": None,
+            "retried": False,
+            "before_count": 0,
+            "after_count": 0,
+            "eval": [],
+            "message": "skipped",
+        }
 
         total = self.engine.collection.count()  # 当前知识库条数
         if total == 0:  # 空库无法检索
@@ -109,6 +126,7 @@ class RagAskService:  # 面向 /ask 的业务编排类
                     "hyde_doc": None,  # 无 HyDE
                     "retrieval_queries": [],  # 未发起检索
                 },
+                "crag": empty_crag,
             }
 
         k = max(1, min(k, total))  # Top-K 夹在 [1, 库容量] 之间
@@ -130,12 +148,21 @@ class RagAskService:  # 面向 /ask 的业务编排类
         # 检索后：重排 → 压缩 → 长上下文重排（用用户原问题打分/裁句）
         fused = apply_postprocessors(fused, question, k)
 
-        if not fused:  # 检索为空
+        # Corrective RAG：过滤无关；全无关则改写后重走「混合+后处理」
+        fused, crag_info = apply_crag(
+            question,
+            fused,
+            retrieve_fn=lambda q: self._retrieve_pipeline(q, k),
+            llm=Settings.llm,
+        )
+
+        if not fused:  # 检索为空或 CRAG 过滤后为空
             return {  # 告诉用户换问法或检查库
                 "question": question,  # 回显问题
-                "answer": "没有检索到相关知识，请换一种问法或检查知识库内容。",  # 空检索提示
+                "answer": "知识库中没有足够相关信息回答该问题（Corrective RAG 过滤后为空）。",
                 "sources": [],  # 无来源
                 "pre_retrieval": prep,  # 仍返回优化过程，便于排查
+                "crag": crag_info,
             }
 
         # 用真实文档块生成答案；HyDE 假想文档不当作引用
@@ -152,4 +179,5 @@ class RagAskService:  # 面向 /ask 的业务编排类
             "answer": str(response).strip(),  # 最终自然语言答案
             "sources": sources,  # 真实知识库片段
             "pre_retrieval": prep,  # 检索前优化中间信息
+            "crag": crag_info,
         }

@@ -67,6 +67,16 @@ class PreRetrievalInfo(BaseModel):  # 检索前优化中间产物（便于作业
     retrieval_queries: List[str] = Field(default_factory=list)  # 实际用于检索的查询列表
 
 
+class CragInfo(BaseModel):  # Corrective RAG 过程信息
+    enabled: bool = False
+    rewritten_query: str | None = None  # 全无关时的改写句
+    retried: bool = False  # 是否触发了改写重检索
+    before_count: int = 0  # 过滤前篇数
+    after_count: int = 0  # 过滤后篇数
+    eval: List[dict] = Field(default_factory=list)  # 每篇相关/无关明细
+    message: str = "skipped"  # filtered / rewrote_and_filtered / ...
+
+
 class AskRequest(BaseModel):  # POST /ask：基础 RAG + 检索前优化
     question: str = Field(..., description="用户问题", min_length=1)  # 必填用户问题
     k: int = Field(5, description="检索条数", ge=1, le=100)  # 最终返回来源条数
@@ -81,3 +91,4 @@ class AskResponse(BaseModel):  # /ask 的响应体
     answer: str  # 检索后由模型生成的最终答案
     sources: List[DocumentResponse] = Field(default_factory=list)  # 真实知识库引用来源
     pre_retrieval: PreRetrievalInfo  # 检索前优化过程信息
+    crag: CragInfo | None = None  # Corrective RAG 过程（可选）

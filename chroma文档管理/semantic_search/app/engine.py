@@ -20,6 +20,7 @@ from semantic_search.app.config import (  # 导入运行时配置常量
     CHUNK_SIZE,  # 分块大小
     COLLECTION_NAME,  # 集合名
     COMPRESS_ENABLED,
+    CRAG_ENABLED,
     DASHSCOPE_API_KEY,  # 千问 Key
     DATA_DIR,  # 默认数据目录
     DEEPSEEK_API_KEY,  # DeepSeek Key
@@ -106,7 +107,7 @@ class SemanticSearchEngine:  # Native RAG 引擎主体
         print(
             "检索优化: "
             f"hybrid={HYBRID_ENABLED}, rerank={RERANK_ENABLED}/{RERANK_PROVIDER}, "
-            f"compress={COMPRESS_ENABLED}, reorder={REORDER_ENABLED}"
+            f"compress={COMPRESS_ENABLED}, reorder={REORDER_ENABLED}, crag={CRAG_ENABLED}"
         )
 
     def _init_embed_model(self):  # 按配置选择 Embedding 实现

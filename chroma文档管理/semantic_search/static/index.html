@@ -449,6 +449,11 @@
                 检索句：{{ msg.preRetrieval.retrieval_queries.join(' ｜ ') }}
               </div>
             </div>
+            <div class="pre-box" v-if="msg.crag && msg.crag.enabled">
+              <strong>Corrective RAG</strong>
+              <div class="pre-line">过滤：{{ msg.crag.before_count }} → {{ msg.crag.after_count }} 篇 · {{ msg.crag.message }}</div>
+              <div class="pre-line" v-if="msg.crag.retried && msg.crag.rewritten_query">纠错改写：{{ msg.crag.rewritten_query }}</div>
+            </div>
             <div class="sources" v-if="msg.sources && msg.sources.length">
               <div
                 class="source-card"
@@ -724,6 +729,7 @@
               botMsg.content = data.answer || '没有生成回答。';
               botMsg.sources = data.sources || [];
               botMsg.preRetrieval = data.pre_retrieval || null;
+              botMsg.crag = data.crag || null;
             }
           } catch (err) {
             botMsg.content = '请求失败：' + (err.message || String(err));
