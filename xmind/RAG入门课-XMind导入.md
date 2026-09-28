@@ -3925,6 +3925,72 @@ https://ecnwvcdzorsp.feishu.cn/docx/TXQtdZ8Ino1KFZxfifkcWAjOneg
 
 #### 和第 07 章：Self-RAG 治「过度检索 / 检索不足」；与 CRAG（第 12 章）互补
 
+### 术语定义（本章必背）
+
+#### Self-RAG
+
+##### 定义：Self-Reflective Retrieval-Augmented Generation，带自我反思的检索增强生成
+
+##### 要点：模型边生成边输出反思标记，动态决定检索与校正
+
+#### Reflection Tokens（反思令牌）
+
+##### 定义：插入生成过程的特殊控制标记，表达模型对自己行为的判断
+
+##### 四种：Retrieve / ISREL / ISSUP / ISUSE
+
+#### Retrieve（检索决策）
+
+##### 定义：判断当前问题是否需要外部检索的标记/步骤
+
+##### 取值直觉：YES=去查库；NO=直接用模型内部知识回答
+
+#### ISREL（Is Relevant，相关性）
+
+##### 定义：判断检索到的片段是否与问题相关、足以支撑作答
+
+##### 作用：过滤噪声文档，避免无关资料进生成
+
+#### ISSUP（Is Supported，支持度）
+
+##### 定义：判断生成内容是否被检索证据支撑（打幻觉）
+
+##### 常见档：FULLY / PARTIALLY / NO
+
+#### ISUSE（Is Useful，有用性）
+
+##### 定义：判断最终回答对用户问题的帮助程度
+
+##### 常见：1~5 分，用于监控或候选择优
+
+#### Critic / Generator（批评家 / 生成器）
+
+##### 批评家：负责打反思标签的模型（训练阶段老师）
+
+##### 生成器：同时学习「写什么」和「如何自评」的主模型
+
+#### Adaptive Retrieval（自适应检索）
+
+##### 定义：按 Retrieve 概率/阈值动态决定是否检索，而非固定总查
+
+#### 软约束 vs 硬约束
+
+##### 软约束：调令牌权重，引导生成倾向（如更抠证据）
+
+##### 硬约束：直接丢弃不合格候选（如 No Support）
+
+#### 幻觉 Hallucination
+
+##### 定义：模型生成看似合理但无事实依据或与资料矛盾的内容
+
+##### Self-RAG 用 ISSUP 专门压制这类错误
+
+#### 元认知 Metacognition
+
+##### 定义：对自身认知过程的认知——知道自己知不知道、查不查、答得好不好
+
+##### Self-RAG 的价值叙事：让 LLM 具备初级元认知
+
 ### 一、什么是 Self-RAG
 
 #### 1 介绍
@@ -4204,6 +4270,78 @@ https://ecnwvcdzorsp.feishu.cn/docx/TO92dU6QWoTXYjxHT6icY53Dnsf
 #### 阶段归属：Post-Retrieval —— 检索结果评估与修正
 
 #### 和第 10 章：Rerank/压缩改「怎么用」；CRAG 改「用不用、不够就纠」
+
+### 术语定义（本章必背）
+
+#### Corrective RAG / CRAG
+
+##### 定义：Corrective Retrieval-Augmented Generation，修正增强检索生成
+
+##### 公式：CRAG = 标准 RAG + 检索质量校验 + 自动修正/补充检索
+
+##### 一句话：不假设「检索到的就是对的」，先评估再决定怎么用
+
+#### Retrieval Evaluator（检索评估器）
+
+##### 定义：对召回文档相对问题的正确性/相关性打分或分档的模块
+
+##### 论文三档：Correct / Ambiguous / Incorrect
+
+##### 工程常见：逐篇 yes/no 或 RELEVANT/IRRELEVANT
+
+#### Correct（正确）
+
+##### 定义：检索结果整体足以正确支撑回答
+
+##### 后续：走 Knowledge Refinement，主要用内部精炼知识 k_in
+
+#### Ambiguous（模糊）
+
+##### 定义：部分有用但不充分，或相关度存疑
+
+##### 后续：内部精炼 + 外部搜索，组合 k_in + k_ex
+
+#### Incorrect（不正确）
+
+##### 定义：检索结果基本无法支撑正确回答（跑题/错误/空）
+
+##### 后续：侧重外部知识搜索，主要用 k_ex
+
+#### Knowledge Refinement（知识精炼）
+
+##### 定义：对内部文档做 Decompose→Filter→Recompose，去噪留精华
+
+##### 产物：精炼内部知识 k_in
+
+#### Knowledge Searching（知识搜索）
+
+##### 定义：内部不足时重写查询并检索外部（如 Web）补充知识
+
+##### 产物：外部知识 k_ex
+
+#### k_in / k_ex
+
+##### k_in：来自内部知识库并经精炼的上下文
+
+##### k_ex：来自外部搜索并经选择的上下文
+
+#### 库内修正 vs 完整 CRAG
+
+##### 库内修正：评估过滤 + 改写后仍查同一知识库（本仓库路线）
+
+##### 完整 CRAG：不足时还可 Web 搜索（讲义 Tavily Workflow）
+
+#### confidently wrong（自信地犯错）
+
+##### 定义：检索看似相关实则答非所问，模型仍斩钉截铁给出错误答案
+
+##### CRAG 要防的典型失败模式
+
+#### 检索相关性 ≠ 答案准确性
+
+##### 定义：向量相近或关键词重合，不等于文档能正确回答该问题
+
+##### 例子：《蝙蝠侠之死》编剧 vs 1989《蝙蝠侠》编剧 Hamm
 
 ### 一、为什么需要 CRAG
 
@@ -4532,6 +4670,100 @@ https://ecnwvcdzorsp.feishu.cn/docx/TO92dU6QWoTXYjxHT6icY53Dnsf
 #### CRAG：crag.apply_crag（可改写重跑 Mid+Post）
 
 #### Gen：response_synthesizer + ASK_QA_PROMPT；返回 answer/sources/pre_retrieval/crag
+
+### 术语定义（项目里会碰到的词）
+
+#### Native RAG
+
+##### 定义：最朴素的检索增强：问句→向量检索 Top-K→塞进 Prompt→生成
+
+##### 本项目底座仍是 Native，上面叠了 Pre/Mid/Post/CRAG
+
+#### SemanticSearchEngine
+
+##### 定义：engine.py 中的核心引擎类，管 Embedding/LLM/Chroma/分块/索引/检索
+
+#### RagAskService
+
+##### 定义：/ask 编排层，按 Pre→Mid→Post→CRAG→Gen 串完整作业链路
+
+#### Node / NodeWithScore
+
+##### Node：LlamaIndex 里一块可检索文本（通常=一个 chunk）
+
+##### NodeWithScore：带检索分数的节点，融合/重排会改 score
+
+#### Chunk / 分块
+
+##### 定义：把长文档切成适合 embedding 与召回的小段
+
+##### 本项目：Sentence / Token / Semantic 三种 splitter
+
+#### strategy（检索前策略）
+
+##### 定义：/ask 请求里控制查询怎么预处理的枚举
+
+##### 取值：none / clean / rewrite（默认）/ hyde
+
+#### QueryFusionRetriever
+
+##### 定义：LlamaIndex 多检索器融合器；本项目用它做向量+BM25 同库混合
+
+##### mode=reciprocal_rerank 即按 RRF 融排名
+
+#### BM25
+
+##### 定义：经典稀疏关键词检索算法，擅长专名、编号、精确词面
+
+##### 中文必须配合分词（本项目 jieba）
+
+#### RRF（Reciprocal Rank Fusion）
+
+##### 定义：用「排名倒数」融合多路结果，不依赖原始分数量纲
+
+##### 本项目两处：路内 QueryFusion；多 query 时 merge_nodes_rrf
+
+#### node_postprocessors
+
+##### 定义：检索后、生成前的节点后处理器列表，按顺序串行
+
+##### 本项目三件套：Rerank → 压缩 → LongContextReorder
+
+#### Cross-Encoder / Bi-Encoder
+
+##### Bi-Encoder：查询与文档各自编码再比相似度，快，适合粗召回
+
+##### Cross-Encoder：query+doc 一起进模型打分，准但慢，适合精排
+
+#### SentenceEmbeddingOptimizer（上下文压缩）
+
+##### 定义：按句与查询的相似度裁掉低相关句子，减少噪声与 token
+
+#### LongContextReorder
+
+##### 定义：把最相关片段放到上下文首尾，对抗 Lost in the Middle
+
+#### Lost in the Middle
+
+##### 定义：长上下文里，模型对中间段落记忆/利用率明显低于首尾
+
+#### HyDE
+
+##### 定义：Hypothetical Document Embeddings，先生成假想答案文档再拿去检索
+
+##### 注意：假想文只用于检索，不能当事实引用（本项目 sources 不用它）
+
+#### pre_retrieval / crag（响应字段）
+
+##### pre_retrieval：检索前中间产物（原句/清洗/改写/HyDE/检索列表）
+
+##### crag：Corrective RAG 过程（过滤前后篇数、是否重试、评估明细）
+
+#### Chroma / Collection
+
+##### Chroma：本项目使用的向量数据库
+
+##### Collection：一个命名向量集合（默认 native_rag）
 
 ### 一、目录与职责（打开代码用）
 
