@@ -2716,7 +2716,7 @@ TREE = topic(
                         topic("第 10 章：检索后专训（Rerank/压缩/长上下文重排）"),
                         topic("第 11 章：Self-RAG 专训（查不查 + 生成反思）"),
                         topic("第 12 章：CRAG 专训（查错了怎么办 + 库内/外搜修正）"),
-                        topic("chroma文档管理：Native 底座 + 已叠混合/后处理/CRAG"),
+                        topic("第 13 章：chroma文档管理 全链路文件/API/开关对照"),
                     ],
                 ),
             ],
@@ -3253,11 +3253,11 @@ TREE = topic(
                             ],
                         ),
                         topic(
-                            "本仓库最小改法",
+                            "本仓库已落地 / 怎么调",
                             children=[
-                                topic("先在 query() 前加方法1+3（清洗+重写）"),
-                                topic("再试 HyDEQueryTransform(include_original=True)"),
-                                topic("专名多再加混合检索；回答飘再加重排"),
+                                topic("/ask 默认 strategy=rewrite：清洗+重写双路（pre_retrieval.py）"),
+                                topic("可改 strategy=hyde / clean / none；假想文档只检索不当引用"),
+                                topic("后面已接混合检索、后处理三件套、CRAG；细节见第 13 章"),
                             ],
                         ),
                     ],
@@ -3704,9 +3704,9 @@ TREE = topic(
                         topic(
                             "和本仓库",
                             children=[
-                                topic("当前 chroma文档管理 ≈ 单路稠密 Native"),
-                                topic("最小改法：同 nodes 加 BM25 + QueryFusionRetriever(mode=reciprocal_rerank)"),
-                                topic("有多目录知识时再拆多路并打 channel 元数据"),
+                                topic("已落地：HYBRID_ENABLED + BM25(jieba) + QueryFusionRetriever(reciprocal_rerank)"),
+                                topic("代码：retrieval_optimize.build_hybrid_retriever；失败回退纯向量"),
+                                topic("未做：多目录多路 channel；见第 13 章演进 P4"),
                             ],
                         ),
                         topic(
@@ -4101,9 +4101,9 @@ TREE = topic(
                         topic(
                             "和本仓库",
                             children=[
-                                topic("Native 查询引擎默认无 node_postprocessors"),
-                                topic("最小改法：as_query_engine(..., node_postprocessors=[DashScopeRerank(...)])"),
-                                topic("再视情况加 SentenceEmbeddingOptimizer 与 LongContextReorder"),
+                                topic("已落地三件套：本地 bge-reranker → SentenceEmbeddingOptimizer → LongContextReorder"),
+                                topic("代码：retrieval_optimize.build_node_postprocessors；/ask 走 apply_postprocessors"),
+                                topic("默认不依赖千问重排；RERANK_PROVIDER=dashscope 才用 API"),
                             ],
                         ),
                         topic(
@@ -4176,6 +4176,7 @@ CHAPTER_COLORS = [
     ("#BE123C", "#FECDD3"),  # 10 玫
     ("#CA8A04", "#FEF9C3"),  # 11 金（Self-RAG）
     ("#9333EA", "#F3E8FF"),  # 12 紫（CRAG）
+    ("#0F766E", "#CCFBF1"),  # 13 深青（项目对照）
 ]
 
 
@@ -4282,7 +4283,7 @@ def make_sheet(title: str, root: dict) -> dict:
 def main():
     import copy
 
-    # 追加 Self-RAG / CRAG 专训章（飞书 05/06）
+    # 追加 Self-RAG / CRAG / 项目全链路对照（飞书 05/06 + chroma文档管理）
     from _chapters_11_12 import chapters as _extra_chapters
 
     if not any(c.get("title", "").startswith("11 ") for c in TREE.get("children", {}).get("attached", [])):

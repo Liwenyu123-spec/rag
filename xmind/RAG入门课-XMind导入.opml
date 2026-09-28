@@ -1641,7 +1641,7 @@
           <outline text="第 10 章：检索后专训（Rerank/压缩/长上下文重排）"/>
           <outline text="第 11 章：Self-RAG 专训（查不查 + 生成反思）"/>
           <outline text="第 12 章：CRAG 专训（查错了怎么办 + 库内/外搜修正）"/>
-          <outline text="chroma文档管理：Native 底座 + 已叠混合/后处理/CRAG"/>
+          <outline text="第 13 章：chroma文档管理 全链路文件/API/开关对照"/>
         </outline>
       </outline>
       <outline text="08 检索前优化（Pre-retrieval）">
@@ -1972,10 +1972,10 @@
             <outline text="5 有类别时间？→ 预过滤(11)；多库？→ 路由(12)；有权限？→(13)"/>
             <outline text="6 进入检索中（第 09 章混合/多路）→ 再重排生成（检索后）"/>
           </outline>
-          <outline text="本仓库最小改法">
-            <outline text="先在 query() 前加方法1+3（清洗+重写）"/>
-            <outline text="再试 HyDEQueryTransform(include_original=True)"/>
-            <outline text="专名多再加混合检索；回答飘再加重排"/>
+          <outline text="本仓库已落地 / 怎么调">
+            <outline text="/ask 默认 strategy=rewrite：清洗+重写双路（pre_retrieval.py）"/>
+            <outline text="可改 strategy=hyde / clean / none；假想文档只检索不当引用"/>
+            <outline text="后面已接混合检索、后处理三件套、CRAG；细节见第 13 章"/>
           </outline>
         </outline>
       </outline>
@@ -2235,9 +2235,9 @@
             <outline text="5 喂给大模型之前 —— 接第 10 章 node_postprocessors 三件套"/>
           </outline>
           <outline text="和本仓库">
-            <outline text="当前 chroma文档管理 ≈ 单路稠密 Native"/>
-            <outline text="最小改法：同 nodes 加 BM25 + QueryFusionRetriever(mode=reciprocal_rerank)"/>
-            <outline text="有多目录知识时再拆多路并打 channel 元数据"/>
+            <outline text="已落地：HYBRID_ENABLED + BM25(jieba) + QueryFusionRetriever(reciprocal_rerank)"/>
+            <outline text="代码：retrieval_optimize.build_hybrid_retriever；失败回退纯向量"/>
+            <outline text="未做：多目录多路 channel；见第 13 章演进 P4"/>
           </outline>
           <outline text="和第 08 章衔接">
             <outline text="先 Pre：清洗/重写/HyDE 得到更好 query"/>
@@ -2457,9 +2457,9 @@
             <outline text="要完整工业链 → 方法4 三件套"/>
           </outline>
           <outline text="和本仓库">
-            <outline text="Native 查询引擎默认无 node_postprocessors"/>
-            <outline text="最小改法：as_query_engine(..., node_postprocessors=[DashScopeRerank(...)])"/>
-            <outline text="再视情况加 SentenceEmbeddingOptimizer 与 LongContextReorder"/>
+            <outline text="已落地三件套：本地 bge-reranker → SentenceEmbeddingOptimizer → LongContextReorder"/>
+            <outline text="代码：retrieval_optimize.build_node_postprocessors；/ask 走 apply_postprocessors"/>
+            <outline text="默认不依赖千问重排；RERANK_PROVIDER=dashscope 才用 API"/>
           </outline>
           <outline text="和第 08/09 章衔接">
             <outline text="Pre（08）改问句 → Mid（09）混合/多路召回 → Post（10）三件套 → 生成"/>
@@ -2616,10 +2616,39 @@
           <outline text="展望：多模态、自然语言式动态反思、按用户个性化权重、与 RL 结合"/>
           <outline text="总结金句：价值不只在准确率，更在让模型有「元认知 / 自知之明」"/>
         </outline>
-        <outline text="九、和本仓库的关系">
-          <outline text="当前 chroma文档管理 主链路已接 CRAG（第 12 章），未接完整 Self-RAG 四令牌"/>
-          <outline text="可借鉴：先做 Retrieve 门控（闲聊不查）+ ISSUP 式生成后验"/>
-          <outline text="与 CRAG 组合：Self-RAG 管查不查与生成忠实；CRAG 管查错了怎么纠"/>
+        <outline text="九、对照 chroma文档管理 搜索引擎（现状 / 缺口 / 怎么接）">
+          <outline text="现状：哪些「像」Self-RAG，哪些还不是">
+            <outline text="已有近似能力（分散在别的模块）">
+              <outline text="ISREL 近似：crag.py 逐篇 RELEVANT/IRRELEVANT（但挂在 CRAG，不是生成中反思）"/>
+              <outline text="生成约束近似：ASK_QA_PROMPT「只依据上下文，没有就说不知道」"/>
+              <outline text="检索前策略：strategy=none/clean/rewrite/hyde（人指定，不是模型 Decide Retrieve）"/>
+            </outline>
+            <outline text="尚未实现的四令牌">
+              <outline text="Retrieve：闲聊也会走混合检索+CRAG（无「要不要查」门控）"/>
+              <outline text="ISSUP：生成后无 FULLY/PARTIALLY/NO 验据，无自动 _correct 重写"/>
+              <outline text="ISUSE：无 1~5 有用性打分与候选择优"/>
+              <outline text="无 Critique-guided Beam Search / 软硬约束权重"/>
+            </outline>
+          </outline>
+          <outline text="四令牌 → 建议落点（文件级）">
+            <outline text="Retrieve → rag_service.ask 开头：LLM YES/NO；NO 则 Settings.llm.complete(原问) 直接返回"/>
+            <outline text="ISREL → 可复用 crag.filter_relevant_nodes（已存在），或生成前再滤一轮"/>
+            <outline text="ISSUP+_correct → synthesizer 之后：判支持度，不足则贴合 sources 重写 answer"/>
+            <outline text="ISUSE → 写入 AskResponse 扩展字段，前端日志区展示（index.html 已有 pre/crag 盒子可仿）"/>
+          </outline>
+          <outline text="最小可落地改造顺序（不改训练也能用）">
+            <outline text="① 加 Retrieve 门控：降闲聊延迟与噪声（性价比最高）"/>
+            <outline text="② 生成后 ISSUP：抑制「资料不够却自信编」"/>
+            <outline text="③ ISUSE 仅打日志：先观测再决定是否参与择优"/>
+            <outline text="④ 真正 token 级 Self-RAG 需微调模型，本仓库用「判断点显式询问」即可"/>
+          </outline>
+          <outline text="和 CRAG 怎么分工（本仓库推荐）">
+            <outline text="CRAG（已上线）：检索后滤噪声 + 全无关改写重查"/>
+            <outline text="Self-RAG（待加）：检索前 Decide + 生成后验据"/>
+            <outline text="顺序建议：Retrieve? → Pre/Mid/Post → CRAG → 生成 → ISSUP/ISUSE"/>
+            <outline text="避免重复烧钱：ISREL 与 CRAG 评估可共用一次结果"/>
+          </outline>
+          <outline text="详见第 13 章：项目全链路文件/API/开关对照表"/>
         </outline>
       </outline>
       <outline text="12 Corrective RAG（CRAG）">
@@ -2777,24 +2806,145 @@
             <outline text="教育辅导：检索差时动态拿最新资料"/>
           </outline>
         </outline>
-        <outline text="九、和本仓库 chroma文档管理 的对齐">
-          <outline text="实现：semantic_search/app/service/crag.py">
-            <outline text="对齐课上 demo01 基础版：库内修正，不联网、不依赖千问 rerank"/>
-            <outline text="评估/改写：Settings.llm（如 DeepSeek）"/>
-            <outline text="filter_relevant_nodes：逐篇 RELEVANT/IRRELEVANT"/>
-            <outline text="全无关 → rewrite_query_for_retrieval → retrieve_fn 再走混合+后处理"/>
-            <outline text="只再来一轮，避免死循环"/>
+        <outline text="九、对照 chroma文档管理：代码级走读">
+          <outline text="在 /ask 流水线中的精确位置">
+            <outline text="① prepare_retrieval_queries（Pre）"/>
+            <outline text="② 每路 _build_retriever：向量+BM25 QueryFusion（Mid）"/>
+            <outline text="③ 多 query 时 merge_nodes_rrf（查询间融合）"/>
+            <outline text="④ apply_postprocessors：rerank→压缩→LongContextReorder（Post）"/>
+            <outline text="⑤ apply_crag（本章）← 过滤无关；全无关则改写后 _retrieve_pipeline 再跑一遍 Mid+Post"/>
+            <outline text="⑥ get_response_synthesizer(compact)+ASK_QA_PROMPT 生成；sources 用用户原问题对应的真实块"/>
           </outline>
-          <outline text="接入位置">
-            <outline text="rag_service.ask：Pre → Mid(hybrid) → Post(三件套) → CRAG → 生成"/>
-            <outline text="配置：CRAG_ENABLED / CRAG_VERBOSE（.env）"/>
-            <outline text="响应：AskResponse.crag 带回评估明细与是否改写重试"/>
+          <outline text="crag.py 函数对照讲义">
+            <outline text="_is_relevant ≈ 讲义 Retrieval Evaluator（二值 RELEVANT/IRRELEVANT）"/>
+            <outline text="filter_relevant_nodes ≈ 基础版 _filter_relevant + verbose 打印"/>
+            <outline text="rewrite_query_for_retrieval ≈ 讲义 REWRITE_PROMPT（全无关才触发）"/>
+            <outline text="apply_crag ≈ CorrectiveRAGQueryEngine.custom_query 的评估+修正段"/>
+            <outline text="retrieve_fn 注入：保证重试仍走混合检索+三件套，不是裸向量"/>
+            <outline text="无 LLM 时 _is_relevant 直接 True：避免把结果滤空"/>
           </outline>
-          <outline text="与完整版差距 / 可选演进">
-            <outline text="已有：评估过滤 + 改写重检索（内部）"/>
-            <outline text="未接：Tavily Web、三档路径、Knowledge Refinement 拆 strip"/>
-            <outline text="下一步：Ambiguous 时合并外搜；或先上 strip 级精炼"/>
+          <outline text="crag 响应字段（前端 index.html 会展示）">
+            <outline text="enabled / message：是否开启、走了哪条分支"/>
+            <outline text="before_count → after_count：过滤前后篇数"/>
+            <outline text="retried + rewritten_query：是否纠错改写及新问句"/>
+            <outline text="eval[]：每篇 rank/relevant/preview，便于作业演示与排障"/>
+            <outline text="message 取值：filtered / rewrote_and_filtered / no_relevant_after_retry / …"/>
           </outline>
+          <outline text="开关与默认">
+            <outline text="CRAG_ENABLED=true（默认开）"/>
+            <outline text="CRAG_VERBOSE=true：终端打印 [CRAG] 文档 i：相关/无关"/>
+            <outline text="评估模型=Settings.llm（与问答同一套，如 DeepSeek），非单独小评估器"/>
+          </outline>
+          <outline text="与讲义完整版（Workflow+Tavily）差距">
+            <outline text="已落地：库内评估过滤 + 一轮改写重检索（demo01 路线）"/>
+            <outline text="未落地：Correct/Ambiguous/Incorrect 三档分流"/>
+            <outline text="未落地：Knowledge Refinement 拆 strip→滤→重组"/>
+            <outline text="未落地：Tavily / Web 外搜；Ambiguous 时 k_in+k_ex"/>
+            <outline text="演进优先级：① strip 精炼 ② 三档 ③ 可选外搜（注意内网/合规）"/>
+          </outline>
+          <outline text="排障口诀（结合本项目）">
+            <outline text="after_count=0：看 eval 是否全 IRRELEVANT → 问法/库覆盖/阈值过严"/>
+            <outline text="retried=true 仍空：改写句是否偏离；检查混合检索是否回退成纯向量"/>
+            <outline text="相关篇被误杀：看 LLM 是否稳定；可临时 CRAG_ENABLED=0 对比"/>
+            <outline text="延迟高：CRAG 每篇一次 complete；可先减小 k / RETRIEVE_CANDIDATES"/>
+          </outline>
+          <outline text="全文件/API 对照见第 13 章"/>
+        </outline>
+      </outline>
+      <outline text="13 chroma文档管理：项目全链路对照">
+        <outline text="〇、一张总图：用户问一句会发生什么">
+          <outline text="浏览器 static/index.html → POST /ask {question,k,strategy}"/>
+          <outline text="main.ask → RagAskService.ask（编排层）"/>
+          <outline text="Pre：pre_retrieval.prepare_retrieval_queries"/>
+          <outline text="Mid：engine._build_retriever → 向量±BM25；多 query 则 merge_nodes_rrf"/>
+          <outline text="Post：retrieval_optimize.apply_postprocessors 三件套"/>
+          <outline text="CRAG：crag.apply_crag（可改写重跑 Mid+Post）"/>
+          <outline text="Gen：response_synthesizer + ASK_QA_PROMPT；返回 answer/sources/pre_retrieval/crag"/>
+        </outline>
+        <outline text="一、目录与职责（打开代码用）">
+          <outline text="run.py：启动入口，挂 sys.path 后调 semantic_search.__main__"/>
+          <outline text="app/main.py：FastAPI 路由 /ask /search /query /chat /ingest /upload …"/>
+          <outline text="app/engine.py：Embedding/LLM/Chroma/分块/索引；_build_retriever / query / chat"/>
+          <outline text="app/config.py：模型、分块、HYBRID/RERANK/COMPRESS/REORDER/CRAG 开关"/>
+          <outline text="app/schemas.py：AskRequest/AskResponse、PreRetrievalInfo、CragInfo"/>
+          <outline text="app/service/pre_retrieval.py：清洗 / 重写 / HyDE"/>
+          <outline text="app/service/retrieval_optimize.py：混合召回 + 后处理三件套"/>
+          <outline text="app/service/crag.py：Corrective RAG 库内修正"/>
+          <outline text="app/service/rag_service.py：/ask 专用编排（Pre→Mid→Post→CRAG→Gen）"/>
+          <outline text="static/index.html：问答 UI，展示策略过程、CRAG 过滤、来源卡片"/>
+          <outline text="data/：默认灌库 md/txt；chroma_db/：向量持久化"/>
+        </outline>
+        <outline text="二、章节 ↔ 模块映射">
+          <outline text="第 08 检索前 → pre_retrieval.py + /ask?strategy=">
+            <outline text="none：原句单路"/>
+            <outline text="clean：去口语填充 + 术语表（电脑→笔记本电脑 等）"/>
+            <outline text="rewrite（默认）：清洗句 + 改写句双路，防改歪"/>
+            <outline text="hyde：清洗句 + 假想说明文双路；假想文只检索不当引用"/>
+            <outline text="前端：pre_retrieval 盒子展示 original/clean/rewritten/hyde_doc"/>
+          </outline>
+          <outline text="第 09 检索中 → retrieval_optimize.build_hybrid_retriever">
+            <outline text="HYBRID_ENABLED：向量 as_retriever + BM25(jieba) → QueryFusionRetriever"/>
+            <outline text="默认 mode=reciprocal_rerank（RRF）；失败回退纯向量"/>
+            <outline text="粗排窗口：RETRIEVE_CANDIDATES（默认 20）给精排留余量"/>
+            <outline text="/ask 多 query：路内融合后再 merge_nodes_rrf 做查询间融合"/>
+          </outline>
+          <outline text="第 10 检索后 → build_node_postprocessors / apply_postprocessors">
+            <outline text="Rerank：默认本地 SentenceTransformerRerank(bge-reranker-base)"/>
+            <outline text="RERANK_PROVIDER=dashscope 才走千问 qwen3-rerank"/>
+            <outline text="压缩：SentenceEmbeddingOptimizer + 中文切句 + COMPRESS_PERCENTILE"/>
+            <outline text="排版：LongContextReorder 对抗 Lost in the Middle"/>
+            <outline text="query/chat：挂在 RetrieverQueryEngine / chat_engine 的 node_postprocessors"/>
+          </outline>
+          <outline text="第 11 Self-RAG → 尚未成独立模块">
+            <outline text="缺口：Retrieve 门控、ISSUP 验据、ISUSE 打分"/>
+            <outline text="可借用：CRAG 的相关性过滤 ≈ ISREL"/>
+            <outline text="落地建议见第 11 章第九节"/>
+          </outline>
+          <outline text="第 12 CRAG → crag.py + rag_service 第⑤步">
+            <outline text="默认开启；全无关改写后 _retrieve_pipeline 重跑"/>
+            <outline text="不联网：无 Tavily，属讲义基础版路线"/>
+          </outline>
+        </outline>
+        <outline text="三、API 怎么选">
+          <outline text="/ask：作业主链路，带 strategy + pre_retrieval + crag（推荐演示）"/>
+          <outline text="/search：只检索不生成，看混合/后处理召回效果"/>
+          <outline text="/query：一次性 RAG，有后处理，无 Pre 多策略、无 CRAG 编排"/>
+          <outline text="/chat：多轮记忆；后处理挂引擎，会话键含 hybrid/rerank 标志"/>
+          <outline text="/ingest /upload：灌库；会 _invalidate_retrieval_cache 重建 BM25"/>
+          <outline text="/stats /health：看库规模与 hybrid_enabled/rerank_enabled 等"/>
+        </outline>
+        <outline text="四、环境变量开关速查（config.py）">
+          <outline text="HYBRID_ENABLED / HYBRID_FUSION_MODE / RETRIEVE_CANDIDATES"/>
+          <outline text="RERANK_ENABLED / RERANK_PROVIDER(local|dashscope|none) / RERANK_MODEL / RERANK_TOP_N"/>
+          <outline text="COMPRESS_ENABLED / COMPRESS_PERCENTILE"/>
+          <outline text="REORDER_ENABLED"/>
+          <outline text="CRAG_ENABLED / CRAG_VERBOSE"/>
+          <outline text="CHUNK_SIZE / CHUNK_OVERLAP / SIMILARITY_TOP_K"/>
+          <outline text="EMBEDDING_* / LLM（DeepSeek 等）/ DASHSCOPE_API_KEY（仅千问路径需要）"/>
+          <outline text="SEARCH_HOST / SEARCH_PORT（默认 8003）"/>
+        </outline>
+        <outline text="五、和讲义 Advanced 闭环四问对照">
+          <outline text="查什么 → strategy 重写/HyDE（第 08）"/>
+          <outline text="去哪查 → 同库向量+BM25（第 09）；未做多目录多路 channel"/>
+          <outline text="查得准 → 本地 bge rerank（第 10）"/>
+          <outline text="怎么用 → 压缩+长上下文重排+引用约束；错了再 CRAG 纠（第 10/12）"/>
+          <outline text="查不查 → Self-RAG Retrieve 尚未接（第 11 缺口）"/>
+        </outline>
+        <outline text="六、效果不好时：按本项目排查">
+          <outline text="① /stats 库是否为空；分块是否切断关键句"/>
+          <outline text="② 换 strategy：rewrite↔hyde↔clean，看 pre_retrieval 双路是否合理"/>
+          <outline text="③ 专名搜不到：确认 HYBRID_ENABLED 与 jieba/bm25 依赖"/>
+          <outline text="④ 相关在后面：确认 RERANK_ENABLED 与本地 bge 是否加载成功"/>
+          <outline text="⑤ 答案飘：看压缩是否过猛；Prompt 是否仍「仅依据上下文」"/>
+          <outline text="⑥ CRAG 滤光：看 crag.eval；必要时 CRAG_VERBOSE 对照终端"/>
+          <outline text="⑦ 延迟：降 k/候选；关 CRAG 或压缩做 A/B"/>
+        </outline>
+        <outline text="七、建议的下一刀改造（优先级）">
+          <outline text="P0：Self-RAG Retrieve 门控（闲聊不查）"/>
+          <outline text="P1：生成后 ISSUP 验据 + 不足则重写"/>
+          <outline text="P2：CRAG strip 级 Knowledge Refinement（对齐论文 Correct 路径）"/>
+          <outline text="P3：可选 Web 补充（仅公网场景；内网知识库慎开）"/>
+          <outline text="P4：多目录多路召回 + channel 元数据（第 09 进阶）"/>
         </outline>
       </outline>
     </outline>
