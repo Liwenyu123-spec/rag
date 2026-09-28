@@ -1454,6 +1454,43 @@
             <outline text="先别一上来上 GraphRAG / Agent，Native 没稳先别叠高级模块"/>
           </outline>
         </outline>
+        <outline text="术语定义（Advanced 总览必背）">
+          <outline text="RAG（Retrieval-Augmented Generation）">
+            <outline text="定义：检索增强生成——先从外部知识库取相关资料，再让 LLM 基于资料生成答案"/>
+          </outline>
+          <outline text="Native RAG">
+            <outline text="定义：最简流水线：提问→向量检索 Top-K→拼 Prompt→生成，中间少优化"/>
+          </outline>
+          <outline text="Advanced RAG">
+            <outline text="定义：在 Native 上对检索前/中/后系统优化，形成可组合的增强链路"/>
+          </outline>
+          <outline text="Pre / Mid / Post-retrieval">
+            <outline text="Pre：优化问句与索引准备（查什么）"/>
+            <outline text="Mid：优化召回算法与通道（怎么查）"/>
+            <outline text="Post：优化已召回材料再喂模型（怎么用）"/>
+          </outline>
+          <outline text="Embedding（嵌入）">
+            <outline text="定义：把文本映射到向量空间，使语义相近的文本距离更近"/>
+          </outline>
+          <outline text="Top-K">
+            <outline text="定义：检索返回相似度最高的前 K 条候选"/>
+          </outline>
+          <outline text="Self-RAG">
+            <outline text="定义：生成过程中自我决定是否检索、资料好不好、答案有无依据（见第 11 章）"/>
+          </outline>
+          <outline text="Corrective RAG（CRAG）">
+            <outline text="定义：评估检索质量，差则改写/外搜纠正后再生成（见第 12 章）"/>
+          </outline>
+          <outline text="RAG-Fusion">
+            <outline text="定义：多查询并行检索 + RRF 融排名的完整打法"/>
+          </outline>
+          <outline text="Agentic RAG">
+            <outline text="定义：由 Agent 规划检索步骤与工具调用的灵活 RAG 形态"/>
+          </outline>
+          <outline text="GraphRAG">
+            <outline text="定义：基于实体关系图做检索/摘要，适合多跳与全局主题"/>
+          </outline>
+        </outline>
         <outline text="一、检索前优化（Pre-retrieval）">
           <outline text="查询重写 Query Rewriting">
             <outline text="做什么：口语/指代不明 → 检索友好、术语齐全的问句"/>
@@ -1649,6 +1686,20 @@
           <outline text="查询侧：清洗 → 澄清 → 重写 / 扩展 / HyDE / Step-Back / 分解"/>
           <outline text="文档侧（离线）：分块 → 元数据 → 增强 → 多表示 / 路由规则"/>
           <outline text="原则：先判断病症，再选一种方法；不要一次全开"/>
+        </outline>
+        <outline text="术语定义（本章必背）">
+          <outline text="Pre-retrieval（检索前优化）：进入检索前，优化「问什么」和「库怎么建」"/>
+          <outline text="查询清洗：去口语废话与标点噪声，并做术语标准化"/>
+          <outline text="查询重写：把口语/模糊问题改成更适合检索的表达，保留原意"/>
+          <outline text="查询扩展：生成多个同义变体并行检索再合并，抬召回"/>
+          <outline text="HyDE：先生成假想答案文档再拿去向量检索（假想文不当事实引用）"/>
+          <outline text="Step-Back：把具体问题先退成更宽泛背景问题"/>
+          <outline text="查询分解：复杂多跳/比较题拆成原子子问题分别检索再综合"/>
+          <outline text="Chunking（分块）：长文切成适合 embedding 与召回的片段"/>
+          <outline text="Overlap：相邻块保留重叠，减轻边界切断语义"/>
+          <outline text="父子块/Small-to-Big：小块命中，返回父级大上下文"/>
+          <outline text="元数据 Metadata：标题/时间/来源/权限等，供过滤与引用"/>
+          <outline text="意图路由：按问题类型选择不同索引或工具"/>
         </outline>
         <outline text="方法1：查询文本清洗">
           <outline text="适用：问题里废话多、口语多、术语不统一"/>
@@ -1987,6 +2038,20 @@
           <outline text="落点：都在 RAG 第 4 步「检索召回」；前三步仍是加载→分块→向量化入库"/>
           <outline text="和检索前区别：第 08 章改「问什么」；本章改「怎么查、去哪查」"/>
         </outline>
+        <outline text="术语定义（本章必背）">
+          <outline text="Retrieval（检索中）：优化「怎么查、用什么算法/通道查」"/>
+          <outline text="召回率 Recall：该找到的相关内容里实际找回来的比例（少漏）"/>
+          <outline text="精确率 Precision：找回来的内容里真正相关的比例（少脏）"/>
+          <outline text="稠密向量：几乎每维都有值，擅长语义/同义匹配"/>
+          <outline text="稀疏检索（BM25等）：词面/倒排，擅长专名与编号"/>
+          <outline text="混合检索 Hybrid：同库同时跑稠密+稀疏再融合"/>
+          <outline text="多路召回 Multi-channel：多源/多索引各自召回再融合"/>
+          <outline text="RRF：倒数排名融合 score=Σ1/(k+rank)，不要求分数量纲一致"/>
+          <outline text="relative_score：各路分数归一化后再加权融合"/>
+          <outline text="Round-Robin：各路轮流取一条，简单保多样性"/>
+          <outline text="ColBERT：token 级多向量交互（MaxSim），更细更吃资源"/>
+          <outline text="SPLADE：学习型稀疏向量，兼顾词面与一点语义"/>
+        </outline>
         <outline text="指标预习：召回率 vs 精确率">
           <outline text="适用">
             <outline text="开口答「效果不好」前，先分清漏了还是脏了"/>
@@ -2253,6 +2318,19 @@
           <outline text="入口：node_postprocessors=[...]，按列表顺序串行加工 nodes"/>
           <outline text="三件套：Rerank → SentenceEmbeddingOptimizer → LongContextReorder"/>
           <outline text="和第 08/09 章：前改问句、中改召回；本章改「怎么用召回结果」"/>
+        </outline>
+        <outline text="术语定义（本章必背）">
+          <outline text="Post-retrieval（检索后）：召回之后、喂 LLM 之前加工候选"/>
+          <outline text="Node Postprocessor：对 NodeWithScore 列表串行后处理的组件"/>
+          <outline text="Re-ranking：用更准模型对粗召回候选二次打分排序"/>
+          <outline text="两阶段检索：粗召回（快广）+ 精排（慢准）"/>
+          <outline text="Bi-Encoder：查询/文档各自编码再比相似度，快"/>
+          <outline text="Cross-Encoder：query+doc 一起进模型打分，准但慢"/>
+          <outline text="上下文压缩：只留与问题最相关的句子，丢掉冗余"/>
+          <outline text="SentenceEmbeddingOptimizer：按句-查询相似度裁剪的压缩器"/>
+          <outline text="LongContextReorder：最相关放首尾，对抗中间遗忘"/>
+          <outline text="Lost in the Middle：长上下文中模型对中间段落利用率偏低"/>
+          <outline text="Citation：答案标明来源，便于核查并抑制瞎编"/>
         </outline>
         <outline text="方法1：两阶段检索与重排序 Re-ranking">
           <outline text="适用：粗召回有相关材料，但 Top-3/5 常被「沾边噪声」占坑"/>
