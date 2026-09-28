@@ -1,4 +1,10 @@
 {
   "python.defaultInterpreterPath": "H:/anaconda/envs/llm/python.exe",
-  "python.envFile": "${workspaceFolder}/.env"
+  "python.envFile": "${workspaceFolder}/.env",
+  "python.analysis.extraPaths": [
+    "${workspaceFolder}/chroma文档管理"
+  ],
+  "python.autoComplete.extraPaths": [
+    "${workspaceFolder}/chroma文档管理"
+  ]
 }
