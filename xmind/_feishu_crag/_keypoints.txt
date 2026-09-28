@@ -1,0 +1,2259 @@
+06-其他优化（CorrectiveRAG） 
+今天修改
+一、什么是 Corrective RAG？
+当RAG系统的检索环节"失手"时,系统应该具备"自知之明"和"自我纠错"能力。CRAG通过引入轻量级评估器和动态知识纠错机制,让RAG从"盲目依赖检索"进化为"智能评估+按需纠错",在多个基准测试中将检索增强生成的准确率提升了4%-37%,且无需对现有LLM进行额外训练。
+1、背景铺垫
+想象一下,你在准备一场演讲,你的助手帮你找了一些资料。如果助手找来的资料很靠谱,你的演讲会很精彩;但如果助手找来的资料是错的或者不相关的,而你还完全照搬,那后果就不堪设想了。
+这就是当前RAG面临的困境:
+•
+问题本质: RAG把"检索器"找来的文档当作"绝对真理",无条件喂给生成器使用
+•
+现实挑战: 检索器不是完美的,它可能因为查询表述不清、知识库覆盖不全、语义理解偏差等原因,返回不相关甚至误导性的内容
+•
+现有局限: 大多数RAG方法对检索结果"照单全收",没有质量评估机制。就像你拿到一份资料不先看看质量如何就直接使用,风险很大
+
+
+
+
+
+
+
+
+
+
+
+这张图展示了 Corrective RAG（CRAG） 的核心思想：检索后评估文档质量，区分"准确文档"和"不准确文档"，只使用准确文档来生成答案。
+左侧：准确文档 → 正确回答 ✅
+
+代码块
+Plain Text
+复制
+用户问题: 【亨利·菲尔登的职业是什么？】
+           ↓
+检索器返回:【亨利·费登（保守党政治家）：亨利·费登大师是保守党政治家】
+           ↓
+文档标注: （准确文档，绿色高亮 " 政治家"）
+           ↓
+生成器输出: 政治家. ✓
+
+关键：文档明确包含答案，生成器直接提取关键信息，回答正确。
+
+=====
+
+这张图展示了 Corrective RAG（CRAG） 的核心思想：检索后评估文档质量，区分"准确文档"和"不准确文档"，只使用准确文档来生成答案。
+
+=====
+
+06-其他优化（CorrectiveRAG） 
+今天修改
+一、什么是 Corrective RAG？
+当RAG系统的检索环节"失手"时,系统应该具备"自知之明"和"自我纠错"能力。CRAG通过引入轻量级评估器和动态知识纠错机制,让RAG从"盲目依赖检索"进化为"智能评估+按需纠错",在多个基准测试中将检索增强生成的准确率提升了4%-37%,且无需对现有LLM进行额外训练。
+1、背景铺垫
+想象一下,你在准备一场演讲,你的助手帮你找了一些资料。如果助手找来的资料很靠谱,你的演讲会很精彩;但如果助手找来的资料是错的或者不相关的,而你还完全照搬,那后果就不堪设想了。
+这就是当前RAG面临的困境:
+•
+问题本质: RAG把"检索器"找来的文档当作"绝对真理",无条件喂给生成器使用
+•
+现实挑战: 检索器不是完美的,它可能因为查询表述不清、知识库覆盖不全、语义理解偏差等原因,返回不相关甚至误导性的内容
+•
+现有局限: 大多数RAG方法对检索结果"照单全收",没有质量评估机制。就像你拿到一份资料不先看看质量如何就直接使用,风险很大
+
+
+
+
+
+
+
+
+
+
+
+这张图展示了 Corrective RAG（CRAG） 的核心思想：检索后评估文档质量，区分"准确文档"和"不准确文档"，只使用准确文档来生成答案。
+左侧：准确文档 → 正确回答 ✅
+
+代码块
+Plain Text
+复制
+用户问题: 【亨利·菲尔登的职业是什么？】
+           ↓
+检索器返回:【亨利·费登（保守党政治家）：亨利·费登大师是保守党政治家】
+           ↓
+文档标注: （准确文档，绿色高亮 " 政治家"）
+           ↓
+生成器输出: 政治家. ✓
+
+关键：文档明确包含答案，生成器直接提取关键信息，回答正确。
+右侧：不准确文档 → 错误回答 ❌
+
+代码块
+Plain Text
+复制
+
+=====
+
+06-其他优化（CorrectiveRAG） 
+今天修改
+一、什么是 Corrective RAG？
+当RAG系统的检索环节"失手"时,系统应该具备"自知之明"和"自我纠错"能力。CRAG通过引入轻量级评估器和动态知识纠错机制,让RAG从"盲目依赖检索"进化为"智能评估+按需纠错",在多个基准测试中将检索增强生成的准确率提升了4%-37%,且无需对现有LLM进行额外训练。
+1、背景铺垫
+想象一下,你在准备一场演讲,你的助手帮你找了一些资料。如果助手找来的资料很靠谱,你的演讲会很精彩;但如果助手找来的资料是错的或者不相关的,而你还完全照搬,那后果就不堪设想了。
+这就是当前RAG面临的困境:
+•
+问题本质: RAG把"检索器"找来的文档当作"绝对真理",无条件喂给生成器使用
+•
+现实挑战: 检索器不是完美的,它可能因为查询表述不清、知识库覆盖不全、语义理解偏差等原因,返回不相关甚至误导性的内容
+•
+现有局限: 大多数RAG方法对检索结果"照单全收",没有质量评估机制。就像你拿到一份资料不先看看质量如何就直接使用,风险很大
+
+
+
+
+
+
+
+
+
+
+
+这张图展示了 Corrective RAG（CRAG） 的核心思想：检索后评估文档质量，区分"准确文档"和"不准确文档"，只使用准确文档来生成答案。
+左侧：准确文档 → 正确回答 ✅
+
+代码块
+Plain Text
+复制
+用户问题: 【亨利·菲尔登的职业是什么？】
+           ↓
+检索器返回:【亨利·费登（保守党政治家）：亨利·费登大师是保守党政治家】
+           ↓
+文档标注: （准确文档，绿色高亮 " 政治家"）
+           ↓
+生成器输出: 政治家. ✓
+
+关键：文档明确包含答案，生成器直接提取关键信息，回答正确。
+右侧：不准确文档 → 错误回答 ❌
+
+代码块
+Plain Text
+复制
+用户问题: 【《蝙蝠侠之死》的编剧是谁？】
+           ↓
+检索器返回: 【蝙蝠侠（1989年电影）：……当哈姆的剧本被重写时】
+           ↓                               
+文档标注: （不准确文档，红色高亮 "哈姆"）
+           ↓
+
+=====
+
+Corrective RAG（修正增强检索） = 标准 RAG + 检索质量校验 + 自动修正 / 补充检索。它解决标准 RAG 最大痛点：
+
+=====
+
+5、CorrectiveRAG（CRAG）属于检索后优化阶段
+
+=====
+
+CorrectiveRAG（CRAG）属于 RAG 架构的检索后优化阶段（Post-Retrieval Phase），具体来说是在检索结果评估与修正阶段。
+
+=====
+
+代码块
+Python
+复制
+"""
+Corrective RAG（基础版）- LlamaIndex 实现
+检索 → 逐篇相关性评估 → 过滤无关 → 全不相关则重写查询重检索 → 生成
+只做"内部修正"，不联网；用 qwen-plus 当检索评估器。
+
+=====
+
+Corrective RAG（基础版）- LlamaIndex 实现
+
+=====
+
+代码块
+Python
+复制
+"""
+Corrective RAG（基础版）- LlamaIndex 实现
+检索 → 逐篇相关性评估 → 过滤无关 → 全不相关则重写查询重检索 → 生成
+只做"内部修正"，不联网；用 qwen-plus 当检索评估器。
+"""
+
+import os
+
+from llama_index.core import Settings, SimpleDirectoryReader, VectorStoreIndex
+from llama_index.core.base.base_retriever import BaseRetriever
+from llama_index.core.llms import LLM
+
+=====
+
+代码块
+Python
+复制
+"""
+Corrective RAG（基础版）- LlamaIndex 实现
+检索 → 逐篇相关性评估 → 过滤无关 → 全不相关则重写查询重检索 → 生成
+只做"内部修正"，不联网；用 qwen-plus 当检索评估器。
+"""
+
+import os
+
+from llama_index.core import Settings, SimpleDirectoryReader, VectorStoreIndex
+from llama_index.core.base.base_retriever import BaseRetriever
+from llama_index.core.llms import LLM
+from llama_index.core.prompts import PromptTemplate
+from llama_index.core.query_engine import CustomQueryEngine
+from llama_index.embeddings.dashscope import DashScopeEmbedding
+from llama_index.llms.dashscope import DashScope
+
+#
+
+=====
+
+06-其他优化（CorrectiveRAG） 
+今天修改
+3、工作流程
+1）用户提问
+2）初步检索：从知识库召回相关文档
+3）检索质量评估（CRAG 灵魂）：用一个轻量级检索评估器（Retrieval Evaluator）给每篇文档打分，把整体检索结果归为三类：
+
+
+4）最终回答：根据评估结果组合"内部精炼知识 / 外部搜索知识 "，用可靠信息生成答案。
+4、为什么要用 Corrective RAG？
+•
+大幅降低回答幻觉
+•
+对私有知识库 + 公共知识混合问题效果极好
+•
+比普通 RAG 更鲁棒（健壮）、更准确
+5、CorrectiveRAG（CRAG）属于检索后优化阶段
+CorrectiveRAG（CRAG）属于 RAG 架构的检索后优化阶段（Post-Retrieval Phase），具体来说是在检索结果评估与修正阶段。
+二、示例代码（LlamaIndex 基础版：相关性过滤 + 查询重写）
+先看一个不依赖外部 Web 搜索的最小 CRAG：检索 → 逐篇相关性评估 → 过滤无关文档 → 若全部不相关则重写查询重检索 → 生成。这一版覆盖 CRAG 的"评估 + 内部修正"环节，方便先理解主流程；下一节再加上 Web 搜索补充外部知识，构成完整 CRAG。
+依赖安装：
+
+代码块
+Bash
+复制
+pip install llama-index-core llama-index-llms-dashscope llama-index-embeddings-dashscope
+
+
+代码块
+Python
+复制
+"""
+Corrective RAG（基础版）- LlamaIndex 实现
+检索 → 逐篇相关性评估 → 过滤无关 → 全不相关则重写查询重检索 → 生成
+只做"内部修正"，不联网；用 qwen-plus 当检索评估器。
+"""
+
+import os
+
+from llama_index.core import Settings, SimpleDirectoryReader, VectorStoreIndex
+from llama_index.core.base.base_retriever import BaseRetriever
+from llama_index.core.llms import LLM
+from llama_index.core.prompts import PromptTemplate
+from llama_index.core.query_engine import CustomQueryEngine
+from llama_index.embeddings.dashscope import DashScopeEmbedding
+from llama_index.llms.dashscope import DashScope
+
+#
+
+=====
+
+06-其他优化（CorrectiveRAG） 
+今天修改
+2）初步检索：从知识库召回相关文档
+3）检索质量评估（CRAG 灵魂）：用一个轻量级检索评估器（Retrieval Evaluator）给每篇文档打分，把整体检索结果归为三类：
+
+
+4）最终回答：根据评估结果组合"内部精炼知识 / 外部搜索知识 "，用可靠信息生成答案。
+4、为什么要用 Corrective RAG？
+•
+大幅降低回答幻觉
+•
+对私有知识库 + 公共知识混合问题效果极好
+•
+比普通 RAG 更鲁棒（健壮）、更准确
+5、CorrectiveRAG（CRAG）属于检索后优化阶段
+CorrectiveRAG（CRAG）属于 RAG 架构的检索后优化阶段（Post-Retrieval Phase），具体来说是在检索结果评估与修正阶段。
+二、示例代码（LlamaIndex 基础版：相关性过滤 + 查询重写）
+先看一个不依赖外部 Web 搜索的最小 CRAG：检索 → 逐篇相关性评估 → 过滤无关文档 → 若全部不相关则重写查询重检索 → 生成。这一版覆盖 CRAG 的"评估 + 内部修正"环节，方便先理解主流程；下一节再加上 Web 搜索补充外部知识，构成完整 CRAG。
+依赖安装：
+
+代码块
+Bash
+复制
+pip install llama-index-core llama-index-llms-dashscope llama-index-embeddings-dashscope
+
+
+代码块
+Python
+复制
+"""
+Corrective RAG（基础版）- LlamaIndex 实现
+检索 → 逐篇相关性评估 → 过滤无关 → 全不相关则重写查询重检索 → 生成
+只做"内部修正"，不联网；用 qwen-plus 当检索评估器。
+"""
+
+import os
+
+from llama_index.core import Settings, SimpleDirectoryReader, VectorStoreIndex
+from llama_index.core.base.base_retriever import BaseRetriever
+from llama_index.core.llms import LLM
+from llama_index.core.prompts import PromptTemplate
+from llama_index.core.query_engine import CustomQueryEngine
+from llama_index.embeddings.dashscope import DashScopeEmbedding
+from llama_index.llms.dashscope import DashScope
+
+#
+
+=====
+
+06-其他优化（CorrectiveRAG） 
+今天修改
+
+代码块
+Python
+复制
+            text = n.get_content()
+            ok = self._is_relevant(query, text)
+            if self.verbose:
+                print(f"  文档 {i}：{'✅ 相关' if ok else '❌ 无关'}")
+            if ok:
+                kept.append(text)
+        return kept
+
+    def custom_query(self, query_str: str) -> str:
+        if self.verbose:
+            print(f"\n
+
+=====
+
+=
+if __name__ == "__main__":
+    crag = CorrectiveRAGQueryEngine(
+        retriever=index.as_retriever(similarity_top_k=5),  # 多召回，方便过滤
+        llm=Settings.llm,
+    )
+    print("=" * 50)
+    print("✅ Corrective RAG（基础版）已启动，输入 quit 退出")
+    print("=" * 50)
+
+    while True:
+        q = input("\n请输入问题：")
+        if q.lower() == "quit":
+            print("退出")
+            break
+        print("\n" + "=" * 60)
+        print("📝 最终回答：")
+        print(crag.query(q))
+        print("=" * 60)
+
+=====
+
+crag = CorrectiveRAGQueryEngine(
+
+=====
+
+print("✅ Corrective RAG（基础版）已启动，输入 quit 退出")
+
+=====
+
+1.
+Corrective RAG = 普通 RAG + 检索质量评估 + 自动修正
+
+=====
+
+Corrective RAG = 普通 RAG + 检索质量评估 + 自动修正
+
+=====
+
+2.
+评估器把检索结果分为 Correct / Ambiguous / Incorrect 三档（工程实现常简化为逐篇 yes/no）
+
+=====
+
+评估器把检索结果分为 Correct / Ambiguous / Incorrect 三档（工程实现常简化为逐篇 yes/no）
+
+=====
+
+LlamaIndex 官方提供了开箱即用的 CorrectiveRAGWorkflow（基于事件驱动的 Workflow），完整实现了 CRAG 流程：检索 → 逐篇相关性评估 → 只要有文档被判"不相关"就重写查询并调用 Tavily Web 搜索 → 合并"内部相关文本 + 外部搜索结果"生成答案。
+
+=====
+
+LlamaIndex 官方提供了 CorrectiveRAGPack（llama-index-packs-corrective-rag），但它内部把评估 LLM 写死成 OpenAI(model="gpt-4")，需要 OpenAI Key，和本书统一用的通义千问不一致。所以这里直接用 LlamaIndex 的 Workflow 手写一个等价的 CorrectiveRAGWorkflow，把评估器换成 qwen-plus，逻辑与官方 Pack 完全一致。
+StartEvent → ingest (建索引) → prepare_for_retrieval → retrieve → eval_relevance
+                                                                                                       ↓
+                                                                                                (有"no"就触发)
+                                                                                                       ↓
+
+=====
+
+LlamaIndex 官方提供了 CorrectiveRAGPack（llama-index-packs-corrective-rag），但它内部把评估 LLM 写死成 OpenAI(model="gpt-4")，需要 OpenAI Key，和本书统一用的通义千问不一致。所以这里直接用 LlamaIndex 的 Workflow 手写一个等价的 CorrectiveRAGWorkflow，把评估器换成 qwen-plus，逻辑与官方 Pack 完全一致。
+
+=====
+
+06-其他优化（CorrectiveRAG） 
+今天修改
+
+代码块
+Python
+复制
+            print(f"\n
+
+=====
+
+LlamaIndex 官方提供了 CorrectiveRAGPack（llama-index-packs-corrective-rag），但它内部把评估 LLM 写死成 OpenAI(model="gpt-4")，需要 OpenAI Key，和本书统一用的通义千问不一致。所以这里直接用 LlamaIndex 的 Workflow 手写一个等价的 CorrectiveRAGWorkflow，把评估器换成 qwen-plus，逻辑与官方 Pack 完全一致。
+StartEvent → ingest (建索引) → prepare_for_retrieval → retrieve → eval_relevance
+                                                                                                       ↓
+                                                                                                (有"no"就触发)
+                                                                                                       ↓
+StopEvent ← query_result ← QueryEvent ← transform_query ← extract_relevant_texts
+
+=====
+
+代码块
+Python
+复制
+"""
+Corrective RAG（完整版）- LlamaIndex Workflow 实现
+检索 → 逐篇相关性评估(yes/no) → 有"no"则重写查询 + Tavily Web 搜索 → 合并内外知识生成
+评估器/生成器用通义千问 qwen-plus，与全书统一（官方 Pack 写死 gpt-4，这里替换）。
+
+=====
+
+Corrective RAG（完整版）- LlamaIndex Workflow 实现
+
+=====
+
+06-其他优化（CorrectiveRAG） 
+今天修改
+
+代码块
+Python
+复制
+
+        # 步骤3：全部不相关 → 重写查询，重检索（内部修正）
+        if not relevant:
+            if self.verbose:
+                print("[3] 信息不足，重写查询并重检索...")
+            new_query = self.llm.complete(
+                REWRITE_PROMPT.format(query=query_str)
+            ).text.strip()
+            if self.verbose:
+                print(f"   改写后问题：{new_query}")
+            relevant = self._filter_relevant(query_str, self.retriever.retrieve(new_query))
+
+        if not relevant:
+            return "知识库中没有足够信息回答该问题。"
+
+        # 步骤4：生成
+        if self.verbose:
+            print(f"[4] 用 {len(relevant)} 篇相关文档生成回答...")
+        context = "\n---\n".join(relevant)
+        return self.llm.complete(
+            ANSWER_PROMPT.format(query=query_str, context=context)
+        ).text
+
+
+#
+
+=====
+
+代码块
+Python
+复制
+"""
+Corrective RAG（完整版）- LlamaIndex Workflow 实现
+检索 → 逐篇相关性评估(yes/no) → 有"no"则重写查询 + Tavily Web 搜索 → 合并内外知识生成
+评估器/生成器用通义千问 qwen-plus，与全书统一（官方 Pack 写死 gpt-4，这里替换）。
+"""
+
+import asyncio
+import os
+
+from llama_index.core import (
+    Settings,
+    SimpleDirectoryReader,
+    SummaryIndex,
+    VectorStoreIndex,
+    Document,
+
+=====
+
+06-其他优化（CorrectiveRAG） 
+今天修改
+
+代码块
+Python
+复制
+
+
+#
+
+=====
+
+class CorrectiveRAGWorkflow(Workflow):
+
+=====
+
+如果不想引入 Web 搜索 / Tavily，可以直接复用第二节的 CorrectiveRAGQueryEngine，它已经覆盖"评估 + 内部修正"；完整版只是在"出现不相关文档"这条路径上，把"重检索同一个库"换成了"重写查询 + Web 搜索补充外部知识"。
+
+=====
+
+CorrectiveRAGWorkflow 是事件驱动的：每个 @step 接收一个事件、产出下一个事件，串成 CRAG 流程：
+
+=====
+
+注意：官方实现（以及这里）把论文里的 Correct / Ambiguous / Incorrect 三档简化成了逐篇 yes/no 二值——只要有一篇被判 no，就触发 Web 搜索。这等价于把 Incorrect/Ambiguous 两档合并为"需要补充外部知识"，工程上更简单，效果也足够好。想还原三档，可把 eval_relevance 改成输出 correct/ambiguous/incorrect，并据此分别走"纯内部""内部+外部""纯外部"三条路径。
+
+=====
+
+这张图展示了 Corrective RAG（CRAG）的完整工作流程，比之前的图更详细，包含了知识修正（Knowledge Correction）和知识搜索（Knowledge Searching）两个核心模块
+
+=====
+
+代码块
+Python
+复制
+┌─────────────────────────────────────────────────────────────┐
+│  Stage 1: Retrieval（检索）                                  │
+│  用户问题 x → 检索器 → 检索文档 d₁, d₂                         │
+└─────────────────────────────────────────────────────────────┘
+                              ↓
+┌────────────────────────────────────────────────────────────────────┐
+│  Stage 2: Knowledge Correction（知识修正）                          │
+│  ├─ Retrieval Evaluator: 评估文档是 Correct / Ambiguous / Incorrect │
+│  ├─ Knowledge Refinement: 分解→过滤→重组内部知识 k_in                │
+│  └─ Knowledge Searching: 重写查询 → Web搜索 → 选择外部知识 k_ex      │
+└────────────────────────────────────────────────────────────────────┘
+                              ↓
+┌─────────────────────────────────────────────────────────────┐
+│  Stage 3: Generation（生成）                                 │
+│  根据评估结果，组合不同的知识源生成答案                         │
+└─────────────────────────────────────────────────────────────┘
+
+=====
+
+│  Stage 2: Knowledge Correction（知识修正）                          │
+
+=====
+
+│  ├─ Retrieval Evaluator: 评估文档是 Correct / Ambiguous / Incorrect │
+
+=====
+
+│  ├─ Knowledge Refinement: 分解→过滤→重组内部知识 k_in                │
+
+=====
+
+│  └─ Knowledge Searching: 重写查询 → Web搜索 → 选择外部知识 k_ex      │
+
+=====
+
+代码块
+Bash
+复制
+Ask: If retrieved documents are correct to x?
+         ↓
+    ┌────┼────┐
+  Correct  Ambiguous  Incorrect
+   (绿色)   (黄色)     (红色)
+
+=====
+
+6.2 Knowledge Refinement（知识精炼）— Correct 路径
+
+=====
+
+代码块
+Bash
+复制
+d₁, d₂ → Decompose（分解为 strip₁, strip₂...）
+              ↓
+         Filter（过滤掉不相关片段）
+              ↓
+         Recompose（重组为精炼知识 k_in）
+
+=====
+
+作用：即使文档被判定为 Correct，也可能包含冗余信息。通过分解→过滤→重组，提取最精华的部分。
+
+=====
+
+6.3 Knowledge Searching（知识搜索）— Ambiguous / Incorrect 路径
+
+=====
+
+代码块
+Bash
+复制
+x (原问题) → Rewrite（重写查询 q）
+                ↓
+         "Death of a Batman; screenwriter; Wikipedia"
+                ↓
+         Web Search → k₁, k₂, ... k_n
+                ↓
+         Select（选择最相关的）→ k_ex（外部知识）
+
+=====
+
+类比：第五节 CorrectiveRAGWorkflow 中的 transform_query 步骤（重写查询 + Tavily Web 搜索）。
+
+=====
+
+代码块
+Python
+复制
+│  ├─ Retrieval Evaluator: 评估文档是 Correct / Ambiguous / Incorrect │
+│  ├─ Knowledge Refinement: 分解→过滤→重组内部知识 k_in                │
+│  └─ Knowledge Searching: 重写查询 → Web搜索 → 选择外部知识 k_ex      │
+└────────────────────────────────────────────────────────────────────┘
+                              ↓
+┌─────────────────────────────────────────────────────────────┐
+│  Stage 3: Generation（生成）                                 │
+│  根据评估结果，组合不同的知识源生成答案                         │
+└─────────────────────────────────────────────────────────────┘
+
+=====
+
+为了更好地理解CRAG的创新,可以对比一下它与Self-RAG的区别:
+
+=====
+
+两者并不互斥：实际系统常把 CRAG 的"检索质量校验 + Web 补充"与 Self-RAG 的"生成自我反思"结合，先保证喂进去的资料靠谱，再保证生成的内容有据可依。
+
+=====
+
+06-其他优化（CorrectiveRAG） 
+今天修改
+
+代码块
+Bash
+复制
+         "Death of a Batman; screenwriter; Wikipedia"
+                ↓
+         Web Search → k₁, k₂, ... k_n
+                ↓
+         Select（选择最相关的）→ k_ex（外部知识）
+
+作用：当内部文档不足或错误时，自动重写查询并调用 Web 搜索补充知识。
+类比：第五节 CorrectiveRAGWorkflow 中的 transform_query 步骤（重写查询 + Tavily Web 搜索）。
+6.4 Generation（生成）— 三种输入组合
+生成阶段根据评估器的判定，喂给 LLM 的知识来源不同：
+
+
+
+在第五节的工程化实现里，这三种组合自然地落在一行 Document(text=relevant_text + "\n" + search_text) 上：哪一部分为空，就相当于没用那一路知识。
+
+细节对比:CRAG vs Self-RAG
+为了更好地理解CRAG的创新,可以对比一下它与Self-RAG的区别:
+
+
+
+两者并不互斥：实际系统常把 CRAG 的"检索质量校验 + Web 补充"与 Self-RAG 的"生成自我反思"结合，先保证喂进去的资料靠谱，再保证生成的内容有据可依。
+
+七、实战启示
+对工程实践的指导
+1.
+不要迷信检索器: 你的检索器再厉害,也会有翻车的时候。在RAG系统中加入质量评估和纠错机制是必要的"安全带"
+2.
+轻量级评估优于大模型: 专门训练的0.77B评估器在判断相关性上明显优于ChatGPT。这告诉我们,专业任务用专业模型,不要总想着用"大而全"的LLM做所有事
+3.
+动态知识比静态知识更可靠: 当内部知识库无法回答时,果断转向外部搜索,不要让模型"闭门造车"产生幻觉
+4.
+知识粒度很重要: 整篇文档直接喂给LLM效果往往一般,拆分成片段后再筛选,效率更高
+具体应用场景
+•
+企业问答系统: 当企业知识库的文档匹配度低时,CRAG会自动搜索互联网权威来源,避免"不懂装懂"
+•
+医疗咨询: 医疗领域的准确性要求极高,CRAG的知识精炼和网络搜索机制可以显著降低错误信息
+•
+教育辅导: 学生提问时,如果检索结果不理想,系统可以动态获取最新资料,提供更准确的答案
+
+=====
+
+代码块
+Bash
+复制
+         "Death of a Batman; screenwriter; Wikipedia"
+                ↓
+         Web Search → k₁, k₂, ... k_n
+                ↓
+         Select（选择最相关的）→ k_ex（外部知识）
+
+=====
+
+06-其他优化（CorrectiveRAG） 
+今天修改
+
+
+
+在第五节的工程化实现里，这三种组合自然地落在一行 Document(text=relevant_text + "\n" + search_text) 上：哪一部分为空，就相当于没用那一路知识。
+
+细节对比:CRAG vs Self-RAG
+为了更好地理解CRAG的创新,可以对比一下它与Self-RAG的区别:
+
+
+
+两者并不互斥：实际系统常把 CRAG 的"检索质量校验 + Web 补充"与 Self-RAG 的"生成自我反思"结合，先保证喂进去的资料靠谱，再保证生成的内容有据可依。
+
+七、实战启示
+对工程实践的指导
+1.
+不要迷信检索器: 你的检索器再厉害,也会有翻车的时候。在RAG系统中加入质量评估和纠错机制是必要的"安全带"
+2.
+轻量级评估优于大模型: 专门训练的0.77B评估器在判断相关性上明显优于ChatGPT。这告诉我们,专业任务用专业模型,不要总想着用"大而全"的LLM做所有事
+3.
+动态知识比静态知识更可靠: 当内部知识库无法回答时,果断转向外部搜索,不要让模型"闭门造车"产生幻觉
+4.
+知识粒度很重要: 整篇文档直接喂给LLM效果往往一般,拆分成片段后再筛选,效率更高
+具体应用场景
+•
+企业问答系统: 当企业知识库的文档匹配度低时,CRAG会自动搜索互联网权威来源,避免"不懂装懂"
+•
+医疗咨询: 医疗领域的准确性要求极高,CRAG的知识精炼和网络搜索机制可以显著降低错误信息
+•
+教育辅导: 学生提问时,如果检索结果不理想,系统可以动态获取最新资料,提供更准确的答案
+
+=====
+
+06-其他优化（CorrectiveRAG） 
+今天修改
+一、什么是 Corrective RAG？
+当RAG系统的检索环节"失手"时,系统应该具备"自知之明"和"自我纠错"能力。CRAG通过引入轻量级评估器和动态知识纠错机制,让RAG从"盲目依赖检索"进化为"智能评估+按需纠错",在多个基准测试中将检索增强生成的准确率提升了4%-37%,且无需对现有LLM进行额外训练。
+1、背景铺垫
+想象一下,你在准备一场演讲,你的助手帮你找了一些资料。如果助手找来的资料很靠谱,你的演讲会很精彩;但如果助手找来的资料是错的或者不相关的,而你还完全照搬,那后果就不堪设想了。
+这就是当前RAG面临的困境:
+•
+问题本质: RAG把"检索器"找来的文档当作"绝对真理",无条件喂给生成器使用
+•
+现实挑战: 检索器不是完美的,它可能因为查询表述不清、知识库覆盖不全、语义理解偏差等原因,返回不相关甚至误导性的内容
+•
+现有局限: 大多数RAG方法对检索结果"照单全收",没有质量评估机制。就像你拿到一份资料不先看看质量如何就直接使用,风险很大
+
+
+
+
+
+
+
+
+
+
+
+这张图展示了 Corrective RAG（CRAG） 的核心思想：检索后评估文档质量，区分"准确文档"和"不准确文档"，只使用准确文档来生成答案。
+左侧：准确文档 → 正确回答 ✅
+
+代码块
+Plain Text
+复制
+用户问题: 【亨利·菲尔登的职业是什么？】
+           ↓
+检索器返回:【亨利·费登（保守党政治家）：亨利·费登大师是保守党政治家】
+           ↓
+文档标注: （准确文档，绿色高亮 " 政治家"）
+           ↓
+生成器输出: 政治家. ✓
+
+关键：文档明确包含答案，生成器直接提取关键信息，回答正确。
+右侧：不准确文档 → 错误回答 ❌
+
+代码块
+Plain Text
+复制
+用户问题: 【《蝙蝠侠之死》的编剧是谁？】
+           ↓
+检索器返回: 【蝙蝠侠（1989年电影）：……当哈姆的剧本被重写时】
+           ↓                               
+文档标注: （不准确文档，红色高亮 "哈姆"）
+           ↓
+生成器输出: 哈姆 ✗
+
+问题分析：
+•
+文档说的是 Batman (1989 film) 的编剧 Hamm
+•
+但用户问的是 Death of a Batman（另一部作品）
+
+=====
+
+06-其他优化（CorrectiveRAG） 
+今天修改
+1、背景铺垫
+想象一下,你在准备一场演讲,你的助手帮你找了一些资料。如果助手找来的资料很靠谱,你的演讲会很精彩;但如果助手找来的资料是错的或者不相关的,而你还完全照搬,那后果就不堪设想了。
+这就是当前RAG面临的困境:
+•
+问题本质: RAG把"检索器"找来的文档当作"绝对真理",无条件喂给生成器使用
+•
+现实挑战: 检索器不是完美的,它可能因为查询表述不清、知识库覆盖不全、语义理解偏差等原因,返回不相关甚至误导性的内容
+•
+现有局限: 大多数RAG方法对检索结果"照单全收",没有质量评估机制。就像你拿到一份资料不先看看质量如何就直接使用,风险很大
+
+
+
+
+
+
+
+
+
+
+
+这张图展示了 Corrective RAG（CRAG） 的核心思想：检索后评估文档质量，区分"准确文档"和"不准确文档"，只使用准确文档来生成答案。
+左侧：准确文档 → 正确回答 ✅
+
+代码块
+Plain Text
+复制
+用户问题: 【亨利·菲尔登的职业是什么？】
+           ↓
+检索器返回:【亨利·费登（保守党政治家）：亨利·费登大师是保守党政治家】
+           ↓
+文档标注: （准确文档，绿色高亮 " 政治家"）
+           ↓
+生成器输出: 政治家. ✓
+
+关键：文档明确包含答案，生成器直接提取关键信息，回答正确。
+右侧：不准确文档 → 错误回答 ❌
+
+代码块
+Plain Text
+复制
+用户问题: 【《蝙蝠侠之死》的编剧是谁？】
+           ↓
+检索器返回: 【蝙蝠侠（1989年电影）：……当哈姆的剧本被重写时】
+           ↓                               
+文档标注: （不准确文档，红色高亮 "哈姆"）
+           ↓
+生成器输出: 哈姆 ✗
+
+问题分析：
+•
+文档说的是 Batman (1989 film) 的编剧 Hamm
+•
+但用户问的是 Death of a Batman（另一部作品）
+•
+文档看似相关（都涉及 Batman），但实际答非所问
+•
+生成器被误导，给出了错误答案
+Corrective RAG 的解决思路
+这张图暗示的优化方向是： 在"检索"和"生成"之间插入一道文档质量校验关卡——先判断检索到的文档是否真的能回答问题（区分 Accurate / Inaccurate），再决定怎么用，而不是无条件照单全收。
+CRAG 的具体做法：
+1.
+检索文档后，用 LLM 评估每个文档的相关性和准确性
+2.
+如果文档相关且准确 → 直接用于生成
+3.
+如果文档不相关或不准确 → 丢弃，或触发补充检索（Web 搜索等）
+4.
+如果所有文档都不准确 → 重写查询重新检索，或回答"无法确定"
+
+=====
+
+06-其他优化（CorrectiveRAG） 
+今天修改
+
+
+
+
+
+
+
+
+
+
+
+这张图展示了 Corrective RAG（CRAG） 的核心思想：检索后评估文档质量，区分"准确文档"和"不准确文档"，只使用准确文档来生成答案。
+左侧：准确文档 → 正确回答 ✅
+
+代码块
+Plain Text
+复制
+用户问题: 【亨利·菲尔登的职业是什么？】
+           ↓
+检索器返回:【亨利·费登（保守党政治家）：亨利·费登大师是保守党政治家】
+           ↓
+文档标注: （准确文档，绿色高亮 " 政治家"）
+           ↓
+生成器输出: 政治家. ✓
+
+关键：文档明确包含答案，生成器直接提取关键信息，回答正确。
+右侧：不准确文档 → 错误回答 ❌
+
+代码块
+Plain Text
+复制
+用户问题: 【《蝙蝠侠之死》的编剧是谁？】
+           ↓
+检索器返回: 【蝙蝠侠（1989年电影）：……当哈姆的剧本被重写时】
+           ↓                               
+文档标注: （不准确文档，红色高亮 "哈姆"）
+           ↓
+生成器输出: 哈姆 ✗
+
+问题分析：
+•
+文档说的是 Batman (1989 film) 的编剧 Hamm
+•
+但用户问的是 Death of a Batman（另一部作品）
+•
+文档看似相关（都涉及 Batman），但实际答非所问
+•
+生成器被误导，给出了错误答案
+Corrective RAG 的解决思路
+这张图暗示的优化方向是： 在"检索"和"生成"之间插入一道文档质量校验关卡——先判断检索到的文档是否真的能回答问题（区分 Accurate / Inaccurate），再决定怎么用，而不是无条件照单全收。
+CRAG 的具体做法：
+1.
+检索文档后，用 LLM 评估每个文档的相关性和准确性
+2.
+如果文档相关且准确 → 直接用于生成
+3.
+如果文档不相关或不准确 → 丢弃，或触发补充检索（Web 搜索等）
+4.
+如果所有文档都不准确 → 重写查询重新检索，或回答"无法确定"
+一句话总结
+
+传统 RAG 假设"检索到的就是对的"，CRAG 则质疑"检索到的真的对吗？"
+这张图的核心警示：检索相关性 ≠ 答案准确性，必须对文档做二次验证，否则会把"看似相关但实则错误"的信息喂给 LLM，导致 confidently wrong（自信地犯错）。
+
+2、核心定义
+Corrective RAG（修正增强检索） = 标准 RAG + 检索质量校验 + 自动修正 / 补充检索。它解决标准 RAG 最大痛点：
+
+检索到的文档不相关、不完整、错误 → 导致大模型回答胡说八道（幻觉）
+
+3、工作流程
+1）用户提问
+2）初步检索：从知识库召回相关文档
+
+=====
+
+06-其他优化（CorrectiveRAG） 
+今天修改
+
+
+4）最终回答：根据评估结果组合"内部精炼知识 / 外部搜索知识 "，用可靠信息生成答案。
+4、为什么要用 Corrective RAG？
+•
+大幅降低回答幻觉
+•
+对私有知识库 + 公共知识混合问题效果极好
+•
+比普通 RAG 更鲁棒（健壮）、更准确
+5、CorrectiveRAG（CRAG）属于检索后优化阶段
+CorrectiveRAG（CRAG）属于 RAG 架构的检索后优化阶段（Post-Retrieval Phase），具体来说是在检索结果评估与修正阶段。
+二、示例代码（LlamaIndex 基础版：相关性过滤 + 查询重写）
+先看一个不依赖外部 Web 搜索的最小 CRAG：检索 → 逐篇相关性评估 → 过滤无关文档 → 若全部不相关则重写查询重检索 → 生成。这一版覆盖 CRAG 的"评估 + 内部修正"环节，方便先理解主流程；下一节再加上 Web 搜索补充外部知识，构成完整 CRAG。
+依赖安装：
+
+代码块
+Bash
+复制
+pip install llama-index-core llama-index-llms-dashscope llama-index-embeddings-dashscope
+
+
+代码块
+Python
+复制
+"""
+Corrective RAG（基础版）- LlamaIndex 实现
+检索 → 逐篇相关性评估 → 过滤无关 → 全不相关则重写查询重检索 → 生成
+只做"内部修正"，不联网；用 qwen-plus 当检索评估器。
+"""
+
+import os
+
+from llama_index.core import Settings, SimpleDirectoryReader, VectorStoreIndex
+from llama_index.core.base.base_retriever import BaseRetriever
+from llama_index.core.llms import LLM
+from llama_index.core.prompts import PromptTemplate
+from llama_index.core.query_engine import CustomQueryEngine
+from llama_index.embeddings.dashscope import DashScopeEmbedding
+from llama_index.llms.dashscope import DashScope
+
+#
+
+=====
+
+06-其他优化（CorrectiveRAG） 
+今天修改
+二、示例代码（LlamaIndex 基础版：相关性过滤 + 查询重写）
+先看一个不依赖外部 Web 搜索的最小 CRAG：检索 → 逐篇相关性评估 → 过滤无关文档 → 若全部不相关则重写查询重检索 → 生成。这一版覆盖 CRAG 的"评估 + 内部修正"环节，方便先理解主流程；下一节再加上 Web 搜索补充外部知识，构成完整 CRAG。
+依赖安装：
+
+代码块
+Bash
+复制
+pip install llama-index-core llama-index-llms-dashscope llama-index-embeddings-dashscope
+
+
+代码块
+Python
+复制
+"""
+Corrective RAG（基础版）- LlamaIndex 实现
+检索 → 逐篇相关性评估 → 过滤无关 → 全不相关则重写查询重检索 → 生成
+只做"内部修正"，不联网；用 qwen-plus 当检索评估器。
+"""
+
+import os
+
+from llama_index.core import Settings, SimpleDirectoryReader, VectorStoreIndex
+from llama_index.core.base.base_retriever import BaseRetriever
+from llama_index.core.llms import LLM
+from llama_index.core.prompts import PromptTemplate
+from llama_index.core.query_engine import CustomQueryEngine
+from llama_index.embeddings.dashscope import DashScopeEmbedding
+from llama_index.llms.dashscope import DashScope
+
+#
+
+=====
+
+=
+# 继承 CustomQueryEngine，把"评估 + 修正 + 生成"封装成标准查询引擎
+RELEVANCE_PROMPT = PromptTemplate(
+    "判断下面的文档片段是否与用户问题相关、能否帮助回答问题。\n"
+    "只输出一个词：RELEVANT 或 IRRELEVANT。\n\n"
+    "用户问题：{query}\n文档片段：{document}\n输出："
+)
+REWRITE_PROMPT = PromptTemplate(
+    "原始问题检索不到相关信息，请把它改写得更清晰、更具体，便于检索。\n"
+    "只输出改写后的问题。\n\n原始问题：{query}\n改写后："
+)
+ANSWER_PROMPT = PromptTemplate(
+    "请仅依据以下相关文档准确回答问题，不要编造。\n\n"
+    "相关文档：\n{context}\n\n用户问题：{query}\n回答："
+)
+
+
+class CorrectiveRAGQueryEngine(CustomQueryEngine):
+    retriever: BaseRetriever
+    llm: LLM
+    verbose: bool = True
+
+    def _is_relevant(self, query: str, doc: str) -> bool:
+        resp = self.llm.complete(
+            RELEVANCE_PROMPT.format(query=query, document=doc)
+        ).text.strip().upper()
+        return "IRRELEVANT" not in resp
+
+    def _filter_relevant(self, query: str, nodes) -> list[str]:
+        kept = []
+        for i, n in enumerate(nodes, 1):
+            text = n.get_content()
+
+=====
+
+class CorrectiveRAGQueryEngine(CustomQueryEngine):
+
+=====
+
+06-其他优化（CorrectiveRAG） 
+今天修改
+
+代码块
+Python
+复制
+"""
+Corrective RAG（基础版）- LlamaIndex 实现
+检索 → 逐篇相关性评估 → 过滤无关 → 全不相关则重写查询重检索 → 生成
+只做"内部修正"，不联网；用 qwen-plus 当检索评估器。
+"""
+
+import os
+
+from llama_index.core import Settings, SimpleDirectoryReader, VectorStoreIndex
+from llama_index.core.base.base_retriever import BaseRetriever
+from llama_index.core.llms import LLM
+from llama_index.core.prompts import PromptTemplate
+from llama_index.core.query_engine import CustomQueryEngine
+from llama_index.embeddings.dashscope import DashScopeEmbedding
+from llama_index.llms.dashscope import DashScope
+
+#
+
+=====
+
+06-其他优化（CorrectiveRAG） 
+今天修改
+
+代码块
+Python
+复制
+api_key = os.getenv("DASHSCOPE_API_KEY")
+Settings.llm = DashScope(
+    model_name="qwen3.7-max",      # CRAG 的判断要稳，低温
+    temperature=0.1,
+    api_key=api_key,
+)
+Settings.embed_model = DashScopeEmbedding(
+    model_name="text-embedding-v4",   
+    api_key=api_key,
+)
+
+#
+
+=====
+
+=
+if __name__ == "__main__":
+    crag = CorrectiveRAGQueryEngine(
+        retriever=index.as_retriever(similarity_top_k=5),  # 多召回，方便过滤
+        llm=Settings.llm,
+    )
+    print("=" * 50)
+    print("✅ Corrective RAG（基础版）已启动，输入 quit 退出")
+    print("=" * 50)
+
+
+三、代码使用说明
+1.
+在代码同目录新建 data 文件夹（本案例中采用data/kq.txt）
+2.
+放任意 txt/md 进去当本地知识库
+3.
+配置环境变量：DASHSCOPE_API_KEY（通义千问，必填）；若用第五节完整版，再加 TAVILY_API_KEY（Web 搜索）
+4.
+直接运行
+四、核心知识点总结
+1.
+Corrective RAG = 普通 RAG + 检索质量评估 + 自动修正
+2.
+评估器把检索结果分为 Correct / Ambiguous / Incorrect 三档（工程实现常简化为逐篇 yes/no）
+3.
+核心修正手段 = 知识精炼（内部去噪）+ Web 搜索（外部补充）
+4.
+能大幅缓解幻觉、过时信息、无关检索问题，对"私有知识库 + 公共知识"混合场景效果尤其好
+五、示例代码（完整版：LlamaIndex 官方 CRAG Workflow + Web 搜索）
+基础版只能在"内部知识库"里打转——文档不相关时只是重写查询再查一遍同一个库。
+完整 CRAG 的关键在于：当内部文档不足时，转向外部 Web 搜索补充知识。
+
+=====
+
+=
+if __name__ == "__main__":
+    crag = CorrectiveRAGQueryEngine(
+        retriever=index.as_retriever(similarity_top_k=5),  # 多召回，方便过滤
+        llm=Settings.llm,
+    )
+    print("=" * 50)
+    print("✅ Corrective RAG（基础版）已启动，输入 quit 退出")
+    print("=" * 50)
+
+=====
+
+06-其他优化（CorrectiveRAG） 
+今天修改
+
+代码块
+Python
+复制
+    verbose: bool = True
+
+    def _is_relevant(self, query: str, doc: str) -> bool:
+        resp = self.llm.complete(
+            RELEVANCE_PROMPT.format(query=query, document=doc)
+        ).text.strip().upper()
+        return "IRRELEVANT" not in resp
+
+    def _filter_relevant(self, query: str, nodes) -> list[str]:
+        kept = []
+        for i, n in enumerate(nodes, 1):
+            text = n.get_content()
+            ok = self._is_relevant(query, text)
+            if self.verbose:
+                print(f"  文档 {i}：{'✅ 相关' if ok else '❌ 无关'}")
+            if ok:
+                kept.append(text)
+        return kept
+
+    def custom_query(self, query_str: str) -> str:
+        if self.verbose:
+            print(f"\n
+
+=====
+
+06-其他优化（CorrectiveRAG） 
+今天修改
+
+代码块
+Python
+复制
+
+    def custom_query(self, query_str: str) -> str:
+        if self.verbose:
+            print(f"\n
+
+=====
+
+代码块
+Python
+复制
+"""
+Corrective RAG（完整版）- LlamaIndex Workflow 实现
+检索 → 逐篇相关性评估(yes/no) → 有"no"则重写查询 + Tavily Web 搜索 → 合并内外知识生成
+评估器/生成器用通义千问 qwen-plus，与全书统一（官方 Pack 写死 gpt-4，这里替换）。
+"""
+
+import asyncio
+import os
+
+from llama_index.core import (
+    Settings,
+    SimpleDirectoryReader,
+    SummaryIndex,
+    VectorStoreIndex,
+    Document,
+    PromptTemplate,
+)
+from llama_index.core.schema import NodeWithScore
+from llama_index.core.workflow import (
+
+=====
+
+代码块
+Python
+复制
+"""
+Corrective RAG（完整版）- LlamaIndex Workflow 实现
+检索 → 逐篇相关性评估(yes/no) → 有"no"则重写查询 + Tavily Web 搜索 → 合并内外知识生成
+评估器/生成器用通义千问 qwen-plus，与全书统一（官方 Pack 写死 gpt-4，这里替换）。
+"""
+
+import asyncio
+import os
+
+from llama_index.core import (
+    Settings,
+    SimpleDirectoryReader,
+    SummaryIndex,
+    VectorStoreIndex,
+    Document,
+    PromptTemplate,
+)
+from llama_index.core.schema import NodeWithScore
+from llama_index.core.workflow import (
+    Context,
+    Event,
+    StartEvent,
+    StopEvent,
+    Workflow,
+    step,
+)
+from llama_index.embeddings.dashscope import DashScopeEmbedding
+from llama_index.llms.dashscope import DashScope
+from llama_index.tools.tavily_research.base import TavilyToolSpec
+
+#
+
+=====
+
+06-其他优化（CorrectiveRAG） 
+今天修改
+
+                                                                                                       ↓
+                                                                                                (有"no"就触发)
+                                                                                                       ↓
+StopEvent ← query_result ← QueryEvent ← transform_query ← extract_relevant_texts
+
+
+代码块
+Python
+复制
+"""
+Corrective RAG（完整版）- LlamaIndex Workflow 实现
+检索 → 逐篇相关性评估(yes/no) → 有"no"则重写查询 + Tavily Web 搜索 → 合并内外知识生成
+评估器/生成器用通义千问 qwen-plus，与全书统一（官方 Pack 写死 gpt-4，这里替换）。
+"""
+
+import asyncio
+import os
+
+from llama_index.core import (
+    Settings,
+    SimpleDirectoryReader,
+    SummaryIndex,
+    VectorStoreIndex,
+    Document,
+    PromptTemplate,
+)
+from llama_index.core.schema import NodeWithScore
+from llama_index.core.workflow import (
+    Context,
+    Event,
+    StartEvent,
+    StopEvent,
+    Workflow,
+    step,
+)
+from llama_index.embeddings.dashscope import DashScopeEmbedding
+from llama_index.llms.dashscope import DashScope
+from llama_index.tools.tavily_research.base import TavilyToolSpec
+
+#
+
+=====
+
+06-其他优化（CorrectiveRAG） 
+今天修改
+
+代码块
+Python
+复制
+import os
+
+from llama_index.core import (
+    Settings,
+    SimpleDirectoryReader,
+    SummaryIndex,
+    VectorStoreIndex,
+    Document,
+    PromptTemplate,
+)
+from llama_index.core.schema import NodeWithScore
+from llama_index.core.workflow import (
+    Context,
+    Event,
+    StartEvent,
+    StopEvent,
+    Workflow,
+    step,
+)
+from llama_index.embeddings.dashscope import DashScopeEmbedding
+from llama_index.llms.dashscope import DashScope
+from llama_index.tools.tavily_research.base import TavilyToolSpec
+
+#
+
+=====
+
+=
+class CorrectiveRAGWorkflow(Workflow):
+    @step
+    async def ingest(self, ctx: Context, ev: StartEvent) -> StopEvent | None:
+        """传入 documents 时：建索引并返回 index。"""
+        documents = ev.get("documents")
+        if documents is None:
+            return None
+        index = VectorStoreIndex.from_documents(documents)
+        return StopEvent(result=index)
+
+    @step
+    async def prepare_for_retrieval(self, ctx: Context, ev: StartEvent) -> PrepEvent | None:
+        """传入 query_str/index 时：把 LLM、index、Tavily 工具存进上下文。"""
+        query_str = ev.get("query_str")
+        if query_str is None:
+            return None
+        await ctx.store.set("index", ev.get("index"))
+        await ctx.store.set("tavily_tool", TavilyToolSpec(api_key=ev.get("tavily_ai_apikey")))
+
+
+如果不想引入 Web 搜索 / Tavily，可以直接复用第二节的 CorrectiveRAGQueryEngine，它已经覆盖"评估 + 内部修正"；完整版只是在"出现不相关文档"这条路径上，把"重检索同一个库"换成了"重写查询 + Web 搜索补充外部知识"。
+
+=====
+
+=
+class CorrectiveRAGWorkflow(Workflow):
+    @step
+    async def ingest(self, ctx: Context, ev: StartEvent) -> StopEvent | None:
+        """传入 documents 时：建索引并返回 index。"""
+        documents = ev.get("documents")
+        if documents is None:
+            return None
+        index = VectorStoreIndex.from_documents(documents)
+        return StopEvent(result=index)
+
+    @step
+    async def prepare_for_retrieval(self, ctx: Context, ev: StartEvent) -> PrepEvent | None:
+        """传入 query_str/index 时：把 LLM、index、Tavily 工具存进上下文。"""
+        query_str = ev.get("query_str")
+        if query_str is None:
+            return None
+        await ctx.store.set("index", ev.get("index"))
+        await ctx.store.set("tavily_tool", TavilyToolSpec(api_key=ev.get("tavily_ai_apikey")))
+
+=====
+
+06-其他优化（CorrectiveRAG） 
+今天修改
+
+代码块
+Python
+复制
+)
+from llama_index.embeddings.dashscope import DashScopeEmbedding
+from llama_index.llms.dashscope import DashScope
+from llama_index.tools.tavily_research.base import TavilyToolSpec
+
+#
+
+=====
+
+06-其他优化（CorrectiveRAG） 
+今天修改
+
+代码块
+Python
+复制
+)
+TRANSFORM_QUERY_PROMPT = PromptTemplate(
+    "请把下面的查询改写得更适合检索（抓住核心语义意图，简洁精准）。\n"
+    "只输出改写后的查询。\n\n原始查询：\n{query_str}\n\n改写后查询："
+)
+
+
+#
+
+=====
+
+06-其他优化（CorrectiveRAG） 
+今天修改
+
+代码块
+Python
+复制
+
+
+class TextExtractEvent(Event):
+    relevant_text: str
+
+
+class QueryEvent(Event):
+    relevant_text: str
+    search_text: str
+
+
+#
+
+=====
+
+=
+async def main():
+    workflow = CorrectiveRAGWorkflow(timeout=120)
+    documents = SimpleDirectoryReader(input_files=["./data/qwen.txt"]).load_data()
+    index = await workflow.run(documents=documents)   # 第一次 run：建索引
+
+    print("=" * 50)
+    print("✅ Corrective RAG（Workflow + 通义千问 + Tavily）已启动，输入 quit 退出")
+    print("=" * 50)
+    while True:
+        q = input("\n请输入问题：")
+
+=====
+
+workflow = CorrectiveRAGWorkflow(timeout=120)
+
+=====
+
+print("✅ Corrective RAG（Workflow + 通义千问 + Tavily）已启动，输入 quit 退出")
+
+=====
+
+06-其他优化（CorrectiveRAG） 
+今天修改
+
+代码块
+Bash
+复制
+x (原问题) → Rewrite（重写查询 q）
+                ↓
+         "Death of a Batman; screenwriter; Wikipedia"
+                ↓
+         Web Search → k₁, k₂, ... k_n
+                ↓
+         Select（选择最相关的）→ k_ex（外部知识）
+
+作用：当内部文档不足或错误时，自动重写查询并调用 Web 搜索补充知识。
+类比：第五节 CorrectiveRAGWorkflow 中的 transform_query 步骤（重写查询 + Tavily Web 搜索）。
+6.4 Generation（生成）— 三种输入组合
+生成阶段根据评估器的判定，喂给 LLM 的知识来源不同：
+
+
+
+在第五节的工程化实现里，这三种组合自然地落在一行 Document(text=relevant_text + "\n" + search_text) 上：哪一部分为空，就相当于没用那一路知识。
+
+细节对比:CRAG vs Self-RAG
+为了更好地理解CRAG的创新,可以对比一下它与Self-RAG的区别:
+
+
+
+两者并不互斥：实际系统常把 CRAG 的"检索质量校验 + Web 补充"与 Self-RAG 的"生成自我反思"结合，先保证喂进去的资料靠谱，再保证生成的内容有据可依。
+
+七、实战启示
+对工程实践的指导
+1.
+不要迷信检索器: 你的检索器再厉害,也会有翻车的时候。在RAG系统中加入质量评估和纠错机制是必要的"安全带"
+2.
+轻量级评估优于大模型: 专门训练的0.77B评估器在判断相关性上明显优于ChatGPT。这告诉我们,专业任务用专业模型,不要总想着用"大而全"的LLM做所有事
+3.
+动态知识比静态知识更可靠: 当内部知识库无法回答时,果断转向外部搜索,不要让模型"闭门造车"产生幻觉
+4.
+知识粒度很重要: 整篇文档直接喂给LLM效果往往一般,拆分成片段后再筛选,效率更高
+具体应用场景
+•
+企业问答系统: 当企业知识库的文档匹配度低时,CRAG会自动搜索互联网权威来源,避免"不懂装懂"
+•
+医疗咨询: 医疗领域的准确性要求极高,CRAG的知识精炼和网络搜索机制可以显著降低错误信息
+•
+教育辅导: 学生提问时,如果检索结果不理想,系统可以动态获取最新资料,提供更准确的答案
+
+=====
+
+06-其他优化（CorrectiveRAG） 
+今天修改
+生成阶段根据评估器的判定，喂给 LLM 的知识来源不同：
+
+
+
+在第五节的工程化实现里，这三种组合自然地落在一行 Document(text=relevant_text + "\n" + search_text) 上：哪一部分为空，就相当于没用那一路知识。
+
+细节对比:CRAG vs Self-RAG
+为了更好地理解CRAG的创新,可以对比一下它与Self-RAG的区别:
+
+
+
+两者并不互斥：实际系统常把 CRAG 的"检索质量校验 + Web 补充"与 Self-RAG 的"生成自我反思"结合，先保证喂进去的资料靠谱，再保证生成的内容有据可依。
+
+七、实战启示
+对工程实践的指导
+1.
+不要迷信检索器: 你的检索器再厉害,也会有翻车的时候。在RAG系统中加入质量评估和纠错机制是必要的"安全带"
+2.
+轻量级评估优于大模型: 专门训练的0.77B评估器在判断相关性上明显优于ChatGPT。这告诉我们,专业任务用专业模型,不要总想着用"大而全"的LLM做所有事
+3.
+动态知识比静态知识更可靠: 当内部知识库无法回答时,果断转向外部搜索,不要让模型"闭门造车"产生幻觉
+4.
+知识粒度很重要: 整篇文档直接喂给LLM效果往往一般,拆分成片段后再筛选,效率更高
+具体应用场景
+•
+企业问答系统: 当企业知识库的文档匹配度低时,CRAG会自动搜索互联网权威来源,避免"不懂装懂"
+•
+医疗咨询: 医疗领域的准确性要求极高,CRAG的知识精炼和网络搜索机制可以显著降低错误信息
+•
+教育辅导: 学生提问时,如果检索结果不理想,系统可以动态获取最新资料,提供更准确的答案
+
+=====
+
+06-其他优化（CorrectiveRAG） 
+今天修改
+一、什么是 Corrective RAG？
+当RAG系统的检索环节"失手"时,系统应该具备"自知之明"和"自我纠错"能力。CRAG通过引入轻量级评估器和动态知识纠错机制,让RAG从"盲目依赖检索"进化为"智能评估+按需纠错",在多个基准测试中将检索增强生成的准确率提升了4%-37%,且无需对现有LLM进行额外训练。
+1、背景铺垫
+想象一下,你在准备一场演讲,你的助手帮你找了一些资料。如果助手找来的资料很靠谱,你的演讲会很精彩;但如果助手找来的资料是错的或者不相关的,而你还完全照搬,那后果就不堪设想了。
+这就是当前RAG面临的困境:
+•
+问题本质: RAG把"检索器"找来的文档当作"绝对真理",无条件喂给生成器使用
+•
+现实挑战: 检索器不是完美的,它可能因为查询表述不清、知识库覆盖不全、语义理解偏差等原因,返回不相关甚至误导性的内容
+•
+现有局限: 大多数RAG方法对检索结果"照单全收",没有质量评估机制。就像你拿到一份资料不先看看质量如何就直接使用,风险很大
+
+
+
+
+
+
+
+
+
+
+
+这张图展示了 Corrective RAG（CRAG） 的核心思想：检索后评估文档质量，区分"准确文档"和"不准确文档"，只使用准确文档来生成答案。
+左侧：准确文档 → 正确回答 ✅
+
+代码块
+Plain Text
+复制
+用户问题: 【亨利·菲尔登的职业是什么？】
+           ↓
+检索器返回:【亨利·费登（保守党政治家）：亨利·费登大师是保守党政治家】
+           ↓
+文档标注: （准确文档，绿色高亮 " 政治家"）
+           ↓
+生成器输出: 政治家. ✓
+
+关键：文档明确包含答案，生成器直接提取关键信息，回答正确。
+右侧：不准确文档 → 错误回答 ❌
+
+代码块
+Plain Text
+复制
+用户问题: 【《蝙蝠侠之死》的编剧是谁？】
+           ↓
+检索器返回: 【蝙蝠侠（1989年电影）：……当哈姆的剧本被重写时】
+           ↓
+
+=====
+
+代码块
+Python
+复制
+"""
+Corrective RAG（基础版）- LlamaIndex 实现
+检索 → 逐篇相关性评估 → 过滤无关 → 全不相关则重写查询重检索 → 生成
+
+=====
+
+06-其他优化（CorrectiveRAG） 
+今天修改
+1）用户提问
+2）初步检索：从知识库召回相关文档
+3）检索质量评估（CRAG 灵魂）：用一个轻量级检索评估器（Retrieval Evaluator）给每篇文档打分，把整体检索结果归为三类：
+
+
+4）最终回答：根据评估结果组合"内部精炼知识 / 外部搜索知识 "，用可靠信息生成答案。
+4、为什么要用 Corrective RAG？
+•
+大幅降低回答幻觉
+•
+对私有知识库 + 公共知识混合问题效果极好
+•
+比普通 RAG 更鲁棒（健壮）、更准确
+5、CorrectiveRAG（CRAG）属于检索后优化阶段
+CorrectiveRAG（CRAG）属于 RAG 架构的检索后优化阶段（Post-Retrieval Phase），具体来说是在检索结果评估与修正阶段。
+二、示例代码（LlamaIndex 基础版：相关性过滤 + 查询重写）
+先看一个不依赖外部 Web 搜索的最小 CRAG：检索 → 逐篇相关性评估 → 过滤无关文档 → 若全部不相关则重写查询重检索 → 生成。这一版覆盖 CRAG 的"评估 + 内部修正"环节，方便先理解主流程；下一节再加上 Web 搜索补充外部知识，构成完整 CRAG。
+依赖安装：
+
+代码块
+Bash
+复制
+pip install llama-index-core llama-index-llms-dashscope llama-index-embeddings-dashscope
+
+
+代码块
+Python
+复制
+"""
+Corrective RAG（基础版）- LlamaIndex 实现
+检索 → 逐篇相关性评估 → 过滤无关 → 全不相关则重写查询重检索 → 生成
+只做"内部修正"，不联网；用 qwen-plus 当检索评估器。
+"""
+
+import os
+
+from llama_index.core import Settings, SimpleDirectoryReader, VectorStoreIndex
+from llama_index.core.base.base_retriever import BaseRetriever
+from llama_index.core.llms import LLM
+from llama_index.core.prompts import PromptTemplate
+from llama_index.core.query_engine import CustomQueryEngine
+from llama_index.embeddings.dashscope import DashScopeEmbedding
+from llama_index.llms.dashscope import DashScope
+
+#
+
+=====
+
+06-其他优化（CorrectiveRAG） 
+今天修改
+•
+大幅降低回答幻觉
+•
+对私有知识库 + 公共知识混合问题效果极好
+•
+比普通 RAG 更鲁棒（健壮）、更准确
+5、CorrectiveRAG（CRAG）属于检索后优化阶段
+CorrectiveRAG（CRAG）属于 RAG 架构的检索后优化阶段（Post-Retrieval Phase），具体来说是在检索结果评估与修正阶段。
+二、示例代码（LlamaIndex 基础版：相关性过滤 + 查询重写）
+先看一个不依赖外部 Web 搜索的最小 CRAG：检索 → 逐篇相关性评估 → 过滤无关文档 → 若全部不相关则重写查询重检索 → 生成。这一版覆盖 CRAG 的"评估 + 内部修正"环节，方便先理解主流程；下一节再加上 Web 搜索补充外部知识，构成完整 CRAG。
+依赖安装：
+
+代码块
+Bash
+复制
+pip install llama-index-core llama-index-llms-dashscope llama-index-embeddings-dashscope
+
+
+代码块
+Python
+复制
+"""
+Corrective RAG（基础版）- LlamaIndex 实现
+检索 → 逐篇相关性评估 → 过滤无关 → 全不相关则重写查询重检索 → 生成
+只做"内部修正"，不联网；用 qwen-plus 当检索评估器。
+"""
+
+import os
+
+from llama_index.core import Settings, SimpleDirectoryReader, VectorStoreIndex
+from llama_index.core.base.base_retriever import BaseRetriever
+from llama_index.core.llms import LLM
+from llama_index.core.prompts import PromptTemplate
+from llama_index.core.query_engine import CustomQueryEngine
+from llama_index.embeddings.dashscope import DashScopeEmbedding
+from llama_index.llms.dashscope import DashScope
+
+#
+
+=====
+
+=
+# 继承 CustomQueryEngine，把"评估 + 修正 + 生成"封装成标准查询引擎
+RELEVANCE_PROMPT = PromptTemplate(
+    "判断下面的文档片段是否与用户问题相关、能否帮助回答问题。\n"
+    "只输出一个词：RELEVANT 或 IRRELEVANT。\n\n"
+    "用户问题：{query}\n文档片段：{document}\n输出："
+)
+REWRITE_PROMPT = PromptTemplate(
+    "原始问题检索不到相关信息，请把它改写得更清晰、更具体，便于检索。\n"
+    "只输出改写后的问题。\n\n原始问题：{query}\n改写后："
+)
+ANSWER_PROMPT = PromptTemplate(
+    "请仅依据以下相关文档准确回答问题，不要编造。\n\n"
+    "相关文档：\n{context}\n\n用户问题：{query}\n回答："
+)
+
+
+class CorrectiveRAGQueryEngine(CustomQueryEngine):
+    retriever: BaseRetriever
+    llm: LLM
+    verbose: bool = True
+
+    def _is_relevant(self, query: str, doc: str) -> bool:
+
+=====
+
+06-其他优化（CorrectiveRAG） 
+今天修改
+依赖安装：
+
+代码块
+Bash
+复制
+pip install llama-index-core llama-index-llms-dashscope llama-index-embeddings-dashscope
+
+
+代码块
+Python
+复制
+"""
+Corrective RAG（基础版）- LlamaIndex 实现
+检索 → 逐篇相关性评估 → 过滤无关 → 全不相关则重写查询重检索 → 生成
+只做"内部修正"，不联网；用 qwen-plus 当检索评估器。
+"""
+
+import os
+
+from llama_index.core import Settings, SimpleDirectoryReader, VectorStoreIndex
+from llama_index.core.base.base_retriever import BaseRetriever
+from llama_index.core.llms import LLM
+from llama_index.core.prompts import PromptTemplate
+from llama_index.core.query_engine import CustomQueryEngine
+from llama_index.embeddings.dashscope import DashScopeEmbedding
+from llama_index.llms.dashscope import DashScope
+
+#
+
+=====
+
+06-其他优化（CorrectiveRAG） 
+今天修改
+
+代码块
+Python
+复制
+from llama_index.core.base.base_retriever import BaseRetriever
+from llama_index.core.llms import LLM
+from llama_index.core.prompts import PromptTemplate
+from llama_index.core.query_engine import CustomQueryEngine
+from llama_index.embeddings.dashscope import DashScopeEmbedding
+from llama_index.llms.dashscope import DashScope
+
+#
+
+=====
+
+06-其他优化（CorrectiveRAG） 
+今天修改
+
+代码块
+Python
+复制
+)
+
+#
+
+=====
+
+=
+
+三、代码使用说明
+1.
+在代码同目录新建 data 文件夹（本案例中采用data/kq.txt）
+2.
+放任意 txt/md 进去当本地知识库
+3.
+配置环境变量：DASHSCOPE_API_KEY（通义千问，必填）；若用第五节完整版，再加 TAVILY_API_KEY（Web 搜索）
+4.
+直接运行
+四、核心知识点总结
+1.
+Corrective RAG = 普通 RAG + 检索质量评估 + 自动修正
+2.
+评估器把检索结果分为 Correct / Ambiguous / Incorrect 三档（工程实现常简化为逐篇 yes/no）
+3.
+核心修正手段 = 知识精炼（内部去噪）+ Web 搜索（外部补充）
+4.
+能大幅缓解幻觉、过时信息、无关检索问题，对"私有知识库 + 公共知识"混合场景效果尤其好
+
+=====
+
+06-其他优化（CorrectiveRAG） 
+今天修改
+
+代码块
+Python
+复制
+ANSWER_PROMPT = PromptTemplate(
+    "请仅依据以下相关文档准确回答问题，不要编造。\n\n"
+    "相关文档：\n{context}\n\n用户问题：{query}\n回答："
+)
+
+
+class CorrectiveRAGQueryEngine(CustomQueryEngine):
+    retriever: BaseRetriever
+    llm: LLM
+    verbose: bool = True
+
+    def _is_relevant(self, query: str, doc: str) -> bool:
+        resp = self.llm.complete(
+            RELEVANCE_PROMPT.format(query=query, document=doc)
+        ).text.strip().upper()
+        return "IRRELEVANT" not in resp
+
+    def _filter_relevant(self, query: str, nodes) -> list[str]:
+        kept = []
+        for i, n in enumerate(nodes, 1):
+            text = n.get_content()
+            ok = self._is_relevant(query, text)
+            if self.verbose:
+                print(f"  文档 {i}：{'✅ 相关' if ok else '❌ 无关'}")
+            if ok:
+                kept.append(text)
+        return kept
+
+    def custom_query(self, query_str: str) -> str:
+        if self.verbose:
+            print(f"\n
+
+=====
+
+代码块
+Python
+复制
+ANSWER_PROMPT = PromptTemplate(
+    "请仅依据以下相关文档准确回答问题，不要编造。\n\n"
+    "相关文档：\n{context}\n\n用户问题：{query}\n回答："
+)
+
+
+class CorrectiveRAGQueryEngine(CustomQueryEngine):
+    retriever: BaseRetriever
+    llm: LLM
+    verbose: bool = True
+
+    def _is_relevant(self, query: str, doc: str) -> bool:
+        resp = self.llm.complete(
+            RELEVANCE_PROMPT.format(query=query, document=doc)
+        ).text.strip().upper()
+        return "IRRELEVANT" not in resp
+
+    def _filter_relevant(self, query: str, nodes) -> list[str]:
+        kept = []
+        for i, n in enumerate(nodes, 1):
+            text = n.get_content()
+            ok = self._is_relevant(query, text)
+            if self.verbose:
+                print(f"  文档 {i}：{'✅ 相关' if ok else '❌ 无关'}")
+            if ok:
+                kept.append(text)
+        return kept
+
+    def custom_query(self, query_str: str) -> str:
+        if self.verbose:
+            print(f"\n
+
+=====
+
+06-其他优化（CorrectiveRAG） 
+今天修改
+
+代码块
+Python
+复制
+        kept = []
+        for i, n in enumerate(nodes, 1):
+            text = n.get_content()
+            ok = self._is_relevant(query, text)
+            if self.verbose:
+                print(f"  文档 {i}：{'✅ 相关' if ok else '❌ 无关'}")
+            if ok:
+                kept.append(text)
+        return kept
+
+    def custom_query(self, query_str: str) -> str:
+        if self.verbose:
+            print(f"\n
+
+=====
+
+LlamaIndex 官方提供了 CorrectiveRAGPack（llama-index-packs-corrective-rag），但它内部把评估 LLM 写死成 OpenAI(model="gpt-4")，需要 OpenAI Key，和本书统一用的通义千问不一致。所以这里直接用 LlamaIndex 的 Workflow 手写一个等价的 CorrectiveRAGWorkflow，把评估器换成 qwen-plus，逻辑与官方 Pack 完全一致。
+StartEvent → ingest (建索引) → prepare_for_retrieval → retrieve → eval_relevance
+                                                                                                       ↓
+                                                                                                (有"no"就触发)
+
+=====
+
+06-其他优化（CorrectiveRAG） 
+今天修改
+
+代码块
+Python
+复制
+
+        # 步骤2：相关性评估 + 过滤（CRAG 核心）
+        if self.verbose:
+            print("[2] 文档相关性过滤中...")
+        relevant = self._filter_relevant(query_str, nodes)
+
+        # 步骤3：全部不相关 → 重写查询，重检索（内部修正）
+        if not relevant:
+            if self.verbose:
+                print("[3] 信息不足，重写查询并重检索...")
+            new_query = self.llm.complete(
+                REWRITE_PROMPT.format(query=query_str)
+            ).text.strip()
+            if self.verbose:
+                print(f"   改写后问题：{new_query}")
+            relevant = self._filter_relevant(query_str, self.retriever.retrieve(new_query))
+
+        if not relevant:
+            return "知识库中没有足够信息回答该问题。"
+
+        # 步骤4：生成
+        if self.verbose:
+            print(f"[4] 用 {len(relevant)} 篇相关文档生成回答...")
+        context = "\n---\n".join(relevant)
+        return self.llm.complete(
+            ANSWER_PROMPT.format(query=query_str, context=context)
+        ).text
+
+
+#
+
+=====
+
+代码块
+Python
+复制
+"""
+Corrective RAG（完整版）- LlamaIndex Workflow 实现
+检索 → 逐篇相关性评估(yes/no) → 有"no"则重写查询 + Tavily Web 搜索 → 合并内外知识生成
+评估器/生成器用通义千问 qwen-plus，与全书统一（官方 Pack 写死 gpt-4，这里替换）。
+"""
+
+import asyncio
+import os
+
+from llama_index.core import (
+
+=====
+
+代码块
+Python
+复制
+"""
+Corrective RAG（完整版）- LlamaIndex Workflow 实现
+检索 → 逐篇相关性评估(yes/no) → 有"no"则重写查询 + Tavily Web 搜索 → 合并内外知识生成
+评估器/生成器用通义千问 qwen-plus，与全书统一（官方 Pack 写死 gpt-4，这里替换）。
+"""
+
+import asyncio
+import os
+
+from llama_index.core import (
+    Settings,
+    SimpleDirectoryReader,
+    SummaryIndex,
+    VectorStoreIndex,
+    Document,
+    PromptTemplate,
+)
+from llama_index.core.schema import NodeWithScore
+from llama_index.core.workflow import (
+    Context,
+    Event,
+    StartEvent,
+    StopEvent,
+    Workflow,
+    step,
+)
+from llama_index.embeddings.dashscope import DashScopeEmbedding
+from llama_index.llms.dashscope import DashScope
+
+=====
+
+06-其他优化（CorrectiveRAG） 
+今天修改
+
+代码块
+Python
+复制
+"""
+Corrective RAG（完整版）- LlamaIndex Workflow 实现
+检索 → 逐篇相关性评估(yes/no) → 有"no"则重写查询 + Tavily Web 搜索 → 合并内外知识生成
+评估器/生成器用通义千问 qwen-plus，与全书统一（官方 Pack 写死 gpt-4，这里替换）。
+"""
+
+import asyncio
+import os
+
+from llama_index.core import (
+    Settings,
+    SimpleDirectoryReader,
+    SummaryIndex,
+    VectorStoreIndex,
+    Document,
+    PromptTemplate,
+)
+from llama_index.core.schema import NodeWithScore
+from llama_index.core.workflow import (
+    Context,
+    Event,
+    StartEvent,
+    StopEvent,
+    Workflow,
+    step,
+)
+from llama_index.embeddings.dashscope import DashScopeEmbedding
+from llama_index.llms.dashscope import DashScope
+from llama_index.tools.tavily_research.base import TavilyToolSpec
+
+#
+
+=====
+
+=
+class CorrectiveRAGWorkflow(Workflow):
+    @step
+    async def ingest(self, ctx: Context, ev: StartEvent) -> StopEvent | None:
+        """传入 documents 时：建索引并返回 index。"""
+        documents = ev.get("documents")
+        if documents is None:
+            return None
+        index = VectorStoreIndex.from_documents(documents)
+        return StopEvent(result=index)
+
+=====
+
+06-其他优化（CorrectiveRAG） 
+今天修改
+
+代码块
+Python
+复制
+)
+from llama_index.core.schema import NodeWithScore
+from llama_index.core.workflow import (
+    Context,
+    Event,
+    StartEvent,
+    StopEvent,
+    Workflow,
+    step,
+)
+from llama_index.embeddings.dashscope import DashScopeEmbedding
+from llama_index.llms.dashscope import DashScope
+from llama_index.tools.tavily_research.base import TavilyToolSpec
+
+#
+
+=====
+
+=
+class CorrectiveRAGWorkflow(Workflow):
+    @step
+    async def ingest(self, ctx: Context, ev: StartEvent) -> StopEvent | None:
+        """传入 documents 时：建索引并返回 index。"""
+        documents = ev.get("documents")
+        if documents is None:
+            return None
+        index = VectorStoreIndex.from_documents(documents)
+        return StopEvent(result=index)
+
+    @step
+    async def prepare_for_retrieval(self, ctx: Context, ev: StartEvent) -> PrepEvent | None:
+        """传入 query_str/index 时：把 LLM、index、Tavily 工具存进上下文。"""
+        query_str = ev.get("query_str")
+        if query_str is None:
+            return None
+        await ctx.store.set("index", ev.get("index"))
+        await ctx.store.set("tavily_tool", TavilyToolSpec(api_key=ev.get("tavily_ai_apikey")))
+        await ctx.store.set("query_str", query_str)
+        return PrepEvent()
+
+    @step
+    async def retrieve(self, ctx: Context, ev: PrepEvent) -> RetrieveEvent:
+        """检索候选节点。"""
+        query_str = await ctx.store.get("query_str")
+        index = await ctx.store.get("index")
+        nodes = index.as_retriever(similarity_top_k=5).retrieve(query_str)
+
+=====
+
+06-其他优化（CorrectiveRAG） 
+今天修改
+
+代码块
+Python
+复制
+Settings.llm = DashScope(model_name="qwen3.7-max", temperature=0.1, api_key=api_key)
+Settings.embed_model = DashScopeEmbedding(model_name="text-embedding-v4", api_key=api_key)
+
+#
+
+=====
+
+06-其他优化（CorrectiveRAG） 
+今天修改
+
+代码块
+Python
+复制
+    pass
+
+
+class RetrieveEvent(Event):
+    retrieved_nodes: list[NodeWithScore]
+
+
+class RelevanceEvalEvent(Event):
+    relevant_results: list[str]
+
+
+class TextExtractEvent(Event):
+    relevant_text: str
+
+
+class QueryEvent(Event):
+    relevant_text: str
+    search_text: str
+
+
+#
+
+=====
+
+=
+async def main():
+    workflow = CorrectiveRAGWorkflow(timeout=120)
+    documents = SimpleDirectoryReader(input_files=["./data/qwen.txt"]).load_data()
+    index = await workflow.run(documents=documents)   # 第一次 run：建索引
+
+    print("=" * 50)
+    print("✅ Corrective RAG（Workflow + 通义千问 + Tavily）已启动，输入 quit 退出")
+    print("=" * 50)
+    while True:
+        q = input("\n请输入问题：")
+        if q.lower() == "quit":
+            print("退出")
+            break
+        # 后续 run：传 query_str + index + tavily key 走 CRAG 流程
+        response = await workflow.run(
+            query_str=q, index=index, tavily_ai_apikey=tavily_api_key
+        )
+        print("\n" + "=" * 60)
+        print("📝 最终回答：")
+
+=====
+
+代码块
+Python
+复制
+┌─────────────────────────────────────────────────────────────┐
+│  Stage 1: Retrieval（检索）                                  │
+│  用户问题 x → 检索器 → 检索文档 d₁, d₂                         │
+└─────────────────────────────────────────────────────────────┘
+                              ↓
+┌────────────────────────────────────────────────────────────────────┐
+│  Stage 2: Knowledge Correction（知识修正）                          │
+│  ├─ Retrieval Evaluator: 评估文档是 Correct / Ambiguous / Incorrect │
+│  ├─ Knowledge Refinement: 分解→过滤→重组内部知识 k_in                │
+│  └─ Knowledge Searching: 重写查询 → Web搜索 → 选择外部知识 k_ex      │
+└────────────────────────────────────────────────────────────────────┘
+                              ↓
+┌─────────────────────────────────────────────────────────────┐
+│  Stage 3: Generation（生成）                                 │
+│  根据评估结果，组合不同的知识源生成答案                         │
+
+=====
+
+代码块
+Python
+复制
+└─────────────────────────────────────────────────────────────┘
+                              ↓
+┌────────────────────────────────────────────────────────────────────┐
+│  Stage 2: Knowledge Correction（知识修正）                          │
+│  ├─ Retrieval Evaluator: 评估文档是 Correct / Ambiguous / Incorrect │
+│  ├─ Knowledge Refinement: 分解→过滤→重组内部知识 k_in                │
+│  └─ Knowledge Searching: 重写查询 → Web搜索 → 选择外部知识 k_ex      │
+└────────────────────────────────────────────────────────────────────┘
+                              ↓
+┌─────────────────────────────────────────────────────────────┐
+│  Stage 3: Generation（生成）                                 │
+│  根据评估结果，组合不同的知识源生成答案                         │
+└─────────────────────────────────────────────────────────────┘
+
+=====
+
+代码块
+Bash
+复制
+              ↓
+         Recompose（重组为精炼知识 k_in）
+
+=====
+
+06-其他优化（CorrectiveRAG） 
+今天修改
+
+代码块
+Bash
+复制
+
+作用：当内部文档不足或错误时，自动重写查询并调用 Web 搜索补充知识。
+类比：第五节 CorrectiveRAGWorkflow 中的 transform_query 步骤（重写查询 + Tavily Web 搜索）。
+6.4 Generation（生成）— 三种输入组合
+生成阶段根据评估器的判定，喂给 LLM 的知识来源不同：
+
+
+
+在第五节的工程化实现里，这三种组合自然地落在一行 Document(text=relevant_text + "\n" + search_text) 上：哪一部分为空，就相当于没用那一路知识。
+
+细节对比:CRAG vs Self-RAG
+为了更好地理解CRAG的创新,可以对比一下它与Self-RAG的区别:
+
+
+
+两者并不互斥：实际系统常把 CRAG 的"检索质量校验 + Web 补充"与 Self-RAG 的"生成自我反思"结合，先保证喂进去的资料靠谱，再保证生成的内容有据可依。
+
+七、实战启示
+对工程实践的指导
+1.
+不要迷信检索器: 你的检索器再厉害,也会有翻车的时候。在RAG系统中加入质量评估和纠错机制是必要的"安全带"
+2.
+轻量级评估优于大模型: 专门训练的0.77B评估器在判断相关性上明显优于ChatGPT。这告诉我们,专业任务用专业模型,不要总想着用"大而全"的LLM做所有事
+3.
+动态知识比静态知识更可靠: 当内部知识库无法回答时,果断转向外部搜索,不要让模型"闭门造车"产生幻觉
+4.
+知识粒度很重要: 整篇文档直接喂给LLM效果往往一般,拆分成片段后再筛选,效率更高
+具体应用场景
+•
+企业问答系统: 当企业知识库的文档匹配度低时,CRAG会自动搜索互联网权威来源,避免"不懂装懂"
+•
+医疗咨询: 医疗领域的准确性要求极高,CRAG的知识精炼和网络搜索机制可以显著降低错误信息
+•
+教育辅导: 学生提问时,如果检索结果不理想,系统可以动态获取最新资料,提供更准确的答案
