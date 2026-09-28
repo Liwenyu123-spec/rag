@@ -256,11 +256,59 @@ def chapters(topic):
                 ],
             ),
             topic(
-                "九、和本仓库的关系",
+                "九、对照 chroma文档管理 搜索引擎（现状 / 缺口 / 怎么接）",
+                note="项目路径：chroma文档管理/semantic_search/。主问答入口 /ask → RagAskService.ask。",
                 children=[
-                    topic("当前 chroma文档管理 主链路已接 CRAG（第 12 章），未接完整 Self-RAG 四令牌"),
-                    topic("可借鉴：先做 Retrieve 门控（闲聊不查）+ ISSUP 式生成后验"),
-                    topic("与 CRAG 组合：Self-RAG 管查不查与生成忠实；CRAG 管查错了怎么纠"),
+                    topic(
+                        "现状：哪些「像」Self-RAG，哪些还不是",
+                        children=[
+                            topic(
+                                "已有近似能力（分散在别的模块）",
+                                children=[
+                                    topic("ISREL 近似：crag.py 逐篇 RELEVANT/IRRELEVANT（但挂在 CRAG，不是生成中反思）"),
+                                    topic("生成约束近似：ASK_QA_PROMPT「只依据上下文，没有就说不知道」"),
+                                    topic("检索前策略：strategy=none/clean/rewrite/hyde（人指定，不是模型 Decide Retrieve）"),
+                                ],
+                            ),
+                            topic(
+                                "尚未实现的四令牌",
+                                children=[
+                                    topic("Retrieve：闲聊也会走混合检索+CRAG（无「要不要查」门控）"),
+                                    topic("ISSUP：生成后无 FULLY/PARTIALLY/NO 验据，无自动 _correct 重写"),
+                                    topic("ISUSE：无 1~5 有用性打分与候选择优"),
+                                    topic("无 Critique-guided Beam Search / 软硬约束权重"),
+                                ],
+                            ),
+                        ],
+                    ),
+                    topic(
+                        "四令牌 → 建议落点（文件级）",
+                        children=[
+                            topic("Retrieve → rag_service.ask 开头：LLM YES/NO；NO 则 Settings.llm.complete(原问) 直接返回"),
+                            topic("ISREL → 可复用 crag.filter_relevant_nodes（已存在），或生成前再滤一轮"),
+                            topic("ISSUP+_correct → synthesizer 之后：判支持度，不足则贴合 sources 重写 answer"),
+                            topic("ISUSE → 写入 AskResponse 扩展字段，前端日志区展示（index.html 已有 pre/crag 盒子可仿）"),
+                        ],
+                    ),
+                    topic(
+                        "最小可落地改造顺序（不改训练也能用）",
+                        children=[
+                            topic("① 加 Retrieve 门控：降闲聊延迟与噪声（性价比最高）"),
+                            topic("② 生成后 ISSUP：抑制「资料不够却自信编」"),
+                            topic("③ ISUSE 仅打日志：先观测再决定是否参与择优"),
+                            topic("④ 真正 token 级 Self-RAG 需微调模型，本仓库用「判断点显式询问」即可"),
+                        ],
+                    ),
+                    topic(
+                        "和 CRAG 怎么分工（本仓库推荐）",
+                        children=[
+                            topic("CRAG（已上线）：检索后滤噪声 + 全无关改写重查"),
+                            topic("Self-RAG（待加）：检索前 Decide + 生成后验据"),
+                            topic("顺序建议：Retrieve? → Pre/Mid/Post → CRAG → 生成 → ISSUP/ISUSE"),
+                            topic("避免重复烧钱：ISREL 与 CRAG 评估可共用一次结果"),
+                        ],
+                    ),
+                    topic("详见第 13 章：项目全链路文件/API/开关对照表"),
                 ],
             ),
         ],
