@@ -25,7 +25,8 @@ TREE = topic(
     "RAG入门课",
     note=(
         "根据飞书讲义整理：认知阶段、提示词、RAG整体认知、Embedding、向量数据库、"
-        "Native RAG、Advanced RAG、检索前/中/后优化（Pre / Retrieval / Post-retrieval）。"
+        "Native RAG、Advanced RAG、检索前/中/后优化（Pre / Retrieval / Post-retrieval）、"
+        "Self-RAG、Corrective RAG（CRAG）。"
     ),
     children=[
         topic(
@@ -2656,6 +2657,7 @@ TREE = topic(
                             children=[
                                 topic("模型自己决定：要不要检索、检索结果够不够、要不要再查"),
                                 topic("治的病：过度检索（闲聊也查）和检索不足"),
+                                topic("专训见第 11 章（四种反思令牌 Retrieve/ISREL/ISSUP/ISUSE）"),
                             ],
                         ),
                         topic(
@@ -2664,6 +2666,7 @@ TREE = topic(
                                 topic("先评估检索质量：相关 / 模糊 / 不相关"),
                                 topic("差则纠正：换查询或转外部网页搜索，再生成"),
                                 topic("治的病：知识库覆盖不全、内部库答不了的新资讯"),
+                                topic("专训见第 12 章（评估器 + 精炼 + 外搜 / 本仓库库内修正版）"),
                             ],
                         ),
                         topic(
@@ -2701,17 +2704,19 @@ TREE = topic(
                         topic("④ 相关材料在后面几名：加 rerank"),
                         topic("⑤ 材料对但答案飘：压 Prompt、加引用、压缩上下文"),
                         topic("⑥ 比较/多跳题：子查询分解"),
-                        topic("⑦ 本仓库现状：仍是 Native；最值得先加改写或 bge-reranker"),
+                        topic("⑦ 本仓库现状：已叠混合检索/后处理/CRAG；Self-RAG 四令牌仍可按需加"),
                     ],
                 ),
                 topic(
-                    "六、和本仓库 / 第 08、09、10 章的关系",
+                    "六、和本仓库 / 第 08~12 章的关系",
                     children=[
                         topic("第 07 章：Advanced 全景（前/中/后 + 进阶范式）"),
                         topic("第 08 章：检索前专训（改写/HyDE/分块…）"),
                         topic("第 09 章：检索中专训（混合/多路/RRF）"),
                         topic("第 10 章：检索后专训（Rerank/压缩/长上下文重排）"),
-                        topic("chroma文档管理 项目 = Native 底座；Advanced 是往上叠模块"),
+                        topic("第 11 章：Self-RAG 专训（查不查 + 生成反思）"),
+                        topic("第 12 章：CRAG 专训（查错了怎么办 + 库内/外搜修正）"),
+                        topic("chroma文档管理：Native 底座 + 已叠混合/后处理/CRAG"),
                     ],
                 ),
             ],
@@ -4169,6 +4174,8 @@ CHAPTER_COLORS = [
     ("#0D9488", "#CCFBF1"),  # 08 青绿
     ("#4F46E5", "#E0E7FF"),  # 09 靛
     ("#BE123C", "#FECDD3"),  # 10 玫
+    ("#CA8A04", "#FEF9C3"),  # 11 金（Self-RAG）
+    ("#9333EA", "#F3E8FF"),  # 12 紫（CRAG）
 ]
 
 
@@ -4274,6 +4281,12 @@ def make_sheet(title: str, root: dict) -> dict:
 
 def main():
     import copy
+
+    # 追加 Self-RAG / CRAG 专训章（飞书 05/06）
+    from _chapters_11_12 import chapters as _extra_chapters
+
+    if not any(c.get("title", "").startswith("11 ") for c in TREE.get("children", {}).get("attached", [])):
+        TREE.setdefault("children", {}).setdefault("attached", []).extend(_extra_chapters(topic))
 
     chapters = copy.deepcopy(TREE.get("children", {}).get("attached", []))
     sheets = [make_sheet("00 总览", make_overview(chapters))]
