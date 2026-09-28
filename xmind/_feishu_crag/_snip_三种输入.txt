@@ -1,0 +1,22 @@
+补充知识。
+类比：第五节 CorrectiveRAGWorkflow 中的 transform_query 步骤（重写查询 + Tavily Web 搜索）。
+6.4 Generation（生成）— 三种输入组合
+生成阶段根据评估器的判定，喂给 LLM 的知识来源不同：
+
+
+
+在第五节的工程化实现里，这三种组合自然地落在一行 Document(text=relevant_text + "\n" + search_text) 上：哪一部分为空，就相当于没用那一路知识。
+=====
+代码块
+Bash
+复制
+x (原问题) → Rewrite（重写查询 q）
+                ↓
+         "Death of a Batman; screenwriter; Wikipedia"
+                ↓
+         Web Search → k₁, k₂, ... k_n
+                ↓
+         Select（选择最相关的）→ k_ex（外部知识）
+=====
+Web Search → k₁, k₂, ... k_n
+===
