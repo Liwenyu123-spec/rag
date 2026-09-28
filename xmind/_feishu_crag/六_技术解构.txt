@@ -1,0 +1,244 @@
+06-其他优化（CorrectiveRAG） 
+今天修改
+
+代码块
+SQL
+复制
+                          │relevance│
+                          └────┬────┘
+                               │
+                               ▼
+                     RelevanceEvalEvent(relevant_results=["yes","no","yes","no","yes"])
+                               │
+                               ▼
+                          ┌─────────┐
+                          │extract_ │  ← 只保留 yes 的文本
+                          │relevant │
+                          └────┬────┘
+                               │
+                               ▼
+                     TextExtractEvent(relevant_text="A100 80G...\nQwen2.5 最低...")
+                               │
+                               ▼
+                          ┌──────────────┐
+                          │  transform   │  ← 关键分支！
+                          │  _query      │
+                          └────┬─────────┘
+                               │
+                    ┌──────────┴──────────┐
+                    │  relevancy_results  │
+                    │  里有 "no" 吗？      │
+                    └──┬───────────┬───────┘
+                       │           │
+                  有 no ❌      全是 yes ✅
+                       │           │
+                       ▼           │
+              ① LLM 重写查询       │
+              ② Tavily Web 搜索    │
+              ③ 拿到 search_text   │
+                       │           │
+                       └─────┬─────┘
+                             ▼
+                    QueryEvent(relevant_text, search_text)
+                             │
+                             ▼
+                        ┌──────────┐
+                        │query_    │  ← 合并内外文本 → 生成答案
+                        │result    │
+                        └────┬─────┘
+                             ▼
+                        StopEvent(result=最终回答)
+                             │
+                             ▼
+                        run() 返回 response
+
+六、技术解构
+
+
+这张图展示了 Corrective RAG（CRAG）的完整工作流程，比之前的图更详细，包含了知识修正（Knowledge Correction）和知识搜索（Knowledge Searching）两个核心模块
+整体架构（三阶段）
+
+代码块
+Python
+复制
+┌─────────────────────────────────────────────────────────────┐
+│  Stage 1: Retrieval（检索）                                  │
+│  用户问题 x → 检索器 → 检索文档 d₁, d₂                         │
+└─────────────────────────────────────────────────────────────┘
+                              ↓
+┌────────────────────────────────────────────────────────────────────┐
+│  Stage 2: Knowledge Correction（知识修正）                          │
+│  ├─ Retrieval Evaluator: 评估文档是 Correct / Ambiguous / Incorrect │
+│  ├─ Knowledge Refinement: 分解→过滤→重组内部知识 k_in                │
+│  └─ Knowledge Searching: 重写查询 → Web搜索 → 选择外部知识 k_ex      │
+└────────────────────────────────────────────────────────────────────┘
+                              ↓
+┌─────────────────────────────────────────────────────────────┐
+│  Stage 3: Generation（生成）                                 │
+│  根据评估结果，组合不同的知识源生成答案                         │
+└─────────────────────────────────────────────────────────────┘
+
+逐模块解读
+6.1 Retrieval Evaluator（检索评估器）
+
+代码块
+Bash
+复制
+Ask: If retrieved documents are correct to x?
+         ↓
+    ┌────┼────┐
+06-其他优化（CorrectiveRAG）
+代码块
+SQL
+复制
+                          │relevance│
+                          └────┬────┘
+                               │
+                               ▼
+                     RelevanceEvalEvent(relevant_results=["yes","no","yes","no","yes"])
+                               │
+                               ▼
+                          ┌─────────┐
+                          │extract_ │  ← 只保留 yes 的文本
+                          │relevant │
+                          └────┬────┘
+                               │
+                               ▼
+                     TextExtractEvent(relevant_text="A100 80G...\nQwen2.5 最低...")
+                               │
+                               ▼
+                          ┌──────────────┐
+                          │  transform   │  ← 关键分支！
+                          │  _query      │
+                          └────┬─────────┘
+                               │
+                    ┌──────────┴──────────┐
+                    │  relevancy_results  │
+                    │  里有 "no" 吗？      │
+                    └──┬───────────┬───────┘
+                       │           │
+                  有 no ❌      全是 yes ✅
+                       │           │
+                       ▼           │
+              ① LLM 重写查询       │
+              ② Tavily Web 搜索    │
+              ③ 拿到 search_text   │
+                       │           │
+                       └─────┬─────┘
+                             ▼
+                    QueryEvent(relevant_text, search_text)
+                             │
+                             ▼
+                        ┌──────────┐
+                        │query_    │  ← 合并内外文本 → 生成答案
+                        │result    │
+                        └────┬─────┘
+                             ▼
+                        StopEvent(result=最终回答)
+                             │
+                             ▼
+                        run() 返回 response
+代码块
+│relevance│
+└────┬────┘
+│
+▼
+RelevanceEvalEvent(relevant_results=["yes","no","yes","no","yes"])
+│
+▼
+┌─────────┐
+│extract_ │  ← 只保留 yes 的文本
+│relevant │
+└────┬────┘
+│
+▼
+TextExtractEvent(relevant_text="A100 80G...\nQwen2.5 最低...")
+│
+▼
+┌──────────────┐
+│  transform   │  ← 关键分支！
+│  _query      │
+└────┬─────────┘
+│
+┌──────────┴──────────┐
+│  relevancy_results  │
+│  里有 "no" 吗？      │
+└──┬───────────┬───────┘
+│           │
+有 no ❌      全是 yes ✅
+│           │
+▼           │
+① LLM 重写查询       │
+② Tavily Web 搜索    │
+③ 拿到 search_text   │
+│           │
+└─────┬─────┘
+▼
+QueryEvent(relevant_text, search_text)
+│
+▼
+┌──────────┐
+│query_    │  ← 合并内外文本 → 生成答案
+│result    │
+└────┬─────┘
+▼
+StopEvent(result=最终回答)
+│
+▼
+run() 返回 response
+六、技术解构
+六、技术解构
+这张图展示了 Corrective RAG（CRAG）的完整工作流程，比之前的图更详细，包含了知识修正（Knowledge Correction）和知识搜索（Knowledge Searching）两个核心模块
+这张图展示了 Corrective RAG（CRAG）的完整工作流程，比之前的图更详细，包含了知识修正（Knowledge Correction）和知识搜索（Knowledge Searching）两个核心模块
+整体架构（三阶段）
+整体架构（三阶段）
+代码块
+Python
+复制
+┌─────────────────────────────────────────────────────────────┐
+│  Stage 1: Retrieval（检索）                                  │
+│  用户问题 x → 检索器 → 检索文档 d₁, d₂                         │
+└─────────────────────────────────────────────────────────────┘
+                              ↓
+┌────────────────────────────────────────────────────────────────────┐
+│  Stage 2: Knowledge Correction（知识修正）                          │
+│  ├─ Retrieval Evaluator: 评估文档是 Correct / Ambiguous / Incorrect │
+│  ├─ Knowledge Refinement: 分解→过滤→重组内部知识 k_in                │
+│  └─ Knowledge Searching: 重写查询 → Web搜索 → 选择外部知识 k_ex      │
+└────────────────────────────────────────────────────────────────────┘
+                              ↓
+┌─────────────────────────────────────────────────────────────┐
+│  Stage 3: Generation（生成）                                 │
+│  根据评估结果，组合不同的知识源生成答案                         │
+└─────────────────────────────────────────────────────────────┘
+代码块
+┌─────────────────────────────────────────────────────────────┐
+│  Stage 1: Retrieval（检索）                                  │
+│  用户问题 x → 检索器 → 检索文档 d₁, d₂                         │
+└─────────────────────────────────────────────────────────────┘
+↓
+┌────────────────────────────────────────────────────────────────────┐
+│  Stage 2: Knowledge Correction（知识修正）                          │
+│  ├─ Retrieval Evaluator: 评估文档是 Correct / Ambiguous / Incorrect │
+│  ├─ Knowledge Refinement: 分解→过滤→重组内部知识 k_in                │
+│  └─ Knowledge Searching: 重写查询 → Web搜索 → 选择外部知识 k_ex      │
+└────────────────────────────────────────────────────────────────────┘
+↓
+┌─────────────────────────────────────────────────────────────┐
+│  Stage 3: Generation（生成）                                 │
+│  根据评估结果，组合不同的知识源生成答案                         │
+└─────────────────────────────────────────────────────────────┘
+逐模块解读
+逐模块解读
+6.1 Retrieval Evaluator（检索评估器）
+6.1 Retrieval Evaluator（检索评估器）
+代码块
+Bash
+复制
+Ask: If retrieved documents are correct to x?
+         ↓
+    ┌────┼────┐
+代码块
+Ask: If retrieved documents are correct to x?
+↓
+┌────┼────┐
