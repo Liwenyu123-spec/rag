@@ -96,6 +96,15 @@ class AskRequest(BaseModel):  # POST /ask：基础 RAG + 可选优化链路
         None,
         description="Self-RAG：Retrieve 门控 + ISSUP 验据修正 + ISUSE；null=跟配置",
     )
+    # ----- RAG 评估（飞书：生成质量）-----
+    use_eval: bool = Field(
+        False,
+        description="是否对本次回答做 Faithfulness/Relevancy（+可选 Correctness）评估",
+    )
+    reference: str | None = Field(
+        None,
+        description="标准答案；提供时额外算 Correctness（1~5）",
+    )
 
 
 class OptimizeFlags(BaseModel):  # 本次实际生效的优化开关（回显给前端）
@@ -107,6 +116,7 @@ class OptimizeFlags(BaseModel):  # 本次实际生效的优化开关（回显给
     use_reorder: bool = True
     use_crag: bool = True
     use_self_rag: bool = False
+    use_eval: bool = False
 
 
 class SelfRagInfo(BaseModel):  # Self-RAG 过程信息（作业演示）
@@ -120,6 +130,21 @@ class SelfRagInfo(BaseModel):  # Self-RAG 过程信息（作业演示）
     message: str = "skipped"
 
 
+class MetricScore(BaseModel):
+    passing: bool | None = None
+    score: float | None = None
+    feedback: str | None = None
+
+
+class GenerationEvalInfo(BaseModel):
+    enabled: bool = False
+    faithfulness: MetricScore | None = None
+    relevancy: MetricScore | None = None
+    correctness: MetricScore | None = None
+    diagnosis: str | None = None
+    message: str = "skipped"
+
+
 class AskResponse(BaseModel):  # /ask 的响应体
     question: str  # 原问题
     answer: str  # 最终自然语言答案
@@ -127,4 +152,40 @@ class AskResponse(BaseModel):  # /ask 的响应体
     pre_retrieval: PreRetrievalInfo  # 检索前优化过程信息
     crag: CragInfo | None = None  # Corrective RAG 过程（可选）
     self_rag: SelfRagInfo | None = None  # Self-RAG 过程（可选）
+    generation_eval: GenerationEvalInfo | None = None  # 生成质量评估
     optimizations: OptimizeFlags | None = None  # 本次实际开启的优化项
+
+
+class RetrievalEvalCase(BaseModel):
+    query: str = Field(..., min_length=1)
+    keywords: List[str] = Field(default_factory=list, description="命中判定关键词")
+
+
+class RetrievalEvalRequest(BaseModel):
+    k: int = Field(5, ge=1, le=100)
+    use_hybrid: bool | None = Field(True, description="是否混合检索")
+    use_rerank: bool | None = Field(False, description="是否重排")
+    use_compress: bool | None = Field(False)
+    use_reorder: bool | None = Field(False)
+    cases: List[RetrievalEvalCase] | None = Field(
+        None,
+        description="自定义评测集；为空则用 company_info 默认集",
+    )
+
+
+class RetrievalEvalItem(BaseModel):
+    query: str
+    hit: bool
+    mrr: float
+    retrieved_preview: List[str] = Field(default_factory=list)
+    error: str | None = None
+
+
+class RetrievalEvalResponse(BaseModel):
+    hit_rate: float
+    mrr: float
+    total: int
+    results: List[RetrievalEvalItem] = Field(default_factory=list)
+    message: str = "ok"
+    diagnosis: str | None = None
+    note: str = "Hit Rate / MRR；答案差时先看本结果定位检索瓶颈"

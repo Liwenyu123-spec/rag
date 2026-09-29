@@ -34,9 +34,13 @@ from semantic_search.app.schemas import (  # Pydantic 请求/响应模型，给�
     ChatResponse,  # 多轮对话响应体
     CragInfo,  # Corrective RAG 过程信息
     DocumentResponse,  # 单条检索结果（文档片段 + 相似度）
+    GenerationEvalInfo,  # 生成质量评估
     IngestRequest,  # 从本地文件/目录导入的请求体
     OptimizeFlags,  # 本次实际生效的优化开关
     PreRetrievalInfo,  # 检索前优化中间信息
+    RetrievalEvalItem,
+    RetrievalEvalRequest,
+    RetrievalEvalResponse,
     SelfRagInfo,  # Self-RAG 过程信息
     QueryRequest,  # 一次性问答请求体
     QueryResponse,  # 一次性问答响应体（含来源）
@@ -44,6 +48,8 @@ from semantic_search.app.schemas import (  # Pydantic 请求/响应模型，给�
     SearchResponse,  # 语义搜索响应体
 )
 from semantic_search.app.service import RagAskService  # 业务编排：pre-retrieval → 检索 → 生成
+from semantic_search.app.service.rag_eval import DEFAULT_RETRIEVAL_CASES, evaluate_retrieval_cases
+from semantic_search.app.service.retrieval_optimize import apply_postprocessors
 
 STATIC_DIR = Path(__file__).resolve().parent.parent / "static"  # static 目录：放前端页面
 INDEX_HTML = STATIC_DIR / "index.html"  # 前端入口 HTML 的完整路径
@@ -116,7 +122,8 @@ async def api_info():  # 方便程序或调试查看有哪些入口
         "health": "/health",  # 健康检查
         "search": "/search?q=你的查询内容",  # GET 搜索示例
         "query": "/query?q=根据知识库回答问题",  # GET 问答示例
-        "ask": "POST /ask",  # 检索前优化 + RAG 最终答案（作业主接口）
+        "ask": "POST /ask",  # 可勾选优化 + 可选生成评估
+        "eval_retrieval": "POST /eval/retrieval",  # Hit Rate / MRR
         "chat": "POST /chat",  # 多轮对话接口
         "ingest": "POST /ingest",  # 本地文件导入接口
     }
@@ -124,16 +131,9 @@ async def api_info():  # 方便程序或调试查看有哪些入口
 
 @app.post("/ask", response_model=AskResponse)  # 作业主接口：可勾选优化方向的 RAG 问答
 async def ask(request: AskRequest):  # 请求体含 question / k / 各优化开关
-    """基础 RAG + 可选优化：勾选检索前/中/后/CRAG/Self-RAG，返回最终答案与过程信息。
+    """基础 RAG + 可选优化 + 可选生成评估（Faithfulness/Relevancy/Correctness）。
 
-    strategy（仅 use_pre=true 时生效）：
-    - none: 不做优化，原问题直接检索
-    - clean: 仅查询清洗
-    - rewrite: 清洗 + 查询重写（默认，双路检索）
-    - hyde: 清洗 + HyDE 假想文档检索（双路，假想文不当引用）
-
-    use_hybrid / use_rerank / use_compress / use_reorder / use_crag / use_self_rag：
-    传 true/false 覆盖本次请求；省略则跟从服务端 .env 默认。
+    use_eval=true 时对本次回答做 LlamaIndex 内置评估；传 reference 额外算 Correctness。
     """
     strategy = (request.strategy or "rewrite").strip().lower()
     if strategy not in {"none", "clean", "rewrite", "hyde"}:
@@ -153,6 +153,8 @@ async def ask(request: AskRequest):  # 请求体含 question / k / 各优化开�
             use_reorder=request.use_reorder,
             use_crag=request.use_crag,
             use_self_rag=request.use_self_rag,
+            use_eval=request.use_eval,
+            reference=request.reference,
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
@@ -160,6 +162,7 @@ async def ask(request: AskRequest):  # 请求体含 question / k / 各优化开�
         raise HTTPException(status_code=503, detail=str(exc)) from exc
 
     opts = payload.get("optimizations")
+    gen_eval = payload.get("generation_eval")
     return AskResponse(
         question=payload["question"],
         answer=payload["answer"],
@@ -167,7 +170,50 @@ async def ask(request: AskRequest):  # 请求体含 question / k / 各优化开�
         pre_retrieval=PreRetrievalInfo(**payload["pre_retrieval"]),
         crag=CragInfo(**(payload.get("crag") or {})),
         self_rag=SelfRagInfo(**(payload.get("self_rag") or {})),
+        generation_eval=GenerationEvalInfo(**gen_eval) if gen_eval else None,
         optimizations=OptimizeFlags(**opts) if opts else None,
+    )
+
+
+@app.post("/eval/retrieval", response_model=RetrievalEvalResponse)
+async def eval_retrieval(request: RetrievalEvalRequest):
+    """检索质量评估：Hit Rate + MRR（飞书 01-RAG评估）。
+
+    默认使用 company_info 配套评测集；也可传入自定义 cases（query + keywords）。
+    答案差时先看本接口：检索差 → 调分块/Embedding/混合/重排；检索好 → 查生成侧。
+    """
+    engine = _require_engine(app)
+    cases = (
+        [c.model_dump() for c in request.cases]
+        if request.cases
+        else list(DEFAULT_RETRIEVAL_CASES)
+    )
+    use_hybrid = True if request.use_hybrid is None else bool(request.use_hybrid)
+    use_rerank = False if request.use_rerank is None else bool(request.use_rerank)
+    use_compress = False if request.use_compress is None else bool(request.use_compress)
+    use_reorder = False if request.use_reorder is None else bool(request.use_reorder)
+    k = max(1, min(request.k, max(engine.collection.count(), 1)))
+
+    def _retrieve(q: str):
+        retriever = engine._build_retriever(k, hybrid_enabled=use_hybrid)
+        nodes = list(retriever.retrieve(q))
+        return apply_postprocessors(
+            nodes,
+            q,
+            k,
+            rerank_enabled=use_rerank,
+            compress_enabled=use_compress,
+            reorder_enabled=use_reorder,
+        )
+
+    payload = evaluate_retrieval_cases(cases, _retrieve)
+    return RetrievalEvalResponse(
+        hit_rate=payload["hit_rate"],
+        mrr=payload["mrr"],
+        total=payload["total"],
+        results=[RetrievalEvalItem(**r) for r in payload["results"]],
+        message=payload.get("message") or "ok",
+        diagnosis=payload.get("diagnosis"),
     )
 
 

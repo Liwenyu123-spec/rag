@@ -22,6 +22,7 @@ from semantic_search.app.config import (
 )
 from semantic_search.app.service.crag import apply_crag, filter_relevant_nodes
 from semantic_search.app.service.pre_retrieval import prepare_retrieval_queries
+from semantic_search.app.service.rag_eval import evaluate_generation
 from semantic_search.app.service.retrieval_optimize import apply_postprocessors
 from semantic_search.app.service.self_rag import (
     apply_self_rag_post_generate,
@@ -121,6 +122,36 @@ def _empty_self_rag() -> dict:
     }
 
 
+def _empty_eval() -> dict:
+    return {
+        "enabled": False,
+        "faithfulness": None,
+        "relevancy": None,
+        "correctness": None,
+        "diagnosis": None,
+        "message": "skipped",
+    }
+
+
+def _maybe_generation_eval(
+    *,
+    enabled: bool,
+    question: str,
+    answer: str,
+    sources: list,
+    reference: Optional[str],
+) -> dict:
+    if not enabled:
+        return _empty_eval()
+    return evaluate_generation(
+        question,
+        answer,
+        sources,
+        reference=reference,
+        llm=Settings.llm,
+    )
+
+
 def _context_from_nodes(nodes: list[NodeWithScore]) -> str:
     parts = []
     for i, item in enumerate(nodes, 1):
@@ -171,6 +202,8 @@ class RagAskService:
         use_reorder: Optional[bool] = None,
         use_crag: Optional[bool] = None,
         use_self_rag: Optional[bool] = None,
+        use_eval: bool = False,
+        reference: Optional[str] = None,
     ) -> dict:
         """按勾选开关跑优化链路并生成答案。"""
         self.engine._require_llm()
@@ -187,6 +220,7 @@ class RagAskService:
         flag_reorder = _resolve_flag(use_reorder, REORDER_ENABLED)
         flag_crag = _resolve_flag(use_crag, CRAG_ENABLED)
         flag_self = _resolve_flag(use_self_rag, SELF_RAG_ENABLED)
+        flag_eval = bool(use_eval)
         optimizations = {
             "use_pre": bool(use_pre),
             "strategy": effective_strategy,
@@ -196,6 +230,7 @@ class RagAskService:
             "use_reorder": flag_reorder,
             "use_crag": flag_crag,
             "use_self_rag": flag_self,
+            "use_eval": flag_eval,
         }
 
         empty_pre = {
@@ -232,18 +267,27 @@ class RagAskService:
                     "pre_retrieval": empty_pre,
                     "crag": _empty_crag(),
                     "self_rag": self_info,
+                    "generation_eval": _maybe_generation_eval(
+                        enabled=flag_eval,
+                        question=question,
+                        answer=answer,
+                        sources=[],
+                        reference=reference,
+                    ),
                     "optimizations": optimizations,
                 }
 
         total = self.engine.collection.count()
         if total == 0:
+            empty_ans = "知识库为空，请先上传或导入文档后再提问。"
             return {
                 "question": question,
-                "answer": "知识库为空，请先上传或导入文档后再提问。",
+                "answer": empty_ans,
                 "sources": [],
                 "pre_retrieval": empty_pre,
                 "crag": _empty_crag(),
                 "self_rag": self_info,
+                "generation_eval": _empty_eval(),
                 "optimizations": optimizations,
             }
 
@@ -307,17 +351,25 @@ class RagAskService:
                 }
 
         if not fused:
+            no_hit = (
+                "知识库中没有足够相关信息回答该问题（Corrective RAG / ISREL 过滤后为空）。"
+                if (flag_crag or flag_self)
+                else "知识库中没有检索到相关信息，请换个问法或先导入文档。"
+            )
             return {
                 "question": question,
-                "answer": (
-                    "知识库中没有足够相关信息回答该问题（Corrective RAG / ISREL 过滤后为空）。"
-                    if (flag_crag or flag_self)
-                    else "知识库中没有检索到相关信息，请换个问法或先导入文档。"
-                ),
+                "answer": no_hit,
                 "sources": [],
                 "pre_retrieval": prep,
                 "crag": crag_info,
                 "self_rag": self_info,
+                "generation_eval": _maybe_generation_eval(
+                    enabled=flag_eval,
+                    question=question,
+                    answer=no_hit,
+                    sources=[],
+                    reference=reference,
+                ),
                 "optimizations": optimizations,
             }
 
@@ -351,5 +403,12 @@ class RagAskService:
             "pre_retrieval": prep,
             "crag": crag_info,
             "self_rag": self_info,
+            "generation_eval": _maybe_generation_eval(
+                enabled=flag_eval,
+                question=question,
+                answer=answer,
+                sources=sources,
+                reference=reference,
+            ),
             "optimizations": optimizations,
         }

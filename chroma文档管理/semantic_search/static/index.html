@@ -409,8 +409,26 @@
             <input type="checkbox" v-model="optUseSelfRag" />
             <span>Self-RAG<small>Retrieve 门控 · ISSUP 验据 · ISUSE 打分</small></span>
           </label>
+          <label class="opt-item">
+            <input type="checkbox" v-model="optUseEval" />
+            <span>生成质量评估<small>Faithfulness / Relevancy / Correctness</small></span>
+          </label>
+          <textarea
+            v-if="optUseEval"
+            v-model="evalReference"
+            rows="2"
+            placeholder="可选：标准答案（填了才算 Correctness）"
+            style="width:100%;resize:vertical;color:#dce3ef;font-size:12px;border:1px solid rgba(255,255,255,.12);border-radius:10px;background:rgba(0,0,0,.2);padding:8px 10px;"
+          ></textarea>
         </div>
-        <div class="upload-msg">只勾选需要的环节；Self-RAG 与 CRAG 可同时开（ISREL 共用）</div>
+        <button
+          class="upload-btn"
+          style="margin-top:2px"
+          :disabled="evalLoading"
+          @click="runRetrievalEval"
+        >{{ evalLoading ? '检索评估中...' : '跑 Hit Rate / MRR' }}</button>
+        <div class="upload-msg" v-if="evalRetrievalMsg">{{ evalRetrievalMsg }}</div>
+        <div class="upload-msg">评估会多调裁判模型；Hit/MRR 用 company_info 默认题</div>
       </div>
 
       <div class="side-label">导入文档</div>
@@ -495,6 +513,7 @@
                 <span class="opt-tag" :class="{ off: !msg.optimizations.use_reorder }">长上下文{{ msg.optimizations.use_reorder ? '' : '关' }}</span>
                 <span class="opt-tag" :class="{ off: !msg.optimizations.use_crag }">CRAG{{ msg.optimizations.use_crag ? '' : '关' }}</span>
                 <span class="opt-tag" :class="{ off: !msg.optimizations.use_self_rag }">Self-RAG{{ msg.optimizations.use_self_rag ? '' : '关' }}</span>
+                <span class="opt-tag" :class="{ off: !msg.optimizations.use_eval }">生成评估{{ msg.optimizations.use_eval ? '' : '关' }}</span>
               </div>
             </div>
             <div class="pre-box" v-if="msg.preRetrieval && msg.optimizations?.use_pre">
@@ -519,6 +538,27 @@
               <div class="pre-line" v-if="msg.selfRag.issup">ISSUP：{{ msg.selfRag.issup }}{{ msg.selfRag.corrected ? ' → 已按资料重写' : '' }}</div>
               <div class="pre-line" v-if="msg.selfRag.isuse != null">ISUSE：{{ msg.selfRag.isuse }} / 5</div>
               <div class="pre-line" v-if="msg.selfRag.message">状态：{{ msg.selfRag.message }}</div>
+            </div>
+            <div class="pre-box" v-if="msg.generationEval && msg.generationEval.enabled">
+              <strong>生成质量评估</strong>
+              <div class="pre-line">
+                忠实度 Faithfulness：{{ metricLabel(msg.generationEval.faithfulness) }}
+              </div>
+              <div class="pre-line">
+                相关性 Relevancy：{{ metricLabel(msg.generationEval.relevancy) }}
+              </div>
+              <div class="pre-line" v-if="msg.generationEval.correctness">
+                正确性 Correctness：{{ metricLabel(msg.generationEval.correctness, true) }}
+              </div>
+              <div class="pre-line" v-if="msg.generationEval.diagnosis">诊断：{{ msg.generationEval.diagnosis }}</div>
+            </div>
+            <div class="pre-box" v-if="msg.retrievalEval">
+              <strong>检索质量评估 · Hit Rate / MRR</strong>
+              <div class="pre-line">Hit Rate：{{ msg.retrievalEval.hit_rate }} · MRR：{{ msg.retrievalEval.mrr }} · 共 {{ msg.retrievalEval.total }} 题</div>
+              <div class="pre-line" v-if="msg.retrievalEval.diagnosis">诊断：{{ msg.retrievalEval.diagnosis }}</div>
+              <div class="pre-line" v-for="(r, i) in (msg.retrievalEval.results || [])" :key="i">
+                {{ r.hit ? '✓' : '✗' }} MRR={{ r.mrr }} · {{ r.query }}
+              </div>
             </div>
             <div class="sources" v-if="msg.sources && msg.sources.length">
               <div
@@ -582,6 +622,10 @@
         const optUseReorder = ref(true);
         const optUseCrag = ref(true);
         const optUseSelfRag = ref(false);
+        const optUseEval = ref(false);
+        const evalReference = ref('');
+        const evalLoading = ref(false);
+        const evalRetrievalMsg = ref('');
         const health = ref(null);
         const messagesEl = ref(null);
         const sessionId = ref('web-' + Math.random().toString(36).slice(2, 10));
@@ -649,6 +693,13 @@
         });
 
         const strategyLabel = (s) => strategyNames[s] || s;
+        const metricLabel = (m, isCorr = false) => {
+          if (!m) return '-';
+          const pass = m.passing === true ? '通过' : (m.passing === false ? '不通过' : '-');
+          if (isCorr && m.score != null) return `${m.score}/5（${pass}）`;
+          if (m.score != null) return `${pass}（score=${m.score}）`;
+          return pass;
+        };
 
         const autoResize = (e) => {
           e.target.style.height = 'auto';
@@ -736,6 +787,48 @@
           }
         };
 
+        const runRetrievalEval = async () => {
+          if (evalLoading.value) return;
+          evalLoading.value = true;
+          evalRetrievalMsg.value = '正在计算 Hit Rate / MRR...';
+          messages.value.push({
+            role: 'bot',
+            content: '检索质量评估进行中…',
+            sources: [],
+            expanded: {},
+          });
+          const botMsg = messages.value[messages.value.length - 1];
+          scrollToBottom();
+          try {
+            const res = await fetch('/eval/retrieval', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                k: topK.value,
+                use_hybrid: optUseHybrid.value,
+                use_rerank: optUseRerank.value,
+                use_compress: optUseCompress.value,
+                use_reorder: optUseReorder.value,
+              }),
+            });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok) {
+              botMsg.content = data.detail || ('评估失败：HTTP ' + res.status);
+              evalRetrievalMsg.value = botMsg.content;
+            } else {
+              botMsg.content = `检索评估完成：Hit Rate=${data.hit_rate}，MRR=${data.mrr}（${data.total} 题）`;
+              botMsg.retrievalEval = data;
+              evalRetrievalMsg.value = botMsg.content;
+            }
+          } catch (err) {
+            botMsg.content = '评估失败：' + (err.message || String(err));
+            evalRetrievalMsg.value = botMsg.content;
+          } finally {
+            evalLoading.value = false;
+            scrollToBottom();
+          }
+        };
+
         const sendMessage = async () => {
           const question = inputText.value.trim();
           if (!question || loading.value) return;
@@ -776,6 +869,10 @@
                   use_reorder: optUseReorder.value,
                   use_crag: optUseCrag.value,
                   use_self_rag: optUseSelfRag.value,
+                  use_eval: optUseEval.value,
+                  reference: optUseEval.value && evalReference.value.trim()
+                    ? evalReference.value.trim()
+                    : null,
                 }),
               });
             } else if (mode.value === 'query') {
@@ -811,6 +908,7 @@
               botMsg.preRetrieval = data.pre_retrieval || null;
               botMsg.crag = data.crag || null;
               botMsg.selfRag = data.self_rag || null;
+              botMsg.generationEval = data.generation_eval || null;
               botMsg.optimizations = data.optimizations || null;
             }
           } catch (err) {
@@ -841,6 +939,10 @@
           optUseReorder,
           optUseCrag,
           optUseSelfRag,
+          optUseEval,
+          evalReference,
+          evalLoading,
+          evalRetrievalMsg,
           health,
           messagesEl,
           suggestions,
@@ -851,12 +953,14 @@
           placeholder,
           shortModel,
           strategyLabel,
+          metricLabel,
           autoResize,
           formatScore,
           toggleSource,
           setMode,
           useSuggestion,
           sendMessage,
+          runRetrievalEval,
           pickedFiles,
           uploadSplitter,
           uploading,
