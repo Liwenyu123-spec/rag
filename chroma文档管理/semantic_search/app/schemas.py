@@ -121,7 +121,7 @@ class SelfRagInfo(BaseModel):  # Self-RAG 过程信息（作业演示）
 
 
 class AskResponse(BaseModel):  # /ask 的响应体
-    question: str  # 检索 / 生成后的最终答案路径
+    question: str  # 原问题
     answer: str  # 最终自然语言答案
     sources: List[DocumentResponse] = Field(default_factory=list)  # 真实知识库引用来源
     pre_retrieval: PreRetrievalInfo  # 检索前优化过程信息

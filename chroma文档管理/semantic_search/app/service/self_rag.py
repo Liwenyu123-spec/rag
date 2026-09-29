@@ -53,22 +53,15 @@ def _llm_text(prompt: str, llm: Any = None) -> str:
 def decide_retrieve(query: str, *, llm: Any = None, verbose: bool = False) -> bool:
     """Retrieve：要不要检索？YES→True，NO→False。无 LLM 时默认要检索。"""
     raw = _llm_text(RETRIEVE_PROMPT.format(query=query), llm=llm).upper()
-    token = (raw.split() or ["YES"])[0]
+    token = (raw.replace("：", " ").replace(":", " ").split() or ["YES"])[0]
     if token.startswith("NO"):
         need = False
     elif token.startswith("YES"):
         need = True
+    elif "NO" in raw and "YES" not in raw:
+        need = False
     else:
-        # 解析失败保守：去检索
-        need = "YES" in raw and "NO" not in raw
-        if not raw:
-            need = True
-        elif "NO" in raw and "YES" not in raw:
-            need = False
-        elif "YES" in raw:
-            need = True
-        else:
-            need = True
+        need = True  # 解析失败保守：去检索
     if verbose:
         print(f"[Self-RAG] Retrieve={need}  raw={raw!r}")
     return need

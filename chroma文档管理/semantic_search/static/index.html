@@ -405,8 +405,12 @@
             <input type="checkbox" v-model="optUseCrag" />
             <span>Corrective RAG<small>过滤无关并必要时改写重检</small></span>
           </label>
+          <label class="opt-item">
+            <input type="checkbox" v-model="optUseSelfRag" />
+            <span>Self-RAG<small>Retrieve 门控 · ISSUP 验据 · ISUSE 打分</small></span>
+          </label>
         </div>
-        <div class="upload-msg">只勾选需要的环节；不勾选则走基础检索生成</div>
+        <div class="upload-msg">只勾选需要的环节；Self-RAG 与 CRAG 可同时开（ISREL 共用）</div>
       </div>
 
       <div class="side-label">导入文档</div>
@@ -490,6 +494,7 @@
                 <span class="opt-tag" :class="{ off: !msg.optimizations.use_compress }">压缩{{ msg.optimizations.use_compress ? '' : '关' }}</span>
                 <span class="opt-tag" :class="{ off: !msg.optimizations.use_reorder }">长上下文{{ msg.optimizations.use_reorder ? '' : '关' }}</span>
                 <span class="opt-tag" :class="{ off: !msg.optimizations.use_crag }">CRAG{{ msg.optimizations.use_crag ? '' : '关' }}</span>
+                <span class="opt-tag" :class="{ off: !msg.optimizations.use_self_rag }">Self-RAG{{ msg.optimizations.use_self_rag ? '' : '关' }}</span>
               </div>
             </div>
             <div class="pre-box" v-if="msg.preRetrieval && msg.optimizations?.use_pre">
@@ -501,10 +506,19 @@
                 检索句：{{ msg.preRetrieval.retrieval_queries.join(' ｜ ') }}
               </div>
             </div>
-            <div class="pre-box" v-if="msg.crag && msg.crag.enabled">
-              <strong>Corrective RAG</strong>
+            <div class="pre-box" v-if="msg.crag && (msg.crag.enabled || msg.crag.message === 'self_rag_isrel_only')">
+              <strong>{{ msg.crag.enabled ? 'Corrective RAG' : 'Self-RAG · ISREL' }}</strong>
               <div class="pre-line">过滤：{{ msg.crag.before_count }} → {{ msg.crag.after_count }} 篇 · {{ msg.crag.message }}</div>
               <div class="pre-line" v-if="msg.crag.retried && msg.crag.rewritten_query">纠错改写：{{ msg.crag.rewritten_query }}</div>
+            </div>
+            <div class="pre-box" v-if="msg.selfRag && msg.selfRag.enabled">
+              <strong>Self-RAG</strong>
+              <div class="pre-line" v-if="msg.selfRag.retrieve === false">Retrieve：NO · 未检索，直接回答</div>
+              <div class="pre-line" v-else-if="msg.selfRag.retrieve === true">Retrieve：YES · 已检索</div>
+              <div class="pre-line" v-if="msg.selfRag.isrel_shared_with_crag">ISREL：与 CRAG 共用</div>
+              <div class="pre-line" v-if="msg.selfRag.issup">ISSUP：{{ msg.selfRag.issup }}{{ msg.selfRag.corrected ? ' → 已按资料重写' : '' }}</div>
+              <div class="pre-line" v-if="msg.selfRag.isuse != null">ISUSE：{{ msg.selfRag.isuse }} / 5</div>
+              <div class="pre-line" v-if="msg.selfRag.message">状态：{{ msg.selfRag.message }}</div>
             </div>
             <div class="sources" v-if="msg.sources && msg.sources.length">
               <div
@@ -567,6 +581,7 @@
         const optUseCompress = ref(true);
         const optUseReorder = ref(true);
         const optUseCrag = ref(true);
+        const optUseSelfRag = ref(false);
         const health = ref(null);
         const messagesEl = ref(null);
         const sessionId = ref('web-' + Math.random().toString(36).slice(2, 10));
@@ -760,6 +775,7 @@
                   use_compress: optUseCompress.value,
                   use_reorder: optUseReorder.value,
                   use_crag: optUseCrag.value,
+                  use_self_rag: optUseSelfRag.value,
                 }),
               });
             } else if (mode.value === 'query') {
@@ -794,6 +810,7 @@
               botMsg.sources = data.sources || [];
               botMsg.preRetrieval = data.pre_retrieval || null;
               botMsg.crag = data.crag || null;
+              botMsg.selfRag = data.self_rag || null;
               botMsg.optimizations = data.optimizations || null;
             }
           } catch (err) {
@@ -823,6 +840,7 @@
           optUseCompress,
           optUseReorder,
           optUseCrag,
+          optUseSelfRag,
           health,
           messagesEl,
           suggestions,

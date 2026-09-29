@@ -37,6 +37,7 @@ from semantic_search.app.schemas import (  # Pydantic 请求/响应模型，给�
     IngestRequest,  # 从本地文件/目录导入的请求体
     OptimizeFlags,  # 本次实际生效的优化开关
     PreRetrievalInfo,  # 检索前优化中间信息
+    SelfRagInfo,  # Self-RAG 过程信息
     QueryRequest,  # 一次性问答请求体
     QueryResponse,  # 一次性问答响应体（含来源）
     SearchRequest,  # 语义搜索请求体
@@ -123,7 +124,7 @@ async def api_info():  # 方便程序或调试查看有哪些入口
 
 @app.post("/ask", response_model=AskResponse)  # 作业主接口：可勾选优化方向的 RAG 问答
 async def ask(request: AskRequest):  # 请求体含 question / k / 各优化开关
-    """基础 RAG + 可选优化：勾选检索前/中/后/CRAG，返回最终答案与过程信息。
+    """基础 RAG + 可选优化：勾选检索前/中/后/CRAG/Self-RAG，返回最终答案与过程信息。
 
     strategy（仅 use_pre=true 时生效）：
     - none: 不做优化，原问题直接检索
@@ -131,7 +132,7 @@ async def ask(request: AskRequest):  # 请求体含 question / k / 各优化开�
     - rewrite: 清洗 + 查询重写（默认，双路检索）
     - hyde: 清洗 + HyDE 假想文档检索（双路，假想文不当引用）
 
-    use_hybrid / use_rerank / use_compress / use_reorder / use_crag：
+    use_hybrid / use_rerank / use_compress / use_reorder / use_crag / use_self_rag：
     传 true/false 覆盖本次请求；省略则跟从服务端 .env 默认。
     """
     strategy = (request.strategy or "rewrite").strip().lower()
@@ -151,6 +152,7 @@ async def ask(request: AskRequest):  # 请求体含 question / k / 各优化开�
             use_compress=request.use_compress,
             use_reorder=request.use_reorder,
             use_crag=request.use_crag,
+            use_self_rag=request.use_self_rag,
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
@@ -164,6 +166,7 @@ async def ask(request: AskRequest):  # 请求体含 question / k / 各优化开�
         sources=[DocumentResponse(**item) for item in payload["sources"]],
         pre_retrieval=PreRetrievalInfo(**payload["pre_retrieval"]),
         crag=CragInfo(**(payload.get("crag") or {})),
+        self_rag=SelfRagInfo(**(payload.get("self_rag") or {})),
         optimizations=OptimizeFlags(**opts) if opts else None,
     )
 
