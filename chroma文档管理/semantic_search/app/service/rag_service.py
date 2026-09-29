@@ -2,14 +2,22 @@
 
 from __future__ import annotations  # 允许前向类型注解
 
-from typing import TYPE_CHECKING  # 仅类型检查时导入，避免循环依赖
+from typing import TYPE_CHECKING, Optional  # 仅类型检查时导入，避免循环依赖
 
 from llama_index.core import Settings  # 读取全局 Settings.llm
 from llama_index.core.prompts import PromptTemplate  # 自定义问答 Prompt 模板
 from llama_index.core.response_synthesizers import get_response_synthesizer  # 根据节点合成答案
 from llama_index.core.schema import NodeWithScore  # 带相似度分数的检索节点
 
-from semantic_search.app.config import RAG_SYSTEM_PROMPT, SIMILARITY_TOP_K  # 系统提示与默认 Top-K
+from semantic_search.app.config import (  # 系统提示、默认 Top-K、各优化开关默认值
+    COMPRESS_ENABLED,
+    CRAG_ENABLED,
+    HYBRID_ENABLED,
+    RAG_SYSTEM_PROMPT,
+    REORDER_ENABLED,
+    RERANK_ENABLED,
+    SIMILARITY_TOP_K,
+)
 from semantic_search.app.service.crag import apply_crag  # Corrective RAG（库内修正）
 from semantic_search.app.service.pre_retrieval import prepare_retrieval_queries  # 检索前优化入口
 from semantic_search.app.service.retrieval_optimize import apply_postprocessors  # 检索后三件套
@@ -78,29 +86,76 @@ def merge_nodes_rrf(  # Reciprocal Rank Fusion：多路召回融合
     return merged  # 返回融合后的 Top-K
 
 
+def _resolve_flag(override: Optional[bool], default: bool) -> bool:
+    """请求显式传 True/False 则覆盖；None 跟从 .env 默认。"""
+    return default if override is None else bool(override)
+
+
 class RagAskService:  # 面向 /ask 的业务编排类
     """面向作业接口的编排层：pre + mid + post + CRAG + generate。"""  # 类说明
 
     def __init__(self, engine: SemanticSearchEngine):  # 注入已初始化的搜索引擎
         self.engine = engine  # 保存引擎引用，复用 index / collection
 
-    def _retrieve_pipeline(self, query: str, k: int) -> list[NodeWithScore]:
+    def _retrieve_pipeline(
+        self,
+        query: str,
+        k: int,
+        *,
+        use_hybrid: bool,
+        use_rerank: bool,
+        use_compress: bool,
+        use_reorder: bool,
+    ) -> list[NodeWithScore]:
         """单查询：混合召回 + 检索后处理（供 CRAG 重试复用）。"""
-        retriever = self.engine._build_retriever(k)
+        retriever = self.engine._build_retriever(k, hybrid_enabled=use_hybrid)
         nodes = list(retriever.retrieve(query))
-        return apply_postprocessors(nodes, query, k)
+        return apply_postprocessors(
+            nodes,
+            query,
+            k,
+            rerank_enabled=use_rerank,
+            compress_enabled=use_compress,
+            reorder_enabled=use_reorder,
+        )
 
-    def ask(  # 主流程：提问 → 检索前优化 → 检索融合 → CRAG → 生成
+    def ask(  # 主流程：提问 → 按勾选优化 → 生成
         self,  # 服务实例
         question: str,  # 用户原问题
         k: int = SIMILARITY_TOP_K,  # 最终返回的来源条数
-        strategy: str = "rewrite",  # 检索前策略
-    ) -> dict:  # 返回 question/answer/sources/pre_retrieval/crag
-        """接收用户提问 → 检索前优化 → 知识库检索 → CRAG → 模型生成。"""  # 方法说明
+        strategy: str = "rewrite",  # 检索前策略（use_pre=True 时生效）
+        *,
+        use_pre: bool = True,  # 是否启用检索前优化
+        use_hybrid: Optional[bool] = None,  # 混合检索
+        use_rerank: Optional[bool] = None,  # 重排
+        use_compress: Optional[bool] = None,  # 压缩
+        use_reorder: Optional[bool] = None,  # 长上下文重排
+        use_crag: Optional[bool] = None,  # Corrective RAG
+    ) -> dict:  # 返回 question/answer/sources/pre_retrieval/crag/optimizations
+        """接收用户提问 → 按勾选开关跑优化链路 → 模型生成。"""  # 方法说明
         self.engine._require_llm()  # 没有大模型则直接报错（问答依赖 LLM）
         question = (question or "").strip()  # 规范化问题
         if not question:  # 空问题不允许
             raise ValueError("问题不能为空")  # 交给路由转成 400
+
+        # 解析本次实际生效的开关
+        effective_strategy = (strategy or "rewrite").strip().lower() if use_pre else "none"
+        if effective_strategy not in {"none", "clean", "rewrite", "hyde"}:
+            effective_strategy = "rewrite" if use_pre else "none"
+        flag_hybrid = _resolve_flag(use_hybrid, HYBRID_ENABLED)
+        flag_rerank = _resolve_flag(use_rerank, RERANK_ENABLED)
+        flag_compress = _resolve_flag(use_compress, COMPRESS_ENABLED)
+        flag_reorder = _resolve_flag(use_reorder, REORDER_ENABLED)
+        flag_crag = _resolve_flag(use_crag, CRAG_ENABLED)
+        optimizations = {
+            "use_pre": bool(use_pre),
+            "strategy": effective_strategy,
+            "use_hybrid": flag_hybrid,
+            "use_rerank": flag_rerank,
+            "use_compress": flag_compress,
+            "use_reorder": flag_reorder,
+            "use_crag": flag_crag,
+        }
 
         empty_crag = {
             "enabled": False,
@@ -119,7 +174,7 @@ class RagAskService:  # 面向 /ask 的业务编排类
                 "answer": "知识库为空，请先上传或导入文档后再提问。",  # 提示用户先入库
                 "sources": [],  # 无来源
                 "pre_retrieval": {  # 仍返回结构，方便前端统一渲染
-                    "strategy": strategy,  # 用户选择的策略
+                    "strategy": effective_strategy,  # 用户选择的策略
                     "original_query": question,  # 原问题
                     "clean_query": question,  # 空库时未真正清洗流程，原样回填
                     "rewritten_query": None,  # 无重写
@@ -127,15 +182,16 @@ class RagAskService:  # 面向 /ask 的业务编排类
                     "retrieval_queries": [],  # 未发起检索
                 },
                 "crag": empty_crag,
+                "optimizations": optimizations,
             }
 
         k = max(1, min(k, total))  # Top-K 夹在 [1, 库容量] 之间
-        prep = prepare_retrieval_queries(question, strategy, llm=Settings.llm)  # 执行检索前优化
+        prep = prepare_retrieval_queries(question, effective_strategy, llm=Settings.llm)  # 检索前
         queries = prep["retrieval_queries"] or [question]  # 若列表空则退回原问题
 
-        # 检索中：对每个（改写后的）查询用混合检索器召回，再做查询间 RRF
+        # 检索中：对每个（改写后的）查询用（可选混合）检索器召回，再做查询间 RRF
         ranked_lists: list[list[NodeWithScore]] = []  # 收集每一路召回结果
-        retriever = self.engine._build_retriever(k)  # 向量 或 向量+BM25 融合
+        retriever = self.engine._build_retriever(k, hybrid_enabled=flag_hybrid)
         for q in queries:  # 对每个检索查询各跑一路
             ranked_lists.append(list(retriever.retrieve(q)))  # 保存该路命中列表
 
@@ -145,24 +201,42 @@ class RagAskService:  # 面向 /ask 的业务编排类
             ranked_lists[0][:fuse_k] if ranked_lists else []
         )
 
-        # 检索后：重排 → 压缩 → 长上下文重排（用用户原问题打分/裁句）
-        fused = apply_postprocessors(fused, question, k)
+        # 检索后：按勾选跑重排 / 压缩 / 长上下文重排
+        fused = apply_postprocessors(
+            fused,
+            question,
+            k,
+            rerank_enabled=flag_rerank,
+            compress_enabled=flag_compress,
+            reorder_enabled=flag_reorder,
+        )
 
-        # Corrective RAG：过滤无关；全无关则改写后重走「混合+后处理」
+        # Corrective RAG：可关闭；开启则过滤无关，全无关则改写后重走「混合+后处理」
         fused, crag_info = apply_crag(
             question,
             fused,
-            retrieve_fn=lambda q: self._retrieve_pipeline(q, k),
+            retrieve_fn=lambda q: self._retrieve_pipeline(
+                q,
+                k,
+                use_hybrid=flag_hybrid,
+                use_rerank=flag_rerank,
+                use_compress=flag_compress,
+                use_reorder=flag_reorder,
+            ),
             llm=Settings.llm,
+            enabled=flag_crag,
         )
 
         if not fused:  # 检索为空或 CRAG 过滤后为空
             return {  # 告诉用户换问法或检查库
                 "question": question,  # 回显问题
-                "answer": "知识库中没有足够相关信息回答该问题（Corrective RAG 过滤后为空）。",
+                "answer": "知识库中没有足够相关信息回答该问题（Corrective RAG 过滤后为空）。"
+                if flag_crag
+                else "知识库中没有检索到相关信息，请换个问法或先导入文档。",
                 "sources": [],  # 无来源
                 "pre_retrieval": prep,  # 仍返回优化过程，便于排查
                 "crag": crag_info,
+                "optimizations": optimizations,
             }
 
         # 用真实文档块生成答案；HyDE 假想文档不当作引用
@@ -180,4 +254,5 @@ class RagAskService:  # 面向 /ask 的业务编排类
             "sources": sources,  # 真实知识库片段
             "pre_retrieval": prep,  # 检索前优化中间信息
             "crag": crag_info,
+            "optimizations": optimizations,
         }
