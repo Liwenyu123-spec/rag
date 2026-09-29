@@ -36,14 +36,14 @@ from semantic_search.app.config import (  # 导入运行时配置常量
     RERANK_PROVIDER,  # 重排提供方
     SELF_RAG_ENABLED,  # Self-RAG 开关
     SIMILARITY_TOP_K,  # 默认 Top-K
-)  # 括号结束
+)  # config 导入结束
 from semantic_search.app.service.retrieval_optimize import (  # 检索中/后优化工具
     apply_postprocessors,  # 对召回节点做重排/压缩/重排版
     build_hybrid_retriever,  # 构建向量或混合检索器
     build_node_postprocessors,  # 组装 NodePostprocessor 列表
     candidate_top_k,  # 粗排候选数计算
     nodes_from_index,  # 从索引拉出 BM25 语料节点
-)  # 括号结束
+)  # retrieval_optimize 导入结束
 
 SAMPLE_DOCUMENTS = [  # 空库时写入的示例知识，方便一启动就能搜
     "FAISS是Meta开发的向量搜索库，支持大规模向量检索，具有高性能和丰富的索引类型",  # 示例：FAISS
@@ -53,13 +53,13 @@ SAMPLE_DOCUMENTS = [  # 空库时写入的示例知识，方便一启动就能�
     "深度学习模型如BERT、RoBERTa可以生成高质量的文本嵌入向量，捕捉语义信息",  # 示例：Embedding 模型
     "阿里云千问提供text-embedding系列模型，支持文档和查询向量的差异编码",  # 示例：千问 Embedding
     "FAISS索引IVFFlat通过聚类技术将向量空间划分，大幅提升大规模检索效率",  # 示例：IVFFlat
-]  # 列表结束
+]  # SAMPLE_DOCUMENTS 结束
 
 SUPPORTED_EXTS = [".pdf", ".txt", ".md", ".csv", ".docx", ".html", ".ipynb"]  # SimpleDirectoryReader 允许的扩展名
 
 
 def clean_empty_text(documents: List[Document]) -> List[Document]:  # 过滤空文档
-    """过滤空文本，避免后续 embedding / 切分报错。"""
+    """过滤空文本，避免后续 embedding / 切分报错。"""  # 文档：空文本过滤
     clean_docs = []  # 存放清洗后的文档
     for doc in documents:  # 逐条检查
         text = (doc.text or "").strip()  # 去掉首尾空白
@@ -69,13 +69,13 @@ def clean_empty_text(documents: List[Document]) -> List[Document]:  # 过滤空�
 
 
 def chinese_sentence_splitter(text: str) -> List[str]:  # 语义分块用的中文分句函数
-    """适配中文句号、感叹号、问号、换行分句。"""
+    """适配中文句号、感叹号、问号、换行分句。"""  # 文档：中文分句规则
     parts = re.split(r"(?<=[。！？!?\n])\s*", text)  # 在中英文句末标点后切开
     return [p.strip() for p in parts if p.strip()]  # 去掉空句
 
 
 class SemanticSearchEngine:  # Native RAG 引擎主体
-    """LlamaIndex + Chroma 的 Native RAG 引擎，默认用 Windows 环境里的 DeepSeek。"""
+    """LlamaIndex + Chroma 的 Native RAG 引擎，默认用 Windows 环境里的 DeepSeek。"""  # 类说明
 
     def __init__(  # 初始化：Embedding、LLM、Chroma、索引
         self,  # 引擎实例自身
@@ -105,26 +105,26 @@ class SemanticSearchEngine:  # Native RAG 引擎主体
             f"搜索引擎已初始化，Embedding: {EMBEDDING_PROVIDER}/{model_name}，"  # Embedding 提供方与模型
             f"LLM: {LLM_PROVIDER}/{self.llm_model}，持久化目录: {persist_dir}"  # LLM 与 Chroma 路径
         )  # print 结束
-        print(  # 打印日志
-            "检索优化: "  # 字符串内容
-            f"hybrid={HYBRID_ENABLED}, rerank={RERANK_ENABLED}/{RERANK_PROVIDER}, "  # 赋值 f"hybrid
-            f"compress={COMPRESS_ENABLED}, reorder={REORDER_ENABLED}, "  # 赋值 f"compress
-            f"crag={CRAG_ENABLED}, self_rag={SELF_RAG_ENABLED}"  # 赋值 f"crag
-        )  # 括号结束
+        print(  # 检索优化开关汇总日志
+            "检索优化: "  # 前缀文案
+            f"hybrid={HYBRID_ENABLED}, rerank={RERANK_ENABLED}/{RERANK_PROVIDER}, "  # 混合与重排
+            f"compress={COMPRESS_ENABLED}, reorder={REORDER_ENABLED}, "  # 压缩与重排版
+            f"crag={CRAG_ENABLED}, self_rag={SELF_RAG_ENABLED}"  # CRAG 与 Self-RAG
+        )  # 优化开关日志结束
 
     def _init_embed_model(self):  # 按配置选择 Embedding 实现
-        """DeepSeek 不做向量化；优先本地 HuggingFace，有千问 Key 时仍可用千问。"""
+        """DeepSeek 不做向量化；优先本地 HuggingFace，有千问 Key 时仍可用千问。"""  # 方法说明
         if EMBEDDING_PROVIDER == "dashscope":  # 云端千问 Embedding
-            from semantic_search.app.safe_embedding import SafeDashScopeEmbedding  # 从 semantic_search.app.safe_embedding 导入依赖
+            from semantic_search.app.safe_embedding import SafeDashScopeEmbedding  # 分批安全封装
 
             if not DASHSCOPE_API_KEY:  # 选了千问却没 Key
                 raise RuntimeError("EMBEDDING_PROVIDER=dashscope 但未找到 DASHSCOPE_API_KEY")  # 配置冲突直接报错
-            print(f"使用 SafeDashScopeEmbedding（分批≤10）: {self.model_name}")  # 打印日志
+            print(f"使用 SafeDashScopeEmbedding（分批≤10）: {self.model_name}")  # 提示当前 Embedding
             return SafeDashScopeEmbedding(  # 对齐 ModularRAG：避免批量超限
                 model_name=self.model_name,  # 如 text-embedding-v3
                 api_key=DASHSCOPE_API_KEY,  # 鉴权
                 text_type="document",  # 文档侧编码（相对 query 侧）
-            )  # 括号结束
+            )  # SafeDashScopeEmbedding 结束
 
         from llama_index.embeddings.huggingface import HuggingFaceEmbedding  # 本地模型
 
@@ -151,7 +151,7 @@ class SemanticSearchEngine:  # Native RAG 引擎主体
             api_key=DEEPSEEK_API_KEY,  # 鉴权
             api_base=DEEPSEEK_BASE_URL,  # API 根地址
             timeout=120.0,  # 超时秒数
-        )  # 括号结束
+        )  # DeepSeek 结束
 
     def _sentence_splitter(self) -> SentenceSplitter:  # 按句子/标点分块（默认）
         return SentenceSplitter(  # 构造默认分块器
@@ -159,7 +159,7 @@ class SemanticSearchEngine:  # Native RAG 引擎主体
             chunk_overlap=CHUNK_OVERLAP,  # 块重叠
             paragraph_separator="\n\n\n",  # 段落分隔符
             secondary_chunking_regex="[^,.;。]+[,.;。]?",  # 二级切分正则
-        )  # 括号结束
+        )  # SentenceSplitter 结束
 
     def _token_splitter(self) -> TokenTextSplitter:  # 按 token 数分块
         return TokenTextSplitter(chunk_size=CHUNK_SIZE, chunk_overlap=CHUNK_OVERLAP)  # 严格按 token 控制长度
@@ -170,7 +170,7 @@ class SemanticSearchEngine:  # Native RAG 引擎主体
             breakpoint_percentile_threshold=95,  # 相似度百分位阈值
             sentence_splitter=chinese_sentence_splitter,  # 先用中文分句
             embed_model=Settings.embed_model,  # 用当前 Embedding 算句向量
-        )  # 括号结束
+        )  # SemanticSplitterNodeParser 结束
 
     def _splitter(self, mode: str = "sentence"):  # 根据模式名返回对应分块器
         if mode == "token":  # 按 token 切
@@ -187,52 +187,52 @@ class SemanticSearchEngine:  # Native RAG 引擎主体
     def _reset_chat_engines(self) -> None:  # 知识库变更后清掉旧 chat_engine，避免用过期上下文
         self._chat_engines.clear()  # 清空缓存字典
 
-    def _invalidate_retrieval_cache(self) -> None:  # 定义函数 _invalidate_retrieval_cache
-        """入库变更后清空 BM25 语料与对话引擎缓存。"""
-        self._bm25_nodes_cache = None  # 赋值 self._bm25_nodes_cache
-        self._reset_chat_engines()  # 执行本行逻辑
+    def _invalidate_retrieval_cache(self) -> None:  # 入库变更后清缓存
+        """入库变更后清空 BM25 语料与对话引擎缓存。"""  # 方法说明
+        self._bm25_nodes_cache = None  # 下次再懒加载 BM25 语料
+        self._reset_chat_engines()  # 同时清掉 chat_engine
 
-    def _bm25_nodes(self) -> list:  # 定义函数 _bm25_nodes
-        """懒加载 BM25 节点列表。"""
-        if self._bm25_nodes_cache is None:  # 条件分支
-            self._bm25_nodes_cache = nodes_from_index(self.index, self.collection)  # 赋值 self._bm25_nodes_cache
-        return self._bm25_nodes_cache  # 返回结果
+    def _bm25_nodes(self) -> list:  # 获取 BM25 语料节点
+        """懒加载 BM25 节点列表。"""  # 方法说明
+        if self._bm25_nodes_cache is None:  # 尚未缓存
+            self._bm25_nodes_cache = nodes_from_index(self.index, self.collection)  # 从索引/集合拉节点
+        return self._bm25_nodes_cache  # 返回缓存列表
 
-    def _build_retriever(  # 定义函数 _build_retriever
-        self,  # 续行参数/元素
-        k: int = SIMILARITY_TOP_K,  # 赋值 k
-        *,  # 续行参数/元素
-        hybrid_enabled: bool | None = None,  # 赋值 hybrid_enabled
-        num_queries: int | None = None,  # 赋值 num_queries
-        fusion_mode: str | None = None,  # 赋值 fusion_mode
-    ):  # 参数列表结束
-        """检索中：按配置（可被请求覆盖）构建纯向量或 向量+BM25 融合检索器。"""
-        use_hybrid = HYBRID_ENABLED if hybrid_enabled is None else bool(hybrid_enabled)  # 赋值 use_hybrid
-        return build_hybrid_retriever(  # 返回结果
-            self.index,  # 续行参数/元素
-            final_k=k,  # 赋值 final_k
-            collection=self.collection,  # 赋值 collection
-            nodes_cache=self._bm25_nodes() if use_hybrid else None,  # 赋值 nodes_cache
-            hybrid_enabled=use_hybrid,  # 赋值 hybrid_enabled
-            num_queries=num_queries,  # 赋值 num_queries
-            fusion_mode=fusion_mode,  # 赋值 fusion_mode
-        )  # 括号结束
+    def _build_retriever(  # 构建检索器（可覆盖混合开关）
+        self,  # 引擎实例
+        k: int = SIMILARITY_TOP_K,  # 最终返回条数
+        *,  # 其后只能关键字传参
+        hybrid_enabled: bool | None = None,  # None 跟全局配置
+        num_queries: int | None = None,  # Multi-Query 数
+        fusion_mode: str | None = None,  # 融合策略名
+    ):  # 签名结束
+        """检索中：按配置（可被请求覆盖）构建纯向量或 向量+BM25 融合检索器。"""  # 方法说明
+        use_hybrid = HYBRID_ENABLED if hybrid_enabled is None else bool(hybrid_enabled)  # 解析实际开关
+        return build_hybrid_retriever(  # 委托给 retrieval_optimize
+            self.index,  # 向量索引
+            final_k=k,  # 最终条数
+            collection=self.collection,  # Chroma 集合
+            nodes_cache=self._bm25_nodes() if use_hybrid else None,  # 混合时才喂 BM25 语料
+            hybrid_enabled=use_hybrid,  # 是否混合
+            num_queries=num_queries,  # Multi-Query
+            fusion_mode=fusion_mode,  # 融合策略
+        )  # build_hybrid_retriever 结束
 
-    def _build_postprocessors(  # 定义函数 _build_postprocessors
-        self,  # 续行参数/元素
-        k: int = SIMILARITY_TOP_K,  # 赋值 k
-        *,  # 续行参数/元素
-        rerank_enabled: bool | None = None,  # 赋值 rerank_enabled
-        compress_enabled: bool | None = None,  # 赋值 compress_enabled
-        reorder_enabled: bool | None = None,  # 赋值 reorder_enabled
-    ) -> list:  # 执行本行逻辑
-        """检索后：重排 → 压缩 → 长上下文重排（可被请求覆盖）。"""
-        return build_node_postprocessors(  # 返回结果
-            k,  # 续行参数/元素
-            rerank_enabled=rerank_enabled,  # 赋值 rerank_enabled
-            compress_enabled=compress_enabled,  # 赋值 compress_enabled
-            reorder_enabled=reorder_enabled,  # 赋值 reorder_enabled
-        )  # 括号结束
+    def _build_postprocessors(  # 组装检索后处理器
+        self,  # 引擎实例
+        k: int = SIMILARITY_TOP_K,  # 最终条数
+        *,  # 其后只能关键字传参
+        rerank_enabled: bool | None = None,  # None 跟全局
+        compress_enabled: bool | None = None,  # None 跟全局
+        reorder_enabled: bool | None = None,  # None 跟全局
+    ) -> list:  # 返回处理器列表
+        """检索后：重排 → 压缩 → 长上下文重排（可被请求覆盖）。"""  # 方法说明
+        return build_node_postprocessors(  # 委托组装
+            k,  # Top-N / 条数
+            rerank_enabled=rerank_enabled,  # 重排开关
+            compress_enabled=compress_enabled,  # 压缩开关
+            reorder_enabled=reorder_enabled,  # 重排版开关
+        )  # build_node_postprocessors 结束
 
     def _require_llm(self) -> None:  # 问答前检查 LLM 是否可用
         if Settings.llm is None:  # 全局 LLM 未初始化
@@ -247,71 +247,71 @@ class SemanticSearchEngine:  # Native RAG 引擎主体
         documents = clean_empty_text([Document(text=text) for text in texts])  # 文本 → Document 并去空
         nodes = self._splitter(splitter).get_nodes_from_documents(documents)  # 切成节点（chunk）
         if not nodes:  # 切完没有内容
-            print("切分后没有节点，跳过写入")  # 打印日志
-            return self.collection.count()  # 返回结果
+            print("切分后没有节点，跳过写入")  # 提示跳过
+            return self.collection.count()  # 返回当前总量
 
         self.index.insert_nodes(nodes)  # 向量化并写入 Chroma
         self._invalidate_retrieval_cache()  # 索引变了，重建 BM25 / 对话引擎
         total = self.collection.count()  # 当前总量
-        print(f"成功添加 {len(texts)} 个文档 / {len(nodes)} 个节点，总计 {total} 个")  # 打印日志
-        return total  # 返回结果
+        print(f"成功添加 {len(texts)} 个文档 / {len(nodes)} 个节点，总计 {total} 个")  # 写入成功日志
+        return total  # 返回总量
 
     def ingest_files(  # 对应讲义 SimpleDirectoryReader
-        self,  # 续行参数/元素
+        self,  # 引擎实例
         input_files: List[str] | None = None,  # 指定文件列表
         input_dir: str | None = None,  # 或指定目录
         splitter: str = "sentence",  # 分块模式
-    ) -> dict:  # 执行本行逻辑
-        """用 SimpleDirectoryReader 加载本地文件或目录后建索引。"""
+    ) -> dict:  # 返回统计字典
+        """用 SimpleDirectoryReader 加载本地文件或目录后建索引。"""  # 方法说明
         kwargs: dict = {"required_exts": SUPPORTED_EXTS, "recursive": True}  # 目录模式默认参数
         if input_files:  # 有文件列表时只用文件列表（讲义 input_files 写法）
-            kwargs = {"input_files": input_files}  # 赋值 kwargs
+            kwargs = {"input_files": input_files}  # 覆盖为仅文件列表
         elif input_dir:  # 指定目录
-            kwargs["input_dir"] = input_dir  # 赋值 kwargs["input_dir"]
+            kwargs["input_dir"] = input_dir  # 追加目录参数
         else:  # 都没传则用配置里的 DATA_DIR
-            kwargs["input_dir"] = DATA_DIR  # 赋值 kwargs["input_dir"]
+            kwargs["input_dir"] = DATA_DIR  # 默认数据目录
 
         reader = SimpleDirectoryReader(**kwargs)  # 创建加载器
         documents = clean_empty_text(reader.load_data())  # 读文件成 Document 列表
-        print(f"加载了 {len(documents)} 个文档")  # 打印日志
+        print(f"加载了 {len(documents)} 个文档")  # 加载日志
         nodes = self._splitter(splitter).get_nodes_from_documents(documents)  # 分块
-        print(f"切分为 {len(nodes)} 个节点")  # 打印日志
+        print(f"切分为 {len(nodes)} 个节点")  # 分块日志
         if nodes:  # 有节点才写入
             self.index.insert_nodes(nodes)  # Embedding + 存 Chroma
-            self._invalidate_retrieval_cache()  # 执行本行逻辑
-        total = self.collection.count()  # 赋值 total
-        print(f"向量化和存储完成，文档数: {total}")  # 打印日志
+            self._invalidate_retrieval_cache()  # 清 BM25 / chat 缓存
+        total = self.collection.count()  # 写入后总量
+        print(f"向量化和存储完成，文档数: {total}")  # 完成日志
         return {  # 返回统计给 API
             "loaded_documents": len(documents),  # 本次加载文档数
             "nodes": len(nodes),  # 本次切出的节点数
             "total_documents": total,  # 写入后集合总量
-        }  # 字典/集合结束
+        }  # return 结束
 
     def seed_if_empty(self, texts: List[str] | None = None) -> int:  # 启动时若库空则灌入示例 + data
-        """集合为空时写入示例文档，并加载 data 目录中的本地文件。"""
+        """集合为空时写入示例文档，并加载 data 目录中的本地文件。"""  # 方法说明
         if self.collection.count() > 0:  # 已有数据则不重复灌入
-            return self.collection.count()  # 返回结果
+            return self.collection.count()  # 直接返回现有总量
 
         docs = texts if texts is not None else SAMPLE_DOCUMENTS  # 可用自定义文本覆盖示例
-        print("正在加载示例文档...")  # 打印日志
+        print("正在加载示例文档...")  # 灌入提示
         self.add_documents(docs)  # 写入示例知识
 
         data_dir = Path(DATA_DIR)  # 默认数据目录
         has_files = data_dir.is_dir() and any(p.is_file() for p in data_dir.rglob("*"))  # 目录里是否有文件
         if has_files:  # 有则再用 SimpleDirectoryReader 导入
-            print(f"正在从数据目录加载: {data_dir}")  # 打印日志
-            self.ingest_files(input_dir=str(data_dir))  # 赋值 self.ingest_files(input_dir
-        return self.collection.count()  # 返回结果
+            print(f"正在从数据目录加载: {data_dir}")  # 目录导入提示
+            self.ingest_files(input_dir=str(data_dir))  # 导入 data 目录
+        return self.collection.count()  # 返回最终总量
 
     def search(self, query: str, k: int = SIMILARITY_TOP_K) -> List[dict]:  # 只检索，不调用大模型
-        """只检索：混合召回 + 可选检索后处理，不调用大模型。"""
+        """只检索：混合召回 + 可选检索后处理，不调用大模型。"""  # 方法说明
         total = self.collection.count()  # 库里有多少条
         if total == 0 or not query or not query.strip():  # 空库或空查询
-            return []  # 返回结果
+            return []  # 无结果
 
         k = min(k, total)  # Top-K 不能超过库容量
-        if k == 0:  # 条件分支
-            return []  # 返回结果
+        if k == 0:  # 极端兜底
+            return []  # 无结果
 
         retriever = self._build_retriever(k)  # 检索中：向量 / 混合
         results = list(retriever.retrieve(query))  # 粗排候选
@@ -322,81 +322,81 @@ class SemanticSearchEngine:  # Native RAG 引擎主体
             similarity = round(score, 4)  # 当作相似度展示
             distance = round(max(1.0 - score, 0.0), 4) if 0.0 <= score <= 1.0 else round(1 / (1 + score), 4)  # 近似距离
             formatted_results.append(  # 追加一条结构化结果
-                {  # 执行本行逻辑
+                {  # 单条命中字典
                     "rank": i + 1,  # 排名
                     "index": i,  # 下标
                     "document": item.node.get_content(),  # 文本内容
                     "similarity": similarity,  # 相似度
                     "distance": distance,  # 近似距离
-                }  # 字典/集合结束
-            )  # 括号结束
-        return formatted_results  # 返回结果
+                }  # 字典结束
+            )  # append 结束
+        return formatted_results  # 返回格式化列表
 
     def query(self, question: str, k: int = SIMILARITY_TOP_K) -> dict:  # 一次性 RAG：检索 + 生成
-        """一次性问答：混合召回 + 检索后三件套 + 生成。"""
+        """一次性问答：混合召回 + 检索后三件套 + 生成。"""  # 方法说明
         self._require_llm()  # 没 LLM 就抛错
-        from llama_index.core.query_engine import RetrieverQueryEngine  # 从 llama_index.core.query_engine 导入依赖
+        from llama_index.core.query_engine import RetrieverQueryEngine  # 延迟导入查询引擎
 
-        retriever = self._build_retriever(k)  # 赋值 retriever
-        postprocessors = self._build_postprocessors(k)  # 赋值 postprocessors
+        retriever = self._build_retriever(k)  # 检索器
+        postprocessors = self._build_postprocessors(k)  # 检索后处理器
         # RetrieverQueryEngine：自定义 retriever + node_postprocessors
-        engine = RetrieverQueryEngine.from_args(  # 赋值 engine
-            retriever=retriever,  # 赋值 retriever
-            node_postprocessors=postprocessors or None,  # 赋值 node_postprocessors
-        )  # 括号结束
+        engine = RetrieverQueryEngine.from_args(  # 组装查询引擎
+            retriever=retriever,  # 自定义检索器
+            node_postprocessors=postprocessors or None,  # 空列表当 None
+        )  # from_args 结束
         response = engine.query(question)  # 执行问答
         sources = []  # 收集引用来源
         for i, item in enumerate(getattr(response, "source_nodes", []) or []):  # 遍历命中节点
             score = float(item.score or 0.0)  # 取出分数
             sources.append(  # 追加来源卡片字段
-                {  # 执行本行逻辑
+                {  # 单条来源
                     "rank": i + 1,  # 排名
                     "index": i,  # 下标
                     "document": item.node.get_content(),  # 原文片段
                     "similarity": round(score, 4),  # 相似度
                     "distance": round(max(1.0 - score, 0.0), 4) if 0.0 <= score <= 1.0 else round(1 / (1 + score), 4),  # 近似距离
-                }  # 字典/集合结束
-            )  # 括号结束
+                }  # 字典结束
+            )  # append 结束
         return {"question": question, "answer": str(response), "sources": sources}  # 问题、答案、来源
 
     def chat(self, question: str, session_id: str = "default", k: int = SIMILARITY_TOP_K) -> dict:  # 多轮 RAG
-        """多轮对话：带 ChatMemoryBuffer；检索侧与 query 共用混合/后处理。"""
-        self._require_llm()  # 执行本行逻辑
+        """多轮对话：带 ChatMemoryBuffer；检索侧与 query 共用混合/后处理。"""  # 方法说明
+        self._require_llm()  # 没 LLM 就抛错
         # 缓存键带上优化开关，改配置后会重建引擎
-        key = (  # 赋值 key
-            f"{session_id}:{k}:h{int(HYBRID_ENABLED)}:r{int(RERANK_ENABLED)}"  # 执行本行逻辑
-            f":c{int(COMPRESS_ENABLED)}:o{int(REORDER_ENABLED)}"  # 执行本行逻辑
-        )  # 括号结束
+        key = (  # session + k + 优化开关组合键
+            f"{session_id}:{k}:h{int(HYBRID_ENABLED)}:r{int(RERANK_ENABLED)}"  # 会话、k、混合、重排
+            f":c{int(COMPRESS_ENABLED)}:o{int(REORDER_ENABLED)}"  # 压缩、重排版
+        )  # key 赋值结束
         if key not in self._chat_engines:  # 首次创建
             memory = self._memories.setdefault(  # 按 session_id 复用记忆
-                session_id,  # 续行参数/元素
+                session_id,  # 会话 ID
                 ChatMemoryBuffer.from_defaults(token_limit=10000),  # 记忆 token 上限
-            )  # 括号结束
+            )  # setdefault 结束
             # condense_plus_context 主要吃 similarity_top_k；后处理尽量挂上
-            chat_kwargs = dict(  # 赋值 chat_kwargs
-                chat_mode="condense_plus_context",  # 赋值 chat_mode
-                memory=memory,  # 赋值 memory
-                similarity_top_k=candidate_top_k(k),  # 赋值 similarity_top_k
-                system_prompt=RAG_SYSTEM_PROMPT,  # 赋值 system_prompt
-            )  # 括号结束
-            postprocessors = self._build_postprocessors(k)  # 赋值 postprocessors
-            if postprocessors:  # 条件分支
-                chat_kwargs["node_postprocessors"] = postprocessors  # 赋值 chat_kwargs["node_postprocessors"]
-            try:  # 尝试执行
-                self._chat_engines[key] = self.index.as_chat_engine(**chat_kwargs)  # 赋值 self._chat_engines[key]
-            except TypeError:  # 捕获异常
+            chat_kwargs = dict(  # 创建 chat_engine 的参数
+                chat_mode="condense_plus_context",  # 先浓缩问题再带上下文
+                memory=memory,  # 多轮记忆
+                similarity_top_k=candidate_top_k(k),  # 粗排候选数
+                system_prompt=RAG_SYSTEM_PROMPT,  # 系统提示词
+            )  # dict 结束
+            postprocessors = self._build_postprocessors(k)  # 检索后处理器
+            if postprocessors:  # 有处理器才挂上
+                chat_kwargs["node_postprocessors"] = postprocessors  # 写入参数
+            try:  # 新版 LlamaIndex 支持 node_postprocessors
+                self._chat_engines[key] = self.index.as_chat_engine(**chat_kwargs)  # 创建并缓存
+            except TypeError:  # 旧版不支持该参数
                 # 旧版 LlamaIndex 若不支持 node_postprocessors，降级为仅调大候选
-                chat_kwargs.pop("node_postprocessors", None)  # 执行本行逻辑
-                self._chat_engines[key] = self.index.as_chat_engine(**chat_kwargs)  # 赋值 self._chat_engines[key]
+                chat_kwargs.pop("node_postprocessors", None)  # 去掉不兼容参数
+                self._chat_engines[key] = self.index.as_chat_engine(**chat_kwargs)  # 降级创建
         response = self._chat_engines[key].chat(question)  # 发本轮消息
         return {  # 组装多轮响应
             "session_id": session_id,  # 回显会话
             "question": question,  # 本轮问题
             "answer": str(response),  # 本轮回答
-        }  # 字典/集合结束
+        }  # return 结束
 
     def get_stats(self) -> dict:  # 供 /stats、/health 使用
-        """返回文档数量、模型名称和持久化路径等状态。"""
+        """返回文档数量、模型名称和持久化路径等状态。"""  # 方法说明
         return {  # 供 /stats、/health 展示
             "total_documents": self.collection.count(),  # 集合条数
             "dimension": "auto",  # 维度由 Embedding 模型决定
@@ -410,14 +410,14 @@ class SemanticSearchEngine:  # Native RAG 引擎主体
             "chunk_size": CHUNK_SIZE,  # 分块大小
             "chunk_overlap": CHUNK_OVERLAP,  # 分块重叠
             "data_dir": DATA_DIR,  # 默认数据目录
-            "hybrid_enabled": HYBRID_ENABLED,  # 续行参数/元素
-            "rerank_enabled": RERANK_ENABLED,  # 续行参数/元素
-            "compress_enabled": COMPRESS_ENABLED,  # 续行参数/元素
-            "reorder_enabled": REORDER_ENABLED,  # 续行参数/元素
-        }  # 字典/集合结束
+            "hybrid_enabled": HYBRID_ENABLED,  # 混合检索是否开启
+            "rerank_enabled": RERANK_ENABLED,  # 重排是否开启
+            "compress_enabled": COMPRESS_ENABLED,  # 压缩是否开启
+            "reorder_enabled": REORDER_ENABLED,  # 长上下文重排是否开启
+        }  # return 结束
 
     def clear_documents(self) -> None:  # 清空知识库
-        """删除并重建集合，清空全部文档。"""
+        """删除并重建集合，清空全部文档。"""  # 方法说明
         self.client.delete_collection(self.collection_name)  # 删掉旧集合
         self.collection = self.client.get_or_create_collection(name=self.collection_name)  # 重建空集合
         self.vector_store = ChromaVectorStore(chroma_collection=self.collection)  # 重新绑定向量存储
