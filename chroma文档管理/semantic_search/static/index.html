@@ -129,6 +129,20 @@
     .upload-btn:disabled { opacity: .45; cursor: not-allowed; box-shadow: none; }
     .upload-msg { color: #9bb8ff; font-size: 11px; line-height: 1.55; min-height: 16px; }
     .upload-msg.err { color: #ff9aa6; }
+    .opt-list { display: grid; gap: 8px; }
+    .opt-item {
+      display: flex; align-items: flex-start; gap: 8px;
+      color: #c8d2e4; font-size: 12px; line-height: 1.45; cursor: pointer;
+    }
+    .opt-item input { margin-top: 2px; accent-color: #4d8dff; flex-shrink: 0; }
+    .opt-item small { display: block; margin-top: 2px; color: #8090a8; font-size: 11px; }
+    .opt-item.disabled { opacity: .45; pointer-events: none; }
+    .opt-tags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+    .opt-tag {
+      padding: 2px 8px; border-radius: 999px; font-size: 11px;
+      background: #e8eefc; color: #3a5bb8; border: 1px solid #c5d4f5;
+    }
+    .opt-tag.off { background: #f2f4f8; color: #8a93a3; border-color: #dde2ea; }
     .chat-shell {
       min-width: 0; min-height: 0;
       height: 100%;
@@ -300,7 +314,7 @@
         <div class="brand-mark">⌕</div>
         <div>
           <h1>RAG 知识库</h1>
-          <p>BASIC + PRE-RETRIEVAL</p>
+          <p>可选优化链路</p>
         </div>
       </div>
 
@@ -359,15 +373,40 @@
         </button>
       </div>
 
-      <div class="side-label" v-if="mode === 'ask'">检索前策略</div>
+      <div class="side-label" v-if="mode === 'ask'">优化方向（可勾选）</div>
       <div class="upload-card" v-if="mode === 'ask'">
-        <select v-model="askStrategy">
-          <option value="rewrite">清洗 + 查询重写（推荐）</option>
-          <option value="hyde">清洗 + HyDE 假想文档</option>
-          <option value="clean">仅查询清洗</option>
-          <option value="none">不做优化</option>
-        </select>
-        <div class="upload-msg">改写/HyDE 会多调一次大模型，再检索知识库生成答案</div>
+        <div class="opt-list">
+          <label class="opt-item">
+            <input type="checkbox" v-model="optUsePre" />
+            <span>检索前优化<small>清洗 / 重写 / HyDE</small></span>
+          </label>
+          <select v-model="askStrategy" :disabled="!optUsePre">
+            <option value="rewrite">清洗 + 查询重写（推荐）</option>
+            <option value="hyde">清洗 + HyDE 假想文档</option>
+            <option value="clean">仅查询清洗</option>
+          </select>
+          <label class="opt-item">
+            <input type="checkbox" v-model="optUseHybrid" />
+            <span>检索中 · 混合检索<small>向量 + BM25 融合</small></span>
+          </label>
+          <label class="opt-item">
+            <input type="checkbox" v-model="optUseRerank" />
+            <span>检索后 · 重排序<small>Cross-Encoder / 精排</small></span>
+          </label>
+          <label class="opt-item">
+            <input type="checkbox" v-model="optUseCompress" />
+            <span>检索后 · 上下文压缩<small>去掉低相关句子</small></span>
+          </label>
+          <label class="opt-item">
+            <input type="checkbox" v-model="optUseReorder" />
+            <span>检索后 · 长上下文重排<small>重要内容靠前靠后</small></span>
+          </label>
+          <label class="opt-item">
+            <input type="checkbox" v-model="optUseCrag" />
+            <span>Corrective RAG<small>过滤无关并必要时改写重检</small></span>
+          </label>
+        </div>
+        <div class="upload-msg">只勾选需要的环节；不勾选则走基础检索生成</div>
       </div>
 
       <div class="side-label">导入文档</div>
@@ -440,7 +479,20 @@
           <div class="avatar">{{ msg.role === 'user' ? '你' : '⌕' }}</div>
           <div class="bubble-wrap">
             <div class="bubble">{{ msg.content || (msg.role === 'bot' ? '正在检索与生成...' : '') }}</div>
-            <div class="pre-box" v-if="msg.preRetrieval">
+            <div class="pre-box" v-if="msg.optimizations">
+              <strong>本次优化</strong>
+              <div class="opt-tags">
+                <span class="opt-tag" :class="{ off: !msg.optimizations.use_pre }">
+                  检索前{{ msg.optimizations.use_pre ? '·' + strategyLabel(msg.optimizations.strategy) : '关' }}
+                </span>
+                <span class="opt-tag" :class="{ off: !msg.optimizations.use_hybrid }">混合检索{{ msg.optimizations.use_hybrid ? '' : '关' }}</span>
+                <span class="opt-tag" :class="{ off: !msg.optimizations.use_rerank }">重排{{ msg.optimizations.use_rerank ? '' : '关' }}</span>
+                <span class="opt-tag" :class="{ off: !msg.optimizations.use_compress }">压缩{{ msg.optimizations.use_compress ? '' : '关' }}</span>
+                <span class="opt-tag" :class="{ off: !msg.optimizations.use_reorder }">长上下文{{ msg.optimizations.use_reorder ? '' : '关' }}</span>
+                <span class="opt-tag" :class="{ off: !msg.optimizations.use_crag }">CRAG{{ msg.optimizations.use_crag ? '' : '关' }}</span>
+              </div>
+            </div>
+            <div class="pre-box" v-if="msg.preRetrieval && msg.optimizations?.use_pre">
               <strong>检索前优化 · {{ strategyLabel(msg.preRetrieval.strategy) }}</strong>
               <div class="pre-line" v-if="msg.preRetrieval.clean_query">清洗：{{ msg.preRetrieval.clean_query }}</div>
               <div class="pre-line" v-if="msg.preRetrieval.rewritten_query">重写：{{ msg.preRetrieval.rewritten_query }}</div>
@@ -509,6 +561,12 @@
         const loading = ref(false);
         const topK = ref(5);
         const askStrategy = ref('rewrite');
+        const optUsePre = ref(true);
+        const optUseHybrid = ref(true);
+        const optUseRerank = ref(true);
+        const optUseCompress = ref(true);
+        const optUseReorder = ref(true);
+        const optUseCrag = ref(true);
         const health = ref(null);
         const messagesEl = ref(null);
         const sessionId = ref('web-' + Math.random().toString(36).slice(2, 10));
@@ -521,9 +579,9 @@
         const modeMeta = {
           ask: {
             title: 'RAG 知识库问答',
-            subtitle: '检索前优化 → 向量检索 → 大模型生成最终答案',
+            subtitle: '左侧勾选优化方向 → 检索 → 大模型生成答案',
             emptyTitle: '向知识库提问',
-            emptyDesc: '默认先清洗+重写问题，再检索并生成答案。',
+            emptyDesc: '可勾选检索前/中/后优化与 CRAG，再生成答案。',
             placeholder: '例如：嗯那个帮我看看请假咋扣钱啊???',
           },
           chat: {
@@ -695,7 +753,13 @@
                 body: JSON.stringify({
                   question,
                   k: topK.value,
-                  strategy: askStrategy.value,
+                  use_pre: optUsePre.value,
+                  strategy: optUsePre.value ? askStrategy.value : 'none',
+                  use_hybrid: optUseHybrid.value,
+                  use_rerank: optUseRerank.value,
+                  use_compress: optUseCompress.value,
+                  use_reorder: optUseReorder.value,
+                  use_crag: optUseCrag.value,
                 }),
               });
             } else if (mode.value === 'query') {
@@ -730,6 +794,7 @@
               botMsg.sources = data.sources || [];
               botMsg.preRetrieval = data.pre_retrieval || null;
               botMsg.crag = data.crag || null;
+              botMsg.optimizations = data.optimizations || null;
             }
           } catch (err) {
             botMsg.content = '请求失败：' + (err.message || String(err));
@@ -752,6 +817,12 @@
           loading,
           topK,
           askStrategy,
+          optUsePre,
+          optUseHybrid,
+          optUseRerank,
+          optUseCompress,
+          optUseReorder,
+          optUseCrag,
           health,
           messagesEl,
           suggestions,

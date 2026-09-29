@@ -28,13 +28,14 @@ from semantic_search.app.config import (  # 从配置模块导入密钥、模型
 from semantic_search.app.engine import SUPPORTED_EXTS, SemanticSearchEngine  # 引擎 + 允许的文件扩展名
 from semantic_search.app.schemas import (  # Pydantic 请求/响应模型，给接口做校验和文档
     AddDocumentsRequest,  # 追加纯文本文档的请求体
-    AskRequest,  # 检索前优化 + RAG 问答请求体
-    AskResponse,  # 检索前优化 + RAG 问答响应体
+    AskRequest,  # 可勾选优化方向的 RAG 问答请求体
+    AskResponse,  # RAG 问答响应体（含 optimizations 回显）
     ChatRequest,  # 多轮对话请求体
     ChatResponse,  # 多轮对话响应体
     CragInfo,  # Corrective RAG 过程信息
     DocumentResponse,  # 单条检索结果（文档片段 + 相似度）
     IngestRequest,  # 从本地文件/目录导入的请求体
+    OptimizeFlags,  # 本次实际生效的优化开关
     PreRetrievalInfo,  # 检索前优化中间信息
     QueryRequest,  # 一次性问答请求体
     QueryResponse,  # 一次性问答响应体（含来源）
@@ -120,39 +121,50 @@ async def api_info():  # 方便程序或调试查看有哪些入口
     }
 
 
-@app.post("/ask", response_model=AskResponse)  # 作业主接口：提问 → 检索前优化 → 检索 → 生成
-async def ask(request: AskRequest):  # 请求体含 question / k / strategy
-    """基础 RAG + 检索前优化：返回知识库检索后模型生成的最终答案。  # OpenAPI 长说明
+@app.post("/ask", response_model=AskResponse)  # 作业主接口：可勾选优化方向的 RAG 问答
+async def ask(request: AskRequest):  # 请求体含 question / k / 各优化开关
+    """基础 RAG + 可选优化：勾选检索前/中/后/CRAG，返回最终答案与过程信息。
 
-    strategy 可选：
+    strategy（仅 use_pre=true 时生效）：
     - none: 不做优化，原问题直接检索
     - clean: 仅查询清洗
     - rewrite: 清洗 + 查询重写（默认，双路检索）
     - hyde: 清洗 + HyDE 假想文档检索（双路，假想文不当引用）
-    """  # docstring 结束
-    strategy = (request.strategy or "rewrite").strip().lower()  # 默认 rewrite，统一小写
-    if strategy not in {"none", "clean", "rewrite", "hyde"}:  # 非法策略直接 400
-        raise HTTPException(  # 参数错误
-            status_code=400,  # Bad Request
-            detail="strategy 只能是 none / clean / rewrite / hyde",  # 提示合法取值
-        )
-    try:  # 业务异常转 HTTP 状态码
-        payload = RagAskService(_require_engine(app)).ask(  # 编排层：优化→检索→生成
-            request.question,  # 用户原问题
-            k=request.k,  # Top-K
-            strategy=strategy,  # 检索前策略
-        )
-    except ValueError as exc:  # 如空问题
-        raise HTTPException(status_code=400, detail=str(exc)) from exc  # 转 400
-    except RuntimeError as exc:  # 如缺 LLM
-        raise HTTPException(status_code=503, detail=str(exc)) from exc  # 转 503
 
-    return AskResponse(  # 组装带 pre_retrieval / crag 的完整响应
-        question=payload["question"],  # 原问题
-        answer=payload["answer"],  # 最终答案
-        sources=[DocumentResponse(**item) for item in payload["sources"]],  # 真实引用来源
-        pre_retrieval=PreRetrievalInfo(**payload["pre_retrieval"]),  # 检索前优化过程
-        crag=CragInfo(**(payload.get("crag") or {})),  # Corrective RAG 过程
+    use_hybrid / use_rerank / use_compress / use_reorder / use_crag：
+    传 true/false 覆盖本次请求；省略则跟从服务端 .env 默认。
+    """
+    strategy = (request.strategy or "rewrite").strip().lower()
+    if strategy not in {"none", "clean", "rewrite", "hyde"}:
+        raise HTTPException(
+            status_code=400,
+            detail="strategy 只能是 none / clean / rewrite / hyde",
+        )
+    try:
+        payload = RagAskService(_require_engine(app)).ask(
+            request.question,
+            k=request.k,
+            strategy=strategy,
+            use_pre=request.use_pre,
+            use_hybrid=request.use_hybrid,
+            use_rerank=request.use_rerank,
+            use_compress=request.use_compress,
+            use_reorder=request.use_reorder,
+            use_crag=request.use_crag,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+    opts = payload.get("optimizations")
+    return AskResponse(
+        question=payload["question"],
+        answer=payload["answer"],
+        sources=[DocumentResponse(**item) for item in payload["sources"]],
+        pre_retrieval=PreRetrievalInfo(**payload["pre_retrieval"]),
+        crag=CragInfo(**(payload.get("crag") or {})),
+        optimizations=OptimizeFlags(**opts) if opts else None,
     )
 
 
