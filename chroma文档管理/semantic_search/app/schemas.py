@@ -80,14 +80,29 @@ class CragInfo(BaseModel):  # Corrective RAG 过程信息
 class AskRequest(BaseModel):  # POST /ask：基础 RAG + 可选优化链路
     question: str = Field(..., description="用户问题", min_length=1)  # 必填用户问题
     k: int = Field(5, description="检索条数", ge=1, le=100)  # 最终返回来源条数
-    # ----- 检索前 -----
-    use_pre: bool = Field(True, description="是否启用检索前优化")
-    strategy: str = Field(  # 仅 use_pre=True 时生效
-        "rewrite",  # 默认：清洗 + 重写双路检索
-        description="检索前策略: none / clean / rewrite / hyde（use_pre=false 时忽略）",
+    # ----- ModularRAG 风格预设（basic / hybrid_search / advanced / full_optimization）-----
+    preset: str | None = Field(
+        None,
+        description="一键预设；与下方开关同时传时，显式开关优先覆盖预设",
     )
-    # ----- 检索中 / 检索后 / CRAG（勾选开关；None 表示跟从服务端 .env 默认）-----
+    # ----- 检索前 -----
+    use_pre: bool | None = Field(None, description="是否启用检索前优化；null 跟预设/.env")
+    strategy: str | None = Field(
+        None,
+        description="检索前策略: none / clean / rewrite / hyde",
+    )
+    # ----- 检索中 / 检索后 / CRAG（勾选开关；None 表示跟从预设或 .env）-----
     use_hybrid: bool | None = Field(None, description="混合检索 向量+BM25；null=跟配置")
+    fusion_mode: str | None = Field(
+        None,
+        description="融合策略: reciprocal_rerank / relative_score / simple",
+    )
+    num_queries: int | None = Field(
+        None,
+        ge=1,
+        le=8,
+        description="Multi-Query 变体数；1=不做查询扩展，>1=LLM 生成多查询（对齐 ModularRAG）",
+    )
     use_rerank: bool | None = Field(None, description="重排序；null=跟配置")
     use_compress: bool | None = Field(None, description="上下文压缩；null=跟配置")
     use_reorder: bool | None = Field(None, description="长上下文重排；null=跟配置")
@@ -97,7 +112,7 @@ class AskRequest(BaseModel):  # POST /ask：基础 RAG + 可选优化链路
         description="Self-RAG：Retrieve 门控 + ISSUP 验据修正 + ISUSE；null=跟配置",
     )
     # ----- RAG 评估（飞书：生成质量）-----
-    use_eval: bool = Field(
+    use_eval: bool | None = Field(
         False,
         description="是否对本次回答做 Faithfulness/Relevancy（+可选 Correctness）评估",
     )
@@ -108,9 +123,12 @@ class AskRequest(BaseModel):  # POST /ask：基础 RAG + 可选优化链路
 
 
 class OptimizeFlags(BaseModel):  # 本次实际生效的优化开关（回显给前端）
+    preset: str | None = None
     use_pre: bool = True
     strategy: str = "rewrite"
     use_hybrid: bool = True
+    fusion_mode: str = "reciprocal_rerank"
+    num_queries: int = 1
     use_rerank: bool = True
     use_compress: bool = True
     use_reorder: bool = True

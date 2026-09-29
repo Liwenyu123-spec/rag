@@ -30,8 +30,8 @@ if TYPE_CHECKING:
 
 
 def chinese_sentence_splitter(text: str) -> List[str]:
-    """按中英文句末标点切句，供 SentenceEmbeddingOptimizer 使用。"""
-    parts = re.split(r"[。！？；\n!?;]+", text or "")
+    """按中英文句末标点 / 空行切句（对齐 ModularRAG demo）。"""
+    parts = re.split(r"[。！？；!?;]+|\n{2,}", text or "")
     return [p.strip() for p in parts if p.strip()]
 
 
@@ -85,14 +85,37 @@ def build_hybrid_retriever(
     collection: Any = None,
     nodes_cache: Optional[List[Any]] = None,
     hybrid_enabled: Optional[bool] = None,
+    num_queries: Optional[int] = None,
+    fusion_mode: Optional[str] = None,
 ) -> "BaseRetriever":
-    """同库混合：稠密向量 + BM25，经 QueryFusionRetriever 融合。失败则回退纯向量。"""
+    """同库混合：稠密向量 + BM25，经 QueryFusionRetriever 融合。
+
+    num_queries>1 时启用 Multi-Query（对齐 ModularRAG）：LLM 生成查询变体再融合。
+    """
     cand_k = candidate_top_k(final_k)
     vector_retriever = index.as_retriever(similarity_top_k=cand_k)
 
     use_hybrid = HYBRID_ENABLED if hybrid_enabled is None else bool(hybrid_enabled)
+    n_queries = max(1, int(num_queries if num_queries is not None else 1))
+    mode = (fusion_mode or HYBRID_FUSION_MODE or "reciprocal_rerank").strip()
+
     if not use_hybrid:
-        return vector_retriever
+        # 纯向量也可挂 Multi-Query（只用一路检索器）
+        if n_queries <= 1:
+            return vector_retriever
+        try:
+            from llama_index.core.retrievers import QueryFusionRetriever
+
+            return QueryFusionRetriever(
+                retrievers=[vector_retriever],
+                similarity_top_k=cand_k,
+                num_queries=n_queries,
+                mode=mode if mode != "simple" else "reciprocal_rerank",
+                use_async=False,
+            )
+        except Exception as exc:  # noqa: BLE001
+            print(f"警告: Multi-Query 构建失败，回退纯向量: {exc}")
+            return vector_retriever
 
     try:
         import jieba
@@ -113,11 +136,10 @@ def build_hybrid_retriever(
             similarity_top_k=cand_k,
             tokenizer=lambda t: list(jieba.cut(t or "")),
         )
-        mode = HYBRID_FUSION_MODE or "reciprocal_rerank"
         return QueryFusionRetriever(
             retrievers=[vector_retriever, bm25_retriever],
             similarity_top_k=cand_k,
-            num_queries=1,
+            num_queries=n_queries,
             mode=mode,
             use_async=False,
         )

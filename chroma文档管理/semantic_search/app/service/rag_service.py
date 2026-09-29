@@ -13,6 +13,7 @@ from semantic_search.app.config import (
     COMPRESS_ENABLED,
     CRAG_ENABLED,
     HYBRID_ENABLED,
+    HYBRID_FUSION_MODE,
     RAG_SYSTEM_PROMPT,
     REORDER_ENABLED,
     RERANK_ENABLED,
@@ -22,6 +23,7 @@ from semantic_search.app.config import (
 )
 from semantic_search.app.service.crag import apply_crag, filter_relevant_nodes
 from semantic_search.app.service.pre_retrieval import prepare_retrieval_queries
+from semantic_search.app.service.presets import apply_preset
 from semantic_search.app.service.rag_eval import evaluate_generation
 from semantic_search.app.service.retrieval_optimize import apply_postprocessors
 from semantic_search.app.service.self_rag import (

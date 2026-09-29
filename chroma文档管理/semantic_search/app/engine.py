@@ -115,11 +115,12 @@ class SemanticSearchEngine:  # Native RAG 引擎主体
     def _init_embed_model(self):  # 按配置选择 Embedding 实现
         """DeepSeek 不做向量化；优先本地 HuggingFace，有千问 Key 时仍可用千问。"""
         if EMBEDDING_PROVIDER == "dashscope":  # 云端千问 Embedding
-            from llama_index.embeddings.dashscope import DashScopeEmbedding  # 延迟导入，避免无关依赖报错
+            from semantic_search.app.safe_embedding import SafeDashScopeEmbedding
 
             if not DASHSCOPE_API_KEY:  # 选了千问却没 Key
                 raise RuntimeError("EMBEDDING_PROVIDER=dashscope 但未找到 DASHSCOPE_API_KEY")  # 配置冲突直接报错
-            return DashScopeEmbedding(  # 创建千问向量化客户端
+            print(f"使用 SafeDashScopeEmbedding（分批≤10）: {self.model_name}")
+            return SafeDashScopeEmbedding(  # 对齐 ModularRAG：避免批量超限
                 model_name=self.model_name,  # 如 text-embedding-v3
                 api_key=DASHSCOPE_API_KEY,  # 鉴权
                 text_type="document",  # 文档侧编码（相对 query 侧）
@@ -197,7 +198,14 @@ class SemanticSearchEngine:  # Native RAG 引擎主体
             self._bm25_nodes_cache = nodes_from_index(self.index, self.collection)
         return self._bm25_nodes_cache
 
-    def _build_retriever(self, k: int = SIMILARITY_TOP_K, *, hybrid_enabled: bool | None = None):
+    def _build_retriever(
+        self,
+        k: int = SIMILARITY_TOP_K,
+        *,
+        hybrid_enabled: bool | None = None,
+        num_queries: int | None = None,
+        fusion_mode: str | None = None,
+    ):
         """检索中：按配置（可被请求覆盖）构建纯向量或 向量+BM25 融合检索器。"""
         use_hybrid = HYBRID_ENABLED if hybrid_enabled is None else bool(hybrid_enabled)
         return build_hybrid_retriever(
@@ -206,6 +214,8 @@ class SemanticSearchEngine:  # Native RAG 引擎主体
             collection=self.collection,
             nodes_cache=self._bm25_nodes() if use_hybrid else None,
             hybrid_enabled=use_hybrid,
+            num_queries=num_queries,
+            fusion_mode=fusion_mode,
         )
 
     def _build_postprocessors(
