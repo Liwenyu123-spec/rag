@@ -92,6 +92,10 @@ class AskRequest(BaseModel):  # POST /ask：基础 RAG + 可选优化链路
     use_compress: bool | None = Field(None, description="上下文压缩；null=跟配置")
     use_reorder: bool | None = Field(None, description="长上下文重排；null=跟配置")
     use_crag: bool | None = Field(None, description="Corrective RAG；null=跟配置")
+    use_self_rag: bool | None = Field(
+        None,
+        description="Self-RAG：Retrieve 门控 + ISSUP 验据修正 + ISUSE；null=跟配置",
+    )
 
 
 class OptimizeFlags(BaseModel):  # 本次实际生效的优化开关（回显给前端）
@@ -102,12 +106,25 @@ class OptimizeFlags(BaseModel):  # 本次实际生效的优化开关（回显给
     use_compress: bool = True
     use_reorder: bool = True
     use_crag: bool = True
+    use_self_rag: bool = False
+
+
+class SelfRagInfo(BaseModel):  # Self-RAG 过程信息（作业演示）
+    enabled: bool = False
+    retrieve: bool | None = None  # True=需要检索；False=直接答；None=未跑
+    skipped_retrieval: bool = False
+    isrel_shared_with_crag: bool = False
+    issup: str | None = None  # FULLY / PARTIALLY / NO
+    corrected: bool = False
+    isuse: int | None = None  # 1~5
+    message: str = "skipped"
 
 
 class AskResponse(BaseModel):  # /ask 的响应体
-    question: str  # 原问题
-    answer: str  # 检索后由模型生成的最终答案
+    question: str  # 检索 / 生成后的最终答案路径
+    answer: str  # 最终自然语言答案
     sources: List[DocumentResponse] = Field(default_factory=list)  # 真实知识库引用来源
     pre_retrieval: PreRetrievalInfo  # 检索前优化过程信息
     crag: CragInfo | None = None  # Corrective RAG 过程（可选）
+    self_rag: SelfRagInfo | None = None  # Self-RAG 过程（可选）
     optimizations: OptimizeFlags | None = None  # 本次实际开启的优化项

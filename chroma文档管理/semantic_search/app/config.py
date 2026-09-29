@@ -123,6 +123,9 @@ REORDER_ENABLED = _env_bool("REORDER_ENABLED", True)  # 长上下文首尾重排
 # Corrective RAG：过滤无关片段；全无关则改写查询再搜一次（库内修正，不联网）
 CRAG_ENABLED = _env_bool("CRAG_ENABLED", True)
 CRAG_VERBOSE = _env_bool("CRAG_VERBOSE", True)  # 终端打印每篇相关/无关
+# Self-RAG（讲义工程版）：Retrieve 门控 + ISSUP 验据修正 + ISUSE 打分
+SELF_RAG_ENABLED = _env_bool("SELF_RAG_ENABLED", False)  # 默认关，前端勾选开启
+SELF_RAG_VERBOSE = _env_bool("SELF_RAG_VERBOSE", True)
 
 HOST = os.getenv("SEARCH_HOST", "127.0.0.1")  # Web 服务监听地址
 PORT = int(os.getenv("SEARCH_PORT", "8003"))  # 默认 8003，避免和「带安全校验的聊天机器人」8001 冲突
