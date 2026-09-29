@@ -131,23 +131,37 @@ async def api_info():  # 方便程序或调试查看有哪些入口
 
 @app.post("/ask", response_model=AskResponse)  # 作业主接口：可勾选优化方向的 RAG 问答
 async def ask(request: AskRequest):  # 请求体含 question / k / 各优化开关
-    """基础 RAG + 可选优化 + 可选生成评估（Faithfulness/Relevancy/Correctness）。
+    """基础 RAG + ModularRAG 预设 / 勾选优化 + 可选生成评估。
 
-    use_eval=true 时对本次回答做 LlamaIndex 内置评估；传 reference 额外算 Correctness。
+    preset: basic / hybrid_search / advanced / full_optimization（对齐 demo01）
+    显式开关会覆盖预设对应项。
     """
-    strategy = (request.strategy or "rewrite").strip().lower()
-    if strategy not in {"none", "clean", "rewrite", "hyde"}:
+    strategy = (request.strategy or "").strip().lower() if request.strategy else None
+    if strategy and strategy not in {"none", "clean", "rewrite", "hyde"}:
         raise HTTPException(
             status_code=400,
             detail="strategy 只能是 none / clean / rewrite / hyde",
+        )
+    if request.preset and request.preset not in {
+        "basic",
+        "hybrid_search",
+        "advanced",
+        "full_optimization",
+    }:
+        raise HTTPException(
+            status_code=400,
+            detail="preset 只能是 basic / hybrid_search / advanced / full_optimization",
         )
     try:
         payload = RagAskService(_require_engine(app)).ask(
             request.question,
             k=request.k,
             strategy=strategy,
+            preset=request.preset,
             use_pre=request.use_pre,
             use_hybrid=request.use_hybrid,
+            fusion_mode=request.fusion_mode,
+            num_queries=request.num_queries,
             use_rerank=request.use_rerank,
             use_compress=request.use_compress,
             use_reorder=request.use_reorder,

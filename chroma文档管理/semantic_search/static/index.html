@@ -375,42 +375,53 @@
 
       <div class="side-label" v-if="mode === 'ask'">优化方向（可勾选）</div>
       <div class="upload-card" v-if="mode === 'ask'">
+        <select v-model="askPreset" @change="applyPreset">
+          <option value="custom">自定义（下方勾选）</option>
+          <option value="basic">预设 · basic 基础</option>
+          <option value="hybrid_search">预设 · hybrid_search 混合检索</option>
+          <option value="advanced">预设 · advanced 进阶</option>
+          <option value="full_optimization">预设 · full_optimization 全优化</option>
+        </select>
         <div class="opt-list">
           <label class="opt-item">
-            <input type="checkbox" v-model="optUsePre" />
+            <input type="checkbox" v-model="optUsePre" @change="askPreset='custom'" />
             <span>检索前优化<small>清洗 / 重写 / HyDE</small></span>
           </label>
-          <select v-model="askStrategy" :disabled="!optUsePre">
+          <select v-model="askStrategy" :disabled="!optUsePre" @change="askPreset='custom'">
             <option value="rewrite">清洗 + 查询重写（推荐）</option>
             <option value="hyde">清洗 + HyDE 假想文档</option>
             <option value="clean">仅查询清洗</option>
           </select>
           <label class="opt-item">
-            <input type="checkbox" v-model="optUseHybrid" />
+            <input type="checkbox" v-model="optUseHybrid" @change="askPreset='custom'" />
             <span>检索中 · 混合检索<small>向量 + BM25 融合</small></span>
           </label>
           <label class="opt-item">
-            <input type="checkbox" v-model="optUseRerank" />
+            <input type="checkbox" v-model="optUseMultiQuery" @change="askPreset='custom'" />
+            <span>检索中 · Multi-Query<small>LLM 生成多查询变体再融合</small></span>
+          </label>
+          <label class="opt-item">
+            <input type="checkbox" v-model="optUseRerank" @change="askPreset='custom'" />
             <span>检索后 · 重排序<small>Cross-Encoder / 精排</small></span>
           </label>
           <label class="opt-item">
-            <input type="checkbox" v-model="optUseCompress" />
+            <input type="checkbox" v-model="optUseCompress" @change="askPreset='custom'" />
             <span>检索后 · 上下文压缩<small>去掉低相关句子</small></span>
           </label>
           <label class="opt-item">
-            <input type="checkbox" v-model="optUseReorder" />
+            <input type="checkbox" v-model="optUseReorder" @change="askPreset='custom'" />
             <span>检索后 · 长上下文重排<small>重要内容靠前靠后</small></span>
           </label>
           <label class="opt-item">
-            <input type="checkbox" v-model="optUseCrag" />
+            <input type="checkbox" v-model="optUseCrag" @change="askPreset='custom'" />
             <span>Corrective RAG<small>过滤无关并必要时改写重检</small></span>
           </label>
           <label class="opt-item">
-            <input type="checkbox" v-model="optUseSelfRag" />
+            <input type="checkbox" v-model="optUseSelfRag" @change="askPreset='custom'" />
             <span>Self-RAG<small>Retrieve 门控 · ISSUP 验据 · ISUSE 打分</small></span>
           </label>
           <label class="opt-item">
-            <input type="checkbox" v-model="optUseEval" />
+            <input type="checkbox" v-model="optUseEval" @change="askPreset='custom'" />
             <span>生成质量评估<small>Faithfulness / Relevancy / Correctness</small></span>
           </label>
           <textarea
@@ -508,6 +519,9 @@
                   检索前{{ msg.optimizations.use_pre ? '·' + strategyLabel(msg.optimizations.strategy) : '关' }}
                 </span>
                 <span class="opt-tag" :class="{ off: !msg.optimizations.use_hybrid }">混合检索{{ msg.optimizations.use_hybrid ? '' : '关' }}</span>
+                <span class="opt-tag" :class="{ off: !(msg.optimizations.num_queries > 1) }">
+                  Multi-Query{{ msg.optimizations.num_queries > 1 ? '×' + msg.optimizations.num_queries : '关' }}
+                </span>
                 <span class="opt-tag" :class="{ off: !msg.optimizations.use_rerank }">重排{{ msg.optimizations.use_rerank ? '' : '关' }}</span>
                 <span class="opt-tag" :class="{ off: !msg.optimizations.use_compress }">压缩{{ msg.optimizations.use_compress ? '' : '关' }}</span>
                 <span class="opt-tag" :class="{ off: !msg.optimizations.use_reorder }">长上下文{{ msg.optimizations.use_reorder ? '' : '关' }}</span>
@@ -615,8 +629,10 @@
         const loading = ref(false);
         const topK = ref(5);
         const askStrategy = ref('rewrite');
+        const askPreset = ref('custom');
         const optUsePre = ref(true);
         const optUseHybrid = ref(true);
+        const optUseMultiQuery = ref(false);
         const optUseRerank = ref(true);
         const optUseCompress = ref(true);
         const optUseReorder = ref(true);
@@ -699,6 +715,51 @@
           if (isCorr && m.score != null) return `${m.score}/5（${pass}）`;
           if (m.score != null) return `${pass}（score=${m.score}）`;
           return pass;
+        };
+
+        const PRESET_MAP = {
+          basic: {
+            use_pre: false, strategy: 'rewrite', use_hybrid: true, multi: false,
+            fusion: 'simple',
+            use_rerank: false, use_compress: false, use_reorder: false,
+            use_crag: false, use_self_rag: false, use_eval: false,
+          },
+          hybrid_search: {
+            use_pre: false, strategy: 'rewrite', use_hybrid: true, multi: false,
+            fusion: 'reciprocal_rerank',
+            use_rerank: false, use_compress: false, use_reorder: false,
+            use_crag: false, use_self_rag: false, use_eval: false,
+          },
+          advanced: {
+            use_pre: true, strategy: 'rewrite', use_hybrid: true, multi: true,
+            fusion: 'reciprocal_rerank',
+            use_rerank: true, use_compress: true, use_reorder: true,
+            use_crag: false, use_self_rag: false, use_eval: false,
+          },
+          full_optimization: {
+            use_pre: true, strategy: 'hyde', use_hybrid: true, multi: true,
+            fusion: 'reciprocal_rerank',
+            use_rerank: true, use_compress: true, use_reorder: true,
+            use_crag: true, use_self_rag: false, use_eval: false,
+          },
+        };
+
+        const fusionMode = ref('reciprocal_rerank');
+
+        const applyPreset = () => {
+          const p = PRESET_MAP[askPreset.value];
+          if (!p) return;
+          optUsePre.value = p.use_pre;
+          askStrategy.value = p.strategy;
+          optUseHybrid.value = p.use_hybrid;
+          optUseMultiQuery.value = p.multi;
+          fusionMode.value = p.fusion;
+          optUseRerank.value = p.use_rerank;
+          optUseCompress.value = p.use_compress;
+          optUseReorder.value = p.use_reorder;
+          optUseCrag.value = p.use_crag;
+          optUseSelfRag.value = p.use_self_rag;
+          optUseEval.value = p.use_eval;
         };
 
         const autoResize = (e) => {
@@ -861,9 +922,12 @@
                 body: JSON.stringify({
                   question,
                   k: topK.value,
+                  preset: askPreset.value === 'custom' ? null : askPreset.value,
                   use_pre: optUsePre.value,
                   strategy: optUsePre.value ? askStrategy.value : 'none',
                   use_hybrid: optUseHybrid.value,
+                  num_queries: optUseMultiQuery.value ? 3 : 1,
+                  fusion_mode: fusionMode.value || 'reciprocal_rerank',
                   use_rerank: optUseRerank.value,
                   use_compress: optUseCompress.value,
                   use_reorder: optUseReorder.value,
@@ -932,8 +996,11 @@
           loading,
           topK,
           askStrategy,
+          askPreset,
+          fusionMode,
           optUsePre,
           optUseHybrid,
+          optUseMultiQuery,
           optUseRerank,
           optUseCompress,
           optUseReorder,
@@ -954,6 +1021,7 @@
           shortModel,
           strategyLabel,
           metricLabel,
+          applyPreset,
           autoResize,
           formatScore,
           toggleSource,

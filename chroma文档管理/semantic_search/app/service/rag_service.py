@@ -178,9 +178,16 @@ class RagAskService:
         use_rerank: bool,
         use_compress: bool,
         use_reorder: bool,
+        num_queries: int = 1,
+        fusion_mode: str | None = None,
     ) -> list[NodeWithScore]:
         """单查询：混合召回 + 检索后处理（供 CRAG 重试复用）。"""
-        retriever = self.engine._build_retriever(k, hybrid_enabled=use_hybrid)
+        retriever = self.engine._build_retriever(
+            k,
+            hybrid_enabled=use_hybrid,
+            num_queries=num_queries,
+            fusion_mode=fusion_mode,
+        )
         nodes = list(retriever.retrieve(query))
         return apply_postprocessors(
             nodes,
@@ -195,38 +202,98 @@ class RagAskService:
         self,
         question: str,
         k: int = SIMILARITY_TOP_K,
-        strategy: str = "rewrite",
+        strategy: Optional[str] = None,
         *,
-        use_pre: bool = True,
+        preset: Optional[str] = None,
+        use_pre: Optional[bool] = None,
         use_hybrid: Optional[bool] = None,
+        fusion_mode: Optional[str] = None,
+        num_queries: Optional[int] = None,
         use_rerank: Optional[bool] = None,
         use_compress: Optional[bool] = None,
         use_reorder: Optional[bool] = None,
         use_crag: Optional[bool] = None,
         use_self_rag: Optional[bool] = None,
-        use_eval: bool = False,
+        use_eval: Optional[bool] = False,
         reference: Optional[str] = None,
     ) -> dict:
-        """按勾选开关跑优化链路并生成答案。"""
+        """按预设 / 勾选开关跑优化链路并生成答案（对齐 ModularRAG）。"""
         self.engine._require_llm()
         question = (question or "").strip()
         if not question:
             raise ValueError("问题不能为空")
 
-        effective_strategy = (strategy or "rewrite").strip().lower() if use_pre else "none"
+        resolved = apply_preset(
+            preset,
+            {
+                "use_pre": use_pre,
+                "strategy": strategy,
+                "use_hybrid": use_hybrid,
+                "fusion_mode": fusion_mode,
+                "num_queries": num_queries,
+                "use_rerank": use_rerank,
+                "use_compress": use_compress,
+                "use_reorder": use_reorder,
+                "use_crag": use_crag,
+                "use_self_rag": use_self_rag,
+                "use_eval": use_eval,
+            },
+        )
+        # 显式请求字段覆盖预设；未传则用预设；都没有则跟 .env / 默认
+        if use_pre is not None:
+            flag_pre = bool(use_pre)
+        elif "use_pre" in resolved:
+            flag_pre = bool(resolved["use_pre"])
+        else:
+            flag_pre = True
+
+        raw_strategy = strategy if strategy is not None else resolved.get("strategy")
+        effective_strategy = str(raw_strategy or ("rewrite" if flag_pre else "none")).strip().lower()
         if effective_strategy not in {"none", "clean", "rewrite", "hyde"}:
-            effective_strategy = "rewrite" if use_pre else "none"
-        flag_hybrid = _resolve_flag(use_hybrid, HYBRID_ENABLED)
-        flag_rerank = _resolve_flag(use_rerank, RERANK_ENABLED)
-        flag_compress = _resolve_flag(use_compress, COMPRESS_ENABLED)
-        flag_reorder = _resolve_flag(use_reorder, REORDER_ENABLED)
-        flag_crag = _resolve_flag(use_crag, CRAG_ENABLED)
-        flag_self = _resolve_flag(use_self_rag, SELF_RAG_ENABLED)
-        flag_eval = bool(use_eval)
+            effective_strategy = "rewrite" if flag_pre else "none"
+        if not flag_pre:
+            effective_strategy = "none"
+
+        flag_hybrid = _resolve_flag(
+            resolved.get("use_hybrid", use_hybrid), HYBRID_ENABLED
+        )
+        flag_rerank = _resolve_flag(
+            resolved.get("use_rerank", use_rerank), RERANK_ENABLED
+        )
+        flag_compress = _resolve_flag(
+            resolved.get("use_compress", use_compress), COMPRESS_ENABLED
+        )
+        flag_reorder = _resolve_flag(
+            resolved.get("use_reorder", use_reorder), REORDER_ENABLED
+        )
+        flag_crag = _resolve_flag(resolved.get("use_crag", use_crag), CRAG_ENABLED)
+        flag_self = _resolve_flag(
+            resolved.get("use_self_rag", use_self_rag), SELF_RAG_ENABLED
+        )
+        flag_eval = bool(resolved.get("use_eval", use_eval) or False)
+        flag_num_queries = max(1, int(resolved.get("num_queries") or num_queries or 1))
+        flag_fusion = (
+            resolved.get("fusion_mode")
+            or fusion_mode
+            or HYBRID_FUSION_MODE
+            or "reciprocal_rerank"
+        )
+        preset_name = (preset or "").strip().lower() or None
+        if preset_name and preset_name not in {
+            "basic",
+            "hybrid_search",
+            "advanced",
+            "full_optimization",
+        }:
+            preset_name = None
+
         optimizations = {
-            "use_pre": bool(use_pre),
+            "preset": preset_name,
+            "use_pre": flag_pre,
             "strategy": effective_strategy,
             "use_hybrid": flag_hybrid,
+            "fusion_mode": flag_fusion,
+            "num_queries": flag_num_queries,
             "use_rerank": flag_rerank,
             "use_compress": flag_compress,
             "use_reorder": flag_reorder,
@@ -256,7 +323,6 @@ class RagAskService:
                 answer = Settings.llm.complete(question).text.strip()
                 self_info["skipped_retrieval"] = True
                 self_info["message"] = "no_retrieve_direct_answer"
-                # 无资料时仍可打有用性分
                 from semantic_search.app.service.self_rag import judge_isuse
 
                 self_info["isuse"] = judge_isuse(
@@ -298,7 +364,12 @@ class RagAskService:
         queries = prep["retrieval_queries"] or [question]
 
         ranked_lists: list[list[NodeWithScore]] = []
-        retriever = self.engine._build_retriever(k, hybrid_enabled=flag_hybrid)
+        retriever = self.engine._build_retriever(
+            k,
+            hybrid_enabled=flag_hybrid,
+            num_queries=flag_num_queries,
+            fusion_mode=flag_fusion,
+        )
         for q in queries:
             ranked_lists.append(list(retriever.retrieve(q)))
 
@@ -318,7 +389,6 @@ class RagAskService:
             reorder_enabled=flag_reorder,
         )
 
-        # CRAG ≈ ISREL；Self-RAG 开启且未开 CRAG 时单独做相关性过滤
         if flag_crag:
             fused, crag_info = apply_crag(
                 question,
@@ -330,6 +400,8 @@ class RagAskService:
                     use_rerank=flag_rerank,
                     use_compress=flag_compress,
                     use_reorder=flag_reorder,
+                    num_queries=flag_num_queries,
+                    fusion_mode=flag_fusion,
                 ),
                 llm=Settings.llm,
                 enabled=True,
@@ -382,7 +454,6 @@ class RagAskService:
         response = synthesizer.synthesize(query=question, nodes=fused)
         answer = str(response).strip()
 
-        # Self-RAG：ISSUP → 不足则修正 → ISUSE
         if flag_self:
             context = _context_from_nodes(fused)
             answer, post_info = apply_self_rag_post_generate(
