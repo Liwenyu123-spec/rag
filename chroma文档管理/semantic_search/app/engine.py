@@ -19,30 +19,30 @@ from semantic_search.app.config import (  # 导入运行时配置常量
     CHUNK_OVERLAP,  # 分块重叠
     CHUNK_SIZE,  # 分块大小
     COLLECTION_NAME,  # 集合名
-    COMPRESS_ENABLED,
-    CRAG_ENABLED,
+    COMPRESS_ENABLED,  # 上下文压缩开关
+    CRAG_ENABLED,  # Corrective RAG 开关
     DASHSCOPE_API_KEY,  # 千问 Key
     DATA_DIR,  # 默认数据目录
     DEEPSEEK_API_KEY,  # DeepSeek Key
     DEEPSEEK_BASE_URL,  # DeepSeek API 地址
     EMBEDDING_MODEL,  # Embedding 模型名
     EMBEDDING_PROVIDER,  # Embedding 提供方
-    HYBRID_ENABLED,
+    HYBRID_ENABLED,  # 混合检索开关
     LLM_MODEL,  # 大模型名
     LLM_PROVIDER,  # 大模型提供方
     RAG_SYSTEM_PROMPT,  # 对话系统提示词
-    REORDER_ENABLED,
-    RERANK_ENABLED,
-    RERANK_PROVIDER,
-    SELF_RAG_ENABLED,
+    REORDER_ENABLED,  # 长上下文重排开关
+    RERANK_ENABLED,  # 重排开关
+    RERANK_PROVIDER,  # 重排提供方
+    SELF_RAG_ENABLED,  # Self-RAG 开关
     SIMILARITY_TOP_K,  # 默认 Top-K
 )
-from semantic_search.app.service.retrieval_optimize import (
-    apply_postprocessors,
-    build_hybrid_retriever,
-    build_node_postprocessors,
-    candidate_top_k,
-    nodes_from_index,
+from semantic_search.app.service.retrieval_optimize import (  # 检索中/后优化工具
+    apply_postprocessors,  # 对召回节点做重排/压缩/重排版
+    build_hybrid_retriever,  # 构建向量或混合检索器
+    build_node_postprocessors,  # 组装 NodePostprocessor 列表
+    candidate_top_k,  # 粗排候选数计算
+    nodes_from_index,  # 从索引拉出 BM25 语料节点
 )
 
 SAMPLE_DOCUMENTS = [  # 空库时写入的示例知识，方便一启动就能搜

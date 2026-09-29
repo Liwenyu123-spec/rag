@@ -157,6 +157,6 @@ def prepare_retrieval_queries(  # 按策略组装检索用查询列表
     queries = []  # 双路：清洗句 + 改写句，防改歪漏检
     for q in (cleaned, rewritten):  # 遍历两路
         if q and q not in queries:  # 去重追加
-            queries.append(q)
+            queries.append(q)  # 追加一路查询
     meta["retrieval_queries"] = queries  # 写入检索列表
     return meta  # 返回完整中间产物

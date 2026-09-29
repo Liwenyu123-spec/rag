@@ -22,7 +22,7 @@ def _reg_get(root, path: str, name: str) -> str | None:  # 从 Windows 注册表
         return None  # 非 Windows 无注册表可读
     import winreg  # 仅在 Windows 才导入注册表模块
 
-    try:
+    try:  # 注册表可能不存在该键
         with winreg.OpenKey(root, path) as reg:  # 打开指定注册表键
             value, _ = winreg.QueryValueEx(reg, name)  # 读取名为 name 的值
             return (value or "").strip() or None  # 去掉空白；空串当成没有
@@ -97,12 +97,12 @@ CHUNK_OVERLAP = int(os.getenv("CHUNK_OVERLAP", "128"))  # 分块重叠，减轻�
 SIMILARITY_TOP_K = int(os.getenv("SIMILARITY_TOP_K", "5"))  # 最终返回/精排后条数
 
 
-def _env_bool(name: str, default: bool) -> bool:
-    """读布尔环境变量：1/true/yes/on 为真。"""
-    raw = os.getenv(name)
-    if raw is None or not str(raw).strip():
-        return default
-    return str(raw).strip().lower() in {"1", "true", "yes", "on", "y"}
+def _env_bool(name: str, default: bool) -> bool:  # 读布尔型环境变量的小工具
+    """读布尔环境变量：1/true/yes/on 为真。"""  # 函数说明
+    raw = os.getenv(name)  # 取原始字符串；未设置则为 None
+    if raw is None or not str(raw).strip():  # 未设置或全空白
+        return default  # 回退到调用方默认值
+    return str(raw).strip().lower() in {"1", "true", "yes", "on", "y"}  # 常见真值集合
 
 
 # ----- 检索中 / 检索后优化（可用环境变量开关）-----
@@ -110,24 +110,24 @@ HYBRID_ENABLED = _env_bool("HYBRID_ENABLED", True)  # 同库：向量 + BM25 融
 HYBRID_FUSION_MODE = os.getenv("HYBRID_FUSION_MODE", "reciprocal_rerank").strip()  # 或 relative_score
 RETRIEVE_CANDIDATES = int(os.getenv("RETRIEVE_CANDIDATES", "20"))  # 粗排候选数（给精排留窗口）
 # 重排：默认本地 bge，不依赖千问；provider=dashscope 才需要 DASHSCOPE_API_KEY
-RERANK_ENABLED = _env_bool("RERANK_ENABLED", True)
+RERANK_ENABLED = _env_bool("RERANK_ENABLED", True)  # 是否启用重排序
 RERANK_PROVIDER = os.getenv("RERANK_PROVIDER", "local").strip().lower()  # local | dashscope | none
-RERANK_MODEL = os.getenv(
-    "RERANK_MODEL",
-    "BAAI/bge-reranker-base" if os.getenv("RERANK_PROVIDER", "local").strip().lower() != "dashscope" else "qwen3-rerank",
-).strip()
+RERANK_MODEL = os.getenv(  # 重排模型名
+    "RERANK_MODEL",  # 环境变量名
+    "BAAI/bge-reranker-base" if os.getenv("RERANK_PROVIDER", "local").strip().lower() != "dashscope" else "qwen3-rerank",  # 本地 bge 或云端千问
+).strip()  # 去掉首尾空白
 RERANK_TOP_N = int(os.getenv("RERANK_TOP_N", "0"))  # 0 表示跟 SIMILARITY_TOP_K / 请求 k 一致
 COMPRESS_ENABLED = _env_bool("COMPRESS_ENABLED", True)  # 句子级上下文压缩
 COMPRESS_PERCENTILE = float(os.getenv("COMPRESS_PERCENTILE", "0.5"))  # 每片段保留相关句比例
 REORDER_ENABLED = _env_bool("REORDER_ENABLED", True)  # 长上下文首尾重排版
 # Corrective RAG：过滤无关片段；全无关则改写查询再搜一次（库内修正，不联网）
-CRAG_ENABLED = _env_bool("CRAG_ENABLED", True)
+CRAG_ENABLED = _env_bool("CRAG_ENABLED", True)  # Corrective RAG 总开关
 CRAG_VERBOSE = _env_bool("CRAG_VERBOSE", True)  # 终端打印每篇相关/无关
 # Self-RAG（讲义工程版）：Retrieve 门控 + ISSUP 验据修正 + ISUSE 打分
 SELF_RAG_ENABLED = _env_bool("SELF_RAG_ENABLED", False)  # 默认关，前端勾选开启
-SELF_RAG_VERBOSE = _env_bool("SELF_RAG_VERBOSE", True)
+SELF_RAG_VERBOSE = _env_bool("SELF_RAG_VERBOSE", True)  # Self-RAG 过程日志
 # RAG 评估（飞书 01-RAG评估）：生成侧 Faithfulness/Relevancy/Correctness
-EVAL_VERBOSE = _env_bool("EVAL_VERBOSE", True)
+EVAL_VERBOSE = _env_bool("EVAL_VERBOSE", True)  # 评估过程日志
 
 HOST = os.getenv("SEARCH_HOST", "127.0.0.1")  # Web 服务监听地址
 PORT = int(os.getenv("SEARCH_PORT", "8003"))  # 默认 8003，避免和「带安全校验的聊天机器人」8001 冲突

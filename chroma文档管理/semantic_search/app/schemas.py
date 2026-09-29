@@ -68,7 +68,7 @@ class PreRetrievalInfo(BaseModel):  # 检索前优化中间产物（便于作业
 
 
 class CragInfo(BaseModel):  # Corrective RAG 过程信息
-    enabled: bool = False
+    enabled: bool = False  # 是否启用了 CRAG
     rewritten_query: str | None = None  # 全无关时的改写句
     retried: bool = False  # 是否触发了改写重检索
     before_count: int = 0  # 过滤前篇数
@@ -81,86 +81,86 @@ class AskRequest(BaseModel):  # POST /ask：基础 RAG + 可选优化链路
     question: str = Field(..., description="用户问题", min_length=1)  # 必填用户问题
     k: int = Field(5, description="检索条数", ge=1, le=100)  # 最终返回来源条数
     # ----- ModularRAG 风格预设（basic / hybrid_search / advanced / full_optimization）-----
-    preset: str | None = Field(
-        None,
-        description="一键预设；与下方开关同时传时，显式开关优先覆盖预设",
-    )
+    preset: str | None = Field(  # 一键预设名，可空
+        None,  # 默认不指定预设
+        description="一键预设；与下方开关同时传时，显式开关优先覆盖预设",  # OpenAPI 字段说明
+    )  # preset 字段结束
     # ----- 检索前 -----
-    use_pre: bool | None = Field(None, description="是否启用检索前优化；null 跟预设/.env")
-    strategy: str | None = Field(
-        None,
-        description="检索前策略: none / clean / rewrite / hyde",
-    )
+    use_pre: bool | None = Field(None, description="是否启用检索前优化；null 跟预设/.env")  # 检索前总开关
+    strategy: str | None = Field(  # 检索前策略名
+        None,  # 默认跟预设或 .env
+        description="检索前策略: none / clean / rewrite / hyde",  # OpenAPI 字段说明
+    )  # strategy 字段结束
     # ----- 检索中 / 检索后 / CRAG（勾选开关；None 表示跟从预设或 .env）-----
-    use_hybrid: bool | None = Field(None, description="混合检索 向量+BM25；null=跟配置")
-    fusion_mode: str | None = Field(
-        None,
-        description="融合策略: reciprocal_rerank / relative_score / simple",
-    )
-    num_queries: int | None = Field(
-        None,
-        ge=1,
-        le=8,
-        description="Multi-Query 变体数；1=不做查询扩展，>1=LLM 生成多查询（对齐 ModularRAG）",
-    )
-    use_rerank: bool | None = Field(None, description="重排序；null=跟配置")
-    use_compress: bool | None = Field(None, description="上下文压缩；null=跟配置")
-    use_reorder: bool | None = Field(None, description="长上下文重排；null=跟配置")
-    use_crag: bool | None = Field(None, description="Corrective RAG；null=跟配置")
-    use_self_rag: bool | None = Field(
-        None,
-        description="Self-RAG：Retrieve 门控 + ISSUP 验据修正 + ISUSE；null=跟配置",
-    )
+    use_hybrid: bool | None = Field(None, description="混合检索 向量+BM25；null=跟配置")  # 混合检索开关
+    fusion_mode: str | None = Field(  # 多路融合策略
+        None,  # 默认跟配置
+        description="融合策略: reciprocal_rerank / relative_score / simple",  # OpenAPI 字段说明
+    )  # fusion_mode 字段结束
+    num_queries: int | None = Field(  # Multi-Query 变体数量
+        None,  # 默认跟配置
+        ge=1,  # 至少 1
+        le=8,  # 最多 8
+        description="Multi-Query 变体数；1=不做查询扩展，>1=LLM 生成多查询（对齐 ModularRAG）",  # OpenAPI 字段说明
+    )  # num_queries 字段结束
+    use_rerank: bool | None = Field(None, description="重排序；null=跟配置")  # 重排开关
+    use_compress: bool | None = Field(None, description="上下文压缩；null=跟配置")  # 压缩开关
+    use_reorder: bool | None = Field(None, description="长上下文重排；null=跟配置")  # 长上下文重排开关
+    use_crag: bool | None = Field(None, description="Corrective RAG；null=跟配置")  # CRAG 开关
+    use_self_rag: bool | None = Field(  # Self-RAG 开关
+        None,  # 默认跟配置
+        description="Self-RAG：Retrieve 门控 + ISSUP 验据修正 + ISUSE；null=跟配置",  # OpenAPI 字段说明
+    )  # use_self_rag 字段结束
     # ----- RAG 评估（飞书：生成质量）-----
-    use_eval: bool | None = Field(
-        False,
-        description="是否对本次回答做 Faithfulness/Relevancy（+可选 Correctness）评估",
-    )
-    reference: str | None = Field(
-        None,
-        description="标准答案；提供时额外算 Correctness（1~5）",
-    )
+    use_eval: bool | None = Field(  # 是否做生成质量评估
+        False,  # 默认关闭评估
+        description="是否对本次回答做 Faithfulness/Relevancy（+可选 Correctness）评估",  # OpenAPI 字段说明
+    )  # use_eval 字段结束
+    reference: str | None = Field(  # 标准答案（算 Correctness 用）
+        None,  # 默认不提供
+        description="标准答案；提供时额外算 Correctness（1~5）",  # OpenAPI 字段说明
+    )  # reference 字段结束
 
 
 class OptimizeFlags(BaseModel):  # 本次实际生效的优化开关（回显给前端）
-    preset: str | None = None
-    use_pre: bool = True
-    strategy: str = "rewrite"
-    use_hybrid: bool = True
-    fusion_mode: str = "reciprocal_rerank"
-    num_queries: int = 1
-    use_rerank: bool = True
-    use_compress: bool = True
-    use_reorder: bool = True
-    use_crag: bool = True
-    use_self_rag: bool = False
-    use_eval: bool = False
+    preset: str | None = None  # 实际采用的预设名
+    use_pre: bool = True  # 是否启用了检索前优化
+    strategy: str = "rewrite"  # 实际检索前策略
+    use_hybrid: bool = True  # 是否混合检索
+    fusion_mode: str = "reciprocal_rerank"  # 实际融合策略
+    num_queries: int = 1  # 实际 Multi-Query 数
+    use_rerank: bool = True  # 是否重排
+    use_compress: bool = True  # 是否上下文压缩
+    use_reorder: bool = True  # 是否长上下文重排
+    use_crag: bool = True  # 是否 Corrective RAG
+    use_self_rag: bool = False  # 是否 Self-RAG
+    use_eval: bool = False  # 是否做了生成评估
 
 
 class SelfRagInfo(BaseModel):  # Self-RAG 过程信息（作业演示）
-    enabled: bool = False
+    enabled: bool = False  # 是否启用了 Self-RAG
     retrieve: bool | None = None  # True=需要检索；False=直接答；None=未跑
-    skipped_retrieval: bool = False
-    isrel_shared_with_crag: bool = False
+    skipped_retrieval: bool = False  # 是否跳过了检索
+    isrel_shared_with_crag: bool = False  # 是否复用了 CRAG 的相关判定
     issup: str | None = None  # FULLY / PARTIALLY / NO
-    corrected: bool = False
+    corrected: bool = False  # 是否做了验据修正
     isuse: int | None = None  # 1~5
-    message: str = "skipped"
+    message: str = "skipped"  # 过程摘要文案
 
 
-class MetricScore(BaseModel):
-    passing: bool | None = None
-    score: float | None = None
-    feedback: str | None = None
+class MetricScore(BaseModel):  # 单项评估分数结构
+    passing: bool | None = None  # 是否通过阈值
+    score: float | None = None  # 数值分数
+    feedback: str | None = None  # 评估反馈文本
 
 
-class GenerationEvalInfo(BaseModel):
-    enabled: bool = False
-    faithfulness: MetricScore | None = None
-    relevancy: MetricScore | None = None
-    correctness: MetricScore | None = None
-    diagnosis: str | None = None
-    message: str = "skipped"
+class GenerationEvalInfo(BaseModel):  # 生成质量评估汇总
+    enabled: bool = False  # 是否跑了生成评估
+    faithfulness: MetricScore | None = None  # 忠实度（是否胡编）
+    relevancy: MetricScore | None = None  # 相关性（是否答非所问）
+    correctness: MetricScore | None = None  # 正确性（相对标准答案）
+    diagnosis: str | None = None  # 简短诊断结论
+    message: str = "skipped"  # 过程摘要文案
 
 
 class AskResponse(BaseModel):  # /ask 的响应体
@@ -174,36 +174,36 @@ class AskResponse(BaseModel):  # /ask 的响应体
     optimizations: OptimizeFlags | None = None  # 本次实际开启的优化项
 
 
-class RetrievalEvalCase(BaseModel):
-    query: str = Field(..., min_length=1)
-    keywords: List[str] = Field(default_factory=list, description="命中判定关键词")
+class RetrievalEvalCase(BaseModel):  # 单条检索评测样例
+    query: str = Field(..., min_length=1)  # 评测查询，至少 1 字
+    keywords: List[str] = Field(default_factory=list, description="命中判定关键词")  # 命中判定用关键词
 
 
-class RetrievalEvalRequest(BaseModel):
-    k: int = Field(5, ge=1, le=100)
-    use_hybrid: bool | None = Field(True, description="是否混合检索")
-    use_rerank: bool | None = Field(False, description="是否重排")
-    use_compress: bool | None = Field(False)
-    use_reorder: bool | None = Field(False)
-    cases: List[RetrievalEvalCase] | None = Field(
-        None,
-        description="自定义评测集；为空则用 company_info 默认集",
-    )
+class RetrievalEvalRequest(BaseModel):  # POST /eval/retrieval 请求体
+    k: int = Field(5, ge=1, le=100)  # 检索 Top-K
+    use_hybrid: bool | None = Field(True, description="是否混合检索")  # 混合检索开关
+    use_rerank: bool | None = Field(False, description="是否重排")  # 重排开关
+    use_compress: bool | None = Field(False)  # 压缩开关，默认关
+    use_reorder: bool | None = Field(False)  # 长上下文重排开关，默认关
+    cases: List[RetrievalEvalCase] | None = Field(  # 自定义评测集
+        None,  # 为空则用默认集
+        description="自定义评测集；为空则用 company_info 默认集",  # OpenAPI 字段说明
+    )  # cases 字段结束
 
 
-class RetrievalEvalItem(BaseModel):
-    query: str
-    hit: bool
-    mrr: float
-    retrieved_preview: List[str] = Field(default_factory=list)
-    error: str | None = None
+class RetrievalEvalItem(BaseModel):  # 单条检索评测结果
+    query: str  # 本条查询
+    hit: bool  # 是否命中（关键词出现在检索结果中）
+    mrr: float  # 本条 Mean Reciprocal Rank
+    retrieved_preview: List[str] = Field(default_factory=list)  # 检索结果预览片段
+    error: str | None = None  # 本条评测出错信息
 
 
-class RetrievalEvalResponse(BaseModel):
-    hit_rate: float
-    mrr: float
-    total: int
-    results: List[RetrievalEvalItem] = Field(default_factory=list)
-    message: str = "ok"
-    diagnosis: str | None = None
-    note: str = "Hit Rate / MRR；答案差时先看本结果定位检索瓶颈"
+class RetrievalEvalResponse(BaseModel):  # /eval/retrieval 响应体
+    hit_rate: float  # 整体命中率
+    mrr: float  # 整体 MRR
+    total: int  # 评测样例总数
+    results: List[RetrievalEvalItem] = Field(default_factory=list)  # 逐条明细
+    message: str = "ok"  # 状态文案
+    diagnosis: str | None = None  # 简短诊断（检索瓶颈提示）
+    note: str = "Hit Rate / MRR；答案差时先看本结果定位检索瓶颈"  # 使用说明
