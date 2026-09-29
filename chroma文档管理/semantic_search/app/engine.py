@@ -34,6 +34,7 @@ from semantic_search.app.config import (  # 导入运行时配置常量
     REORDER_ENABLED,
     RERANK_ENABLED,
     RERANK_PROVIDER,
+    SELF_RAG_ENABLED,
     SIMILARITY_TOP_K,  # 默认 Top-K
 )
 from semantic_search.app.service.retrieval_optimize import (
@@ -107,7 +108,8 @@ class SemanticSearchEngine:  # Native RAG 引擎主体
         print(
             "检索优化: "
             f"hybrid={HYBRID_ENABLED}, rerank={RERANK_ENABLED}/{RERANK_PROVIDER}, "
-            f"compress={COMPRESS_ENABLED}, reorder={REORDER_ENABLED}, crag={CRAG_ENABLED}"
+            f"compress={COMPRESS_ENABLED}, reorder={REORDER_ENABLED}, "
+            f"crag={CRAG_ENABLED}, self_rag={SELF_RAG_ENABLED}"
         )
 
     def _init_embed_model(self):  # 按配置选择 Embedding 实现
