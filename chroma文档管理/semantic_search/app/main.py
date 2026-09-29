@@ -24,7 +24,7 @@ from semantic_search.app.config import (  # 从配置模块导入密钥、模型
     LLM_MODEL,  # 大模型名称，如 deepseek-v4-flash
     LLM_PROVIDER,  # 大模型提供方：deepseek 或 dashscope
     PORT,  # 服务端口，默认 8003
-)
+)  # 括号结束
 from semantic_search.app.engine import SUPPORTED_EXTS, SemanticSearchEngine  # 引擎 + 允许的文件扩展名
 from semantic_search.app.schemas import (  # Pydantic 请求/响应模型，给接口做校验和文档
     AddDocumentsRequest,  # 追加纯文本文档的请求体
@@ -46,7 +46,7 @@ from semantic_search.app.schemas import (  # Pydantic 请求/响应模型，给�
     QueryResponse,  # 一次性问答响应体（含来源）
     SearchRequest,  # 语义搜索请求体
     SearchResponse,  # 语义搜索响应体
-)
+)  # 括号结束
 from semantic_search.app.service import RagAskService  # 业务编排：pre-retrieval → 检索 → 生成
 from semantic_search.app.service.rag_eval import DEFAULT_RETRIEVAL_CASES, evaluate_retrieval_cases  # 检索评测默认集与评估函数
 from semantic_search.app.service.retrieval_optimize import apply_postprocessors  # 检索后：重排/压缩/重排版
@@ -61,7 +61,7 @@ def _require_engine(app: FastAPI) -> SemanticSearchEngine:  # 从 app 取出已�
         raise HTTPException(  # 返回 HTTP 503 给调用方
             status_code=503,  # 服务暂时不可用
             detail="搜索引擎未初始化，请检查 Windows 环境变量 DEEPSEEK_API_KEY",  # 错误说明
-        )
+        )  # 括号结束
     return engine  # 引擎可用，返回给路由函数继续用
 
 
@@ -73,7 +73,7 @@ async def lifespan(app: FastAPI):  # FastAPI 启动和关闭时都会走到这�
     llm_ready = (  # 判断当前配置下大模型密钥是否齐备
         (LLM_PROVIDER == "deepseek" and bool(DEEPSEEK_API_KEY))  # DeepSeek 模式需要 DEEPSEEK_API_KEY
         or (LLM_PROVIDER == "dashscope" and bool(DASHSCOPE_API_KEY))  # 千问模式需要 DASHSCOPE_API_KEY
-    )
+    )  # 括号结束
     if llm_ready:  # 密钥齐了才真正创建引擎
         app.state.search_engine = SemanticSearchEngine()  # 初始化 Embedding、LLM、Chroma、索引
         total = app.state.search_engine.seed_if_empty()  # 库空时写入示例文档并加载 data 目录
@@ -95,7 +95,7 @@ app = FastAPI(  # 创建 FastAPI 应用实例
     description="LlamaIndex + DeepSeek + Chroma：基础 RAG + 检索前优化（清洗/重写/HyDE）",  # API 文档说明
     version="2.1.0",  # 接口版本号
     lifespan=lifespan,  # 绑定上面的启动/关闭钩子
-)
+)  # 括号结束
 
 
 @app.get("/")  # 浏览器访问根路径时走这个函数
@@ -108,8 +108,8 @@ async def root():  # 返回前端问答 / 搜索页面
         headers={  # 响应头：禁止浏览器缓存旧页面
             "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",  # HTTP/1.1 禁缓存
             "Pragma": "no-cache",  # 兼容旧代理
-        },
-    )
+        },  # 续行参数/元素
+    )  # 括号结束
 
 
 @app.get("/api")  # JSON 形式的服务入口说明（以前根路径返回的内容挪到这里）
@@ -126,7 +126,7 @@ async def api_info():  # 方便程序或调试查看有哪些入口
         "eval_retrieval": "POST /eval/retrieval",  # Hit Rate / MRR
         "chat": "POST /chat",  # 多轮对话接口
         "ingest": "POST /ingest",  # 本地文件导入接口
-    }
+    }  # 字典/集合结束
 
 
 @app.post("/ask", response_model=AskResponse)  # 作业主接口：可勾选优化方向的 RAG 问答
@@ -235,14 +235,14 @@ async def eval_retrieval(request: RetrievalEvalRequest):  # 请求体含 k / 开
 async def search_get(  # 适合浏览器地址栏直接试
     q: str = Query(..., description="搜索查询", min_length=1),  # 必填查询词，至少 1 个字符
     k: int = Query(5, description="返回结果数量", ge=1, le=100),  # 返回条数，默认 5，范围 1~100
-):
+):  # 参数列表结束
     """GET 搜索，只检索相似文档，不调用大模型。"""  # OpenAPI 接口说明
     results = _require_engine(app).search(q, k)  # 调用引擎做向量检索
     return SearchResponse(  # 包装成统一响应结构
         query=q,  # 回显用户查询
         results=[DocumentResponse(**item) for item in results],  # 把每条 dict 转成 DocumentResponse
         total=len(results),  # 本次返回条数
-    )
+    )  # 括号结束
 
 
 @app.post("/search", response_model=SearchResponse)  # POST 语义搜索，适合前端 / 程序化调用
@@ -253,14 +253,14 @@ async def search_post(request: SearchRequest):  # 请求体是 JSON：{"query":"
         query=request.query,  # 回显查询文本
         results=[DocumentResponse(**item) for item in results],  # 结构化结果
         total=len(results),  # 结果数量
-    )
+    )  # 括号结束
 
 
 @app.get("/query", response_model=QueryResponse)  # GET 一次性 RAG 问答
 async def query_get(  # 检索后交给大模型生成答案，并带来源
     q: str = Query(..., description="用户问题", min_length=1),  # 必填问题
     k: int = Query(5, description="检索条数", ge=1, le=100),  # 检索 Top-K
-):
+):  # 参数列表结束
     """一次性 RAG 问答：检索后交给大模型生成。"""  # OpenAPI 接口说明
     try:  # 引擎缺 LLM 时会抛 RuntimeError
         payload = _require_engine(app).query(q, k)  # 执行「检索 + 生成」
@@ -270,7 +270,7 @@ async def query_get(  # 检索后交给大模型生成答案，并带来源
         question=payload["question"],  # 原问题
         answer=payload["answer"],  # 模型生成的答案
         sources=[DocumentResponse(**item) for item in payload["sources"]],  # 引用的知识片段
-    )
+    )  # 括号结束
 
 
 @app.post("/query", response_model=QueryResponse)  # POST 一次性 RAG 问答
@@ -284,7 +284,7 @@ async def query_post(request: QueryRequest):  # JSON 体：question + k
         question=payload["question"],  # 原问题
         answer=payload["answer"],  # 模型答案
         sources=[DocumentResponse(**item) for item in payload["sources"]],  # 引用来源
-    )
+    )  # 括号结束
 
 
 @app.post("/chat", response_model=ChatResponse)  # 多轮对话接口
@@ -309,7 +309,7 @@ async def add_documents(request: AddDocumentsRequest):  # documents 是字符串
     return {  # 返回操作结果摘要
         "message": f"成功添加 {len(request.documents)} 个文档",  # 本次提交的文档条数
         "total_documents": engine.collection.count(),  # 写入后集合总条数
-    }
+    }  # 字典/集合结束
 
 
 @app.post("/ingest")  # 对应讲义 SimpleDirectoryReader：从本地文件/目录导入
@@ -355,7 +355,7 @@ async def upload_documents(  # multipart：files + splitter
         raise HTTPException(  # 没有可入库文件
             status_code=400,  # Bad Request
             detail=f"没有可导入的文件。支持扩展名: {', '.join(SUPPORTED_EXTS)}；已跳过: {skipped}",  # 说明原因
-        )
+        )  # 括号结束
 
     engine = _require_engine(app)  # 拿到引擎
     result = engine.ingest_files(input_files=saved_paths, splitter=splitter)  # 加载→分块→向量化
@@ -365,7 +365,7 @@ async def upload_documents(  # multipart：files + splitter
         "skipped_files": skipped,  # 扩展名不支持而跳过的
         "splitter": splitter,  # 本次使用的分块策略
         **result,  # 合并 loaded_documents / nodes / total_documents
-    }
+    }  # 字典/集合结束
 
 
 @app.get("/stats")  # 查看知识库与模型配置统计
@@ -382,7 +382,7 @@ async def health_check():  # 健康检查接口
         return {  # 返回 error 状态而不是抛异常
             "status": "error",  # 前端侧栏显示红点
             "message": "搜索引擎未初始化，请在 Windows 用户环境变量中配置 DEEPSEEK_API_KEY",  # 缺 Key 提示
-        }
+        }  # 字典/集合结束
 
     stats = engine.get_stats()  # 读取运行时统计
     return {  # 精简字段给前端展示
@@ -393,7 +393,7 @@ async def health_check():  # 健康检查接口
         "llm_model": stats["llm_model"],  # LLM 模型名
         "total_documents": stats["total_documents"],  # 向量库文档数
         "index_type": stats["index_type"],  # 索引类型说明
-    }
+    }  # 字典/集合结束
 
 
 @app.delete("/documents")  # 清空向量集合（危险操作，调试用）

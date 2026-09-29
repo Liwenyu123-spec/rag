@@ -21,7 +21,7 @@ def main() -> None:  # 依次测健康检查、搜索、问答
         f"{BASE_URL}/search",  # 搜索接口
         params={"q": "向量搜索工具", "k": 3},  # 查询词和返回条数
         timeout=30,  # 最长等 30 秒
-    )
+    )  # 括号结束
     print("搜索结果:")  # 打印区块标题
     print(json.dumps(response.json(), indent=2, ensure_ascii=False))  # 打印检索结果
     if not response.ok:  # HTTP 状态码不是 2xx
@@ -31,7 +31,7 @@ def main() -> None:  # 依次测健康检查、搜索、问答
         f"{BASE_URL}/query",  # 问答接口
         params={"q": "迟到怎么扣钱", "k": 3},  # 示例问题（依赖知识库内容）
         timeout=120,  # 调大模型可能较慢，给 120 秒
-    )
+    )  # 括号结束
     print()  # 空行
     print("RAG 问答:")  # 打印区块标题
     print(json.dumps(query.json(), indent=2, ensure_ascii=False))  # 打印答案和来源

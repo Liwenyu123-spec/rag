@@ -20,7 +20,7 @@ from semantic_search.app.config import (  # 从配置读取各优化开关与默
     SELF_RAG_ENABLED,  # Self-RAG 开关默认值
     SELF_RAG_VERBOSE,  # Self-RAG 是否打印详细日志
     SIMILARITY_TOP_K,  # 默认召回 Top-K
-)
+)  # 括号结束
 from semantic_search.app.service.crag import apply_crag, filter_relevant_nodes  # CRAG 纠错与相关性过滤
 from semantic_search.app.service.pre_retrieval import prepare_retrieval_queries  # 检索前：清洗/改写/HyDE
 from semantic_search.app.service.presets import apply_preset  # 按预设名合并各优化开关
@@ -29,7 +29,7 @@ from semantic_search.app.service.retrieval_optimize import apply_postprocessors 
 from semantic_search.app.service.self_rag import (  # Self-RAG：决定是否检索、生成后校验
     apply_self_rag_post_generate,  # 生成后 ISSUP/ISUSE 与纠正
     decide_retrieve,  # 生成前判断要不要查库
-)
+)  # 括号结束
 
 ASK_QA_PROMPT = PromptTemplate(  # 组装「上下文 + 问题 → 回答」的 QA 模板
     f"{RAG_SYSTEM_PROMPT}。只依据给定上下文回答；上下文没有的信息请明确说不知道。\n\n"  # 系统约束：忠实于上下文

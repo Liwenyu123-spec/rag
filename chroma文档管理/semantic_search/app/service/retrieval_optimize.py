@@ -21,7 +21,7 @@ from semantic_search.app.config import (  # 从配置读取检索/后处理开�
     RERANK_TOP_N,  # 精排保留条数上限
     RETRIEVE_CANDIDATES,  # 粗排候选数下限
     SIMILARITY_TOP_K,  # 默认最终 Top-K
-)
+)  # 括号结束
 
 if TYPE_CHECKING:  # 仅类型检查导入，避免运行期循环依赖
     from llama_index.core.base.base_retriever import BaseRetriever  # 检索器基类注解
@@ -112,7 +112,7 @@ def build_hybrid_retriever(  # 构建混合 / Multi-Query 检索器
                 num_queries=n_queries,  # LLM 生成的查询数
                 mode=mode if mode != "simple" else "reciprocal_rerank",  # simple 时改用 RRF
                 use_async=False,  # 同步执行，避免事件循环问题
-            )
+            )  # 括号结束
         except Exception as exc:  # noqa: BLE001  # 构建失败则降级
             print(f"警告: Multi-Query 构建失败，回退纯向量: {exc}")  # 打警告
             return vector_retriever  # 回退纯向量
@@ -135,14 +135,14 @@ def build_hybrid_retriever(  # 构建混合 / Multi-Query 检索器
             nodes=nodes,  # BM25 语料
             similarity_top_k=cand_k,  # 稀疏侧候选数
             tokenizer=lambda t: list(jieba.cut(t or "")),  # 中文分词 tokenizer
-        )
+        )  # 括号结束
         return QueryFusionRetriever(  # 双路融合
             retrievers=[vector_retriever, bm25_retriever],  # 稠密 + 稀疏
             similarity_top_k=cand_k,  # 融合后候选数
             num_queries=n_queries,  # 可叠加 Multi-Query
             mode=mode,  # 融合模式
             use_async=False,  # 同步
-        )
+        )  # 括号结束
     except Exception as exc:  # noqa: BLE001  # 构建失败降级
         print(f"警告: 构建混合检索器失败，回退纯向量: {exc}")  # 打警告
         return vector_retriever  # 回退纯向量
@@ -164,7 +164,7 @@ def _build_reranker(top_n: int) -> Any | None:  # 按配置构建重排器
                 model=RERANK_MODEL,  # 模型名
                 top_n=top_n,  # 保留条数
                 api_key=DASHSCOPE_API_KEY,  # API Key
-            )
+            )  # 括号结束
         except Exception as exc:  # noqa: BLE001  # 初始化失败
             print(f"警告: 初始化 DashScopeRerank 失败，跳过重排: {exc}")  # 打警告
             return None  # 跳过重排
@@ -209,8 +209,8 @@ def build_node_postprocessors(  # 组装后处理器流水线
                     embed_model=Settings.embed_model,  # 与检索同套嵌入
                     percentile_cutoff=COMPRESS_PERCENTILE,  # 保留高分百分位
                     tokenizer_fn=chinese_sentence_splitter,  # 中文切句函数
-                )
-            )
+                )  # 括号结束
+            )  # 括号结束
         except Exception as exc:  # noqa: BLE001  # 初始化失败则跳过压缩
             print(f"警告: 初始化 SentenceEmbeddingOptimizer 失败，跳过压缩: {exc}")  # 打警告
 
@@ -243,7 +243,7 @@ def apply_postprocessors(  # 对已召回节点串行跑后处理
         rerank_enabled=rerank_enabled,  # 重排覆盖
         compress_enabled=compress_enabled,  # 压缩覆盖
         reorder_enabled=reorder_enabled,  # 重排版覆盖
-    )
+    )  # 括号结束
     current = list(nodes)  # 可变副本，避免改动调用方列表
     for proc in procs:  # 按顺序跑每个后处理器
         try:  # 优先用 query_str 关键字

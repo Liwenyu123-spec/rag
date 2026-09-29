@@ -11,7 +11,7 @@ def main() -> None:  # 启动入口函数
         host=HOST,  # 监听主机，默认 127.0.0.1
         port=PORT,  # 监听端口，默认 8003
         reload=False,  # 关闭热重载，避免重复加载大模型
-    )
+    )  # 括号结束
 
 
 if __name__ == "__main__":  # 被 python -m semantic_search 执行时进入

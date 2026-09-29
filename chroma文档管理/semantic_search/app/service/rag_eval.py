@@ -21,28 +21,28 @@ DEFAULT_RETRIEVAL_CASES: list[dict] = [  # 默认检索评测用例（query + ke
         "query": "贝壳科技总部在哪里？",  # 评测问题
         "keywords": ["北京", "总部"],  # 命中判定关键词
         "reference": "贝壳科技总部地点是北京。",  # Correctness 用标准答案
-    },
+    },  # 续行参数/元素
     {  # 用例2：员工人数
         "query": "贝壳科技有多少员工？",  # 评测问题
         "keywords": ["2000", "员工"],  # 命中判定关键词
         "reference": "贝壳科技员工人数为 2000 人。",  # Correctness 用标准答案
-    },
+    },  # 续行参数/元素
     {  # 用例3：上下班时间
         "query": "公司上班和下班时间分别是几点？",  # 评测问题
         "keywords": ["9:00", "18:00", "上班", "下班"],  # 命中判定关键词
         "reference": "上班时间早上9:00，下班时间晚上18:00。",  # Correctness 用标准答案
-    },
+    },  # 续行参数/元素
     {  # 用例4：主营业务
         "query": "公司主要做什么业务？",  # 评测问题
         "keywords": ["AI", "大数据", "云计算", "业务"],  # 命中判定关键词
         "reference": "主要业务是 AI软件开发、大数据服务、云计算平台。",  # Correctness 用标准答案
-    },
+    },  # 续行参数/元素
     {  # 用例5：福利待遇
         "query": "公司有哪些福利？",  # 评测问题
         "keywords": ["五险一金", "年假", "福利"],  # 命中判定关键词
         "reference": "福利包括五险一金、带薪年假、节日福利、定期团建。",  # Correctness 用标准答案
-    },
-]
+    },  # 续行参数/元素
+]  # 列表结束
 
 
 def _pass_score(result: Any) -> tuple[bool | None, float | None, str | None]:  # 统一抽取评估三元组
@@ -60,7 +60,7 @@ def _pass_score(result: Any) -> tuple[bool | None, float | None, str | None]:  #
         bool(passing) if passing is not None else None,  # passing 转 bool；缺省则 None
         score_f,  # 数值分
         str(feedback).strip() if feedback else None,  # 反馈去空白；空则 None
-    )
+    )  # 括号结束
 
 
 def _to_response(answer: str, sources: list[dict] | list[NodeWithScore]) -> Response:  # 拼成评估用 Response
@@ -77,8 +77,8 @@ def _to_response(answer: str, sources: list[dict] | list[NodeWithScore]) -> Resp
                 NodeWithScore(  # LlamaIndex 带分节点
                     node=TextNode(text=str(text)),  # 文本节点承载正文
                     score=float(score) if score is not None else None,  # 有分则转 float
-                )
-            )
+                )  # 括号结束
+            )  # 括号结束
     return Response(response=answer or "", source_nodes=nodes)  # 组装完整 Response
 
 
@@ -101,7 +101,7 @@ def evaluate_generation(  # 生成质量评估入口
         "correctness": None,  # 正确性结果占位
         "diagnosis": None,  # 诊断文案占位
         "message": "ok",  # 状态消息
-    }
+    }  # 字典/集合结束
     if model is None:  # 没有可用 LLM
         info["message"] = "no_llm"  # 标记缺模型
         info["enabled"] = False  # 关闭评估
@@ -112,7 +112,7 @@ def evaluate_generation(  # 生成质量评估入口
             CorrectnessEvaluator,  # 相对标准答案打分
             FaithfulnessEvaluator,  # 是否忠实于上下文
             RelevancyEvaluator,  # 答案是否相关问题
-        )
+        )  # 括号结束
     except ImportError as exc:  # 包缺失或版本不兼容
         info["message"] = f"import_error:{exc}"  # 记录导入错误
         info["enabled"] = False  # 关闭评估
@@ -150,7 +150,7 @@ def evaluate_generation(  # 生成质量评估入口
                 query=question,  # 问题
                 response=answer,  # 模型答案（字符串）
                 reference=str(reference).strip(),  # 标准答案去空白
-            )
+            )  # 括号结束
             p, s, f = _pass_score(corr_r)  # 抽出三元组
             info["correctness"] = {"passing": p, "score": s, "feedback": f}  # 写入结果
             if verb:  # 需要日志时
@@ -223,7 +223,7 @@ def evaluate_retrieval_cases(  # 批量检索评估入口
             "results": [],  # 无明细
             "message": "empty_cases",  # 状态：空用例
             "diagnosis": "请提供评测问题与 keywords",  # 提示补数据
-        }
+        }  # 字典/集合结束
 
     results: list[dict] = []  # 逐题结果列表
     for item in cases:  # 遍历每道评测题
@@ -235,14 +235,14 @@ def evaluate_retrieval_cases(  # 批量检索评估入口
             raw = list(retrieve_fn(query) or [])  # 保证得到列表
         except Exception as exc:  # noqa: BLE001  # 单题检索失败不中断整批
             results.append(  # 记录失败明细
-                {
+                {  # 执行本行逻辑
                     "query": query,  # 原问题
                     "hit": False,  # 记未命中
                     "mrr": 0.0,  # MRR 记 0
                     "retrieved_preview": [],  # 无预览
                     "error": str(exc),  # 错误信息
-                }
-            )
+                }  # 字典/集合结束
+            )  # 括号结束
             continue  # 继续下一题
 
         texts: list[str] = []  # 全文列表（供命中判定）
@@ -257,13 +257,13 @@ def evaluate_retrieval_cases(  # 批量检索评估入口
 
         hit, mrr = _is_relevant_hit(texts, keywords)  # 关键词判定 Hit/MRR
         results.append(  # 写入本题结果
-            {
+            {  # 执行本行逻辑
                 "query": query,  # 原问题
                 "hit": hit,  # 是否命中
                 "mrr": round(mrr, 4),  # MRR 保留四位
                 "retrieved_preview": previews[:5],  # 最多展示 5 条预览
-            }
-        )
+            }  # 字典/集合结束
+        )  # 括号结束
         if verb:  # 需要日志时
             print(f"[Eval] {'HIT' if hit else 'MISS'} MRR={mrr:.3f} | {query[:40]}")  # 打印单题摘要
 
@@ -274,7 +274,7 @@ def evaluate_retrieval_cases(  # 批量检索评估入口
         "检索 Hit Rate 偏低：优先调分块大小、Embedding、混合检索、重排、Top-K"  # 偏低时查检索侧
         if hit_rate < 0.7  # 阈值 0.7
         else "检索侧整体可用；若答案仍差，重点查生成 Faithfulness/Relevancy"  # 可用则转查生成
-    )
+    )  # 括号结束
     return {  # 汇总返回
         "hit_rate": round(hit_rate, 4),  # Hit Rate 四位小数
         "mrr": round(avg_mrr, 4),  # 平均 MRR 四位小数
@@ -282,4 +282,4 @@ def evaluate_retrieval_cases(  # 批量检索评估入口
         "results": results,  # 逐题明细
         "message": "ok",  # 正常完成
         "diagnosis": diagnosis,  # 诊断建议
-    }
+    }  # 字典/集合结束

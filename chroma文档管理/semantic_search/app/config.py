@@ -47,9 +47,9 @@ def get_windows_env(name: str) -> str:  # 按优先级查找环境变量
             winreg.HKEY_LOCAL_MACHINE,  # 本机注册表根
             r"SYSTEM\CurrentControlSet\Control\Session Manager\Environment",  # 系统环境变量路径
             name,  # 变量名
-        )
+        )  # 括号结束
         or ""  # 读不到就返回空串
-    )
+    )  # 括号结束
 
 
 DASHSCOPE_API_KEY = get_windows_env("DASHSCOPE_API_KEY")  # 阿里云千问 / 百炼 Key
@@ -78,12 +78,12 @@ else:  # 千问向量模型默认名
 EMBEDDING_API_BASE = os.getenv(  # OpenAI 兼容的 Embedding 接口地址（千问兼容模式）
     "EMBEDDING_API_BASE",  # 环境变量名
     "https://dashscope.aliyuncs.com/compatible-mode/v1",  # 默认兼容模式地址
-)
+)  # 括号结束
 
 RAG_SYSTEM_PROMPT = os.getenv(  # 多轮 RAG 对话的系统提示词
     "RAG_SYSTEM_PROMPT",  # 环境变量名
     "你是一个知识库助手，根据检索的内容，用简体中文回答问题",  # 默认中文助手人设
-)
+)  # 括号结束
 
 COLLECTION_NAME = os.getenv("CHROMA_COLLECTION", "native_rag")  # Chroma 集合名
 CHROMA_PERSIST_DIR = os.getenv(  # Chroma 持久化目录

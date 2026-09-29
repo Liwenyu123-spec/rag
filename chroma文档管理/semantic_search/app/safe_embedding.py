@@ -18,14 +18,14 @@ class SafeDashScopeEmbedding(BaseEmbedding):  # 包装 DashScope，自动按批�
     _batch_limit: int = PrivateAttr(default=10)  # 每批最多条数（API 限制）
 
     def __init__(  # 构造：创建内层模型并固定批上限
-        self,
-        *,
+        self,  # 续行参数/元素
+        *,  # 续行参数/元素
         model_name: str = "text-embedding-v3",  # 默认 DashScope 向量模型
         api_key: str | None = None,  # API Key；None 则走环境变量
         text_type: str = "document",  # 文本类型：document / query
         batch_limit: int = 10,  # 调用方也可改批大小（仍至少为 1）
         **kwargs: Any,  # 透传给 BaseEmbedding
-    ):
+    ):  # 参数列表结束
         super().__init__(**kwargs)  # 先初始化基类字段
         from llama_index.embeddings.dashscope import DashScopeEmbedding  # 延迟导入，避免无依赖时拖垮模块
 
@@ -33,10 +33,10 @@ class SafeDashScopeEmbedding(BaseEmbedding):  # 包装 DashScope，自动按批�
             model_name=model_name,  # 模型名
             api_key=api_key,  # 密钥
             text_type=text_type,  # document 或 query
-        )
+        )  # 括号结束
         self._batch_limit = max(1, int(batch_limit or 10))  # 批上限至少为 1
 
-    @classmethod
+    @classmethod  # 装饰器
     def class_name(cls) -> str:  # LlamaIndex 序列化/识别用类名
         return "SafeDashScopeEmbedding"  # 固定类名字符串
 
@@ -55,7 +55,7 @@ class SafeDashScopeEmbedding(BaseEmbedding):  # 包装 DashScope，自动按批�
             batch = texts[i : i + limit]  # 当前这一批文本
             embs = self._inner.get_text_embedding_batch(  # 调 DashScope 本批向量化
                 batch, show_progress=show_progress  # 透传进度条开关
-            )
+            )  # 括号结束
             if not embs:  # API 返回空则视为失败
                 raise RuntimeError(f"DashScope 返回空 embedding（batch {i // limit + 1}）")  # 指出第几批
             all_embeddings.extend(embs)  # 追加到总结果
