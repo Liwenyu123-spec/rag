@@ -1,0 +1,91 @@
+01-RAG评估
+今天修改
+
+
+
+Hit Rate 和 MRR 是最常用、最易自动化的两个检索指标。LlamaIndex 的 RetrieverEvaluator 直接内置了它们。
+
+2.2 生成质量（Generation Quality）
+衡量"答案好不好"。LlamaIndex 把生成评估拆成三个互补的维度，关键优势是前两个不需要人工标准答案：
+
+
+
+•
+忠实度只关心"答案有没有出处"，哪怕答案恰好答错了问题但忠于资料，也算忠实——所以要和相关性一起看。
+•
+相关性关心"答没答到点子上"。
+•
+正确性需要人工标注的 reference 答案，最接近"考试打分"。
+下面分别演示：检索评估（Hit Rate + MRR） 与 生成评估（Faithfulness + Relevancy + Correctness），全部使用 LlamaIndex 内置评估器，无需手写打分逻辑。
+诊断思路：
+答案差先看检索指标—— 检索没召回对，锅在分块 /embedding/ 重排；
+检索对了答案还错，锅在 prompt / 上下文 / 模型。
+
+2.3 在项目周期怎么使用
+
+
+
+
+三、示例代码（LlamaIndex 内置评估器）：
+1、准备一份有干扰信息的文档
+data\company_info.txt
+
+代码块
+Bash
+复制
+公司名称：贝壳科技
+成立时间：2010年
+总部地点：北京
+员工人数：2000人
+上班时间：早上9:00
+下班时间：晚上18:00
+午休时间：12:00-13:00
+公司主要业务：AI软件开发、大数据服务、云计算平台
+公司福利：五险一金、带薪年假、节日福利、定期团建
+
+2023年公司调整过一次考勤制度，但后来恢复。
+某合作公司上班时间为 10:00-19:00，与我们不同。
+部分部门偶尔加班，但标准工时不变。
+另一个子公司员工数量为 300 人，注意不要混淆。
+子公司业务为销售，与总部不同。
+
+2、生成质量评估：Faithfulness + Relevancy + Correctness
+LlamaIndex 内置了评估器，不用自己写打分 prompt。用通义千问 qwen-plus 当评委（裁判模型），对 RAG 的回答打分。
+依赖安装：
+
+代码块
+Bash
+复制
+pip install llama-index-core llama-index-llms-dashscope llama-index-embeddings-dashscope\n01-RAG评估\nHit Rate 和 MRR 是最常用、最易自动化的两个检索指标。LlamaIndex 的 RetrieverEvaluator 直接内置了它们。\nHit Rate 和 MRR 是最常用、最易自动化的两个检索指标。LlamaIndex 的 RetrieverEvaluator 直接内置了它们。\nHit Rate 和 MRR 是最常用、最易自动化的两个检索指标。LlamaIndex 的 RetrieverEvaluator 直接内置了它们。\n2.2 生成质量（Generation Quality）\n2.2 生成质量（Generation Quality）\n衡量"答案好不好"。LlamaIndex 把生成评估拆成三个互补的维度，关键优势是前两个不需要人工标准答案：\n衡量"答案好不好"。LlamaIndex 把生成评估拆成三个互补的维度，关键优势是前两个不需要人工标准答案：\n•
+忠实度只关心"答案有没有出处"，哪怕答案恰好答错了问题但忠于资料，也算忠实——所以要和相关性一起看。
+•
+相关性关心"答没答到点子上"。
+•
+正确性需要人工标注的 reference 答案，最接近"考试打分"。
+下面分别演示：检索评估（Hit Rate + MRR） 与 生成评估（Faithfulness + Relevancy + Correctness），全部使用 LlamaIndex 内置评估器，无需手写打分逻辑。
+诊断思路：
+答案差先看检索指标—— 检索没召回对，锅在分块 /embedding/ 重排；
+检索对了答案还错，锅在 prompt / 上下文 / 模型。\n•
+忠实度只关心"答案有没有出处"，哪怕答案恰好答错了问题但忠于资料，也算忠实——所以要和相关性一起看。\n忠实度只关心"答案有没有出处"，哪怕答案恰好答错了问题但忠于资料，也算忠实——所以要和相关性一起看。\n•
+相关性关心"答没答到点子上"。\n相关性关心"答没答到点子上"。\n•
+正确性需要人工标注的 reference 答案，最接近"考试打分"。\n正确性需要人工标注的 reference 答案，最接近"考试打分"。\n下面分别演示：检索评估（Hit Rate + MRR） 与 生成评估（Faithfulness + Relevancy + Correctness），全部使用 LlamaIndex 内置评估器，无需手写打分逻辑。\n下面分别演示：检索评估（Hit Rate + MRR） 与 生成评估（Faithfulness + Relevancy + Correctness），全部使用 LlamaIndex 内置评估器，无需手写打分逻辑。\n诊断思路：\n诊断思路：\n答案差先看检索指标—— 检索没召回对，锅在分块 /embedding/ 重排；\n答案差先看检索指标—— 检索没召回对，锅在分块 /embedding/ 重排；\n检索对了答案还错，锅在 prompt / 上下文 / 模型。\n检索对了答案还错，锅在 prompt / 上下文 / 模型。\n2.3 在项目周期怎么使用\n2.3 在项目周期怎么使用\n三、示例代码（LlamaIndex 内置评估器）：\n三、示例代码（LlamaIndex 内置评估器）：\n1、准备一份有干扰信息的文档\n1、准备一份有干扰信息的文档\ndata\company_info.txt\ndata\company_info.txt\n代码块
+Bash
+复制
+公司名称：贝壳科技
+成立时间：2010年
+总部地点：北京
+员工人数：2000人
+上班时间：早上9:00
+下班时间：晚上18:00
+午休时间：12:00-13:00
+公司主要业务：AI软件开发、大数据服务、云计算平台
+公司福利：五险一金、带薪年假、节日福利、定期团建
+
+2023年公司调整过一次考勤制度，但后来恢复。
+某合作公司上班时间为 10:00-19:00，与我们不同。
+部分部门偶尔加班，但标准工时不变。
+另一个子公司员工数量为 300 人，注意不要混淆。
+子公司业务为销售，与总部不同。\n代码块\n公司名称：贝壳科技\n成立时间：2010年\n总部地点：北京\n员工人数：2000人\n上班时间：早上9:00\n下班时间：晚上18:00\n午休时间：12:00-13:00\n公司主要业务：AI软件开发、大数据服务、云计算平台\n公司福利：五险一金、带薪年假、节日福利、定期团建\n2023年公司调整过一次考勤制度，但后来恢复。\n某合作公司上班时间为 10:00-19:00，与我们不同。\n部分部门偶尔加班，但标准工时不变。\n另一个子公司员工数量为 300 人，注意不要混淆。\n子公司业务为销售，与总部不同。\n2、生成质量评估：Faithfulness + Relevancy + Correctness\n2、生成质量评估：Faithfulness + Relevancy + Correctness\nLlamaIndex 内置了评估器，不用自己写打分 prompt。用通义千问 qwen-plus 当评委（裁判模型），对 RAG 的回答打分。\nLlamaIndex 内置了评估器，不用自己写打分 prompt。用通义千问 qwen-plus 当评委（裁判模型），对 RAG 的回答打分。\n依赖安装：\n依赖安装：\n代码块
+Bash
+复制
+pip install llama-index-core llama-index-llms-dashscope llama-index-embeddings-dashscope\n代码块\npip install llama-index-core llama-index-llms-dashscope llama-index-embeddings-dashscope

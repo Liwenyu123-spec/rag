@@ -1,0 +1,170 @@
+01-RAG评估
+今天修改
+
+
+三、示例代码（LlamaIndex 内置评估器）：
+1、准备一份有干扰信息的文档
+data\company_info.txt
+
+代码块
+Bash
+复制
+公司名称：贝壳科技
+成立时间：2010年
+总部地点：北京
+员工人数：2000人
+上班时间：早上9:00
+下班时间：晚上18:00
+午休时间：12:00-13:00
+公司主要业务：AI软件开发、大数据服务、云计算平台
+公司福利：五险一金、带薪年假、节日福利、定期团建
+
+2023年公司调整过一次考勤制度，但后来恢复。
+某合作公司上班时间为 10:00-19:00，与我们不同。
+部分部门偶尔加班，但标准工时不变。
+另一个子公司员工数量为 300 人，注意不要混淆。
+子公司业务为销售，与总部不同。
+
+2、生成质量评估：Faithfulness + Relevancy + Correctness
+LlamaIndex 内置了评估器，不用自己写打分 prompt。用通义千问 qwen-plus 当评委（裁判模型），对 RAG 的回答打分。
+依赖安装：
+
+代码块
+Bash
+复制
+pip install llama-index-core llama-index-llms-dashscope llama-index-embeddings-dashscope
+
+
+代码块
+Python
+复制
+"""
+RAG 生成质量评估 - LlamaIndex 内置评估器
+FaithfulnessEvaluator（忠实度，无需标准答案）
+RelevancyEvaluator（相关性，无需标准答案）
+CorrectnessEvaluator（正确性，需要标准答案 reference）
+裁判模型用通义千问 qwen-plus。
+"""
+
+import os
+
+from llama_index.core import Settings, SimpleDirectoryReader, VectorStoreIndex
+from llama_index.core.evaluation import (
+    CorrectnessEvaluator,
+    FaithfulnessEvaluator,
+    RelevancyEvaluator,
+)
+from llama_index.embeddings.dashscope import DashScopeEmbedding
+from llama_index.llms.dashscope import DashScope
+
+# ===================== 1. 全局配置（通义千问） =====================
+api_key = os.getenv("DASHSCOPE_API_KEY")
+# 评委模型温度设 0，保证打分稳定可复现
+Settings.llm = DashScope(model_name="qwen3.7-max", temperature=0, api_key=api_key)
+Settings.embed_model = DashScopeEmbedding(model_name="text-embedding-v4", api_key=api_key)
+
+# ===================== 2. 构建一个待评估的 RAG =====================
+documents = SimpleDirectoryReader(input_files=["./data/company_info.txt"]).load_data()
+index = VectorStoreIndex.from_documents(documents)
+query_engine = index.as_query_engine(similarity_top_k=3)
+
+# ===================== 3. 三个内置评估器（都用 Settings.llm 当裁判） =====================
+faithfulness = FaithfulnessEvaluator()   # 忠实度：答案是否被召回上下文支撑
+relevancy = RelevancyEvaluator()         # 相关性：答案+上下文是否切题
+correctness = CorrectnessEvaluator()     # 正确性：答案 vs 标准答案，打 1~5 分
+
+# ===================== 4. 评估若干问题 =====================
+qa_pairs = [
+    ("公司标准上下班时间是什么？", "9:00-18:00，午休 12:00-13:00"),
+    ("公司员工总数是多少？", "2000人"),
+    ("公司主营业务是什么？", "AI软件开发、大数据服务、云计算平台"),
+]
+
+if __name__ == "__main__":
+    print("=" * 70)
+    print("RAG 生成质量评估（LlamaIndex 内置评估器 + 通义千问裁判）")
+    print("=" * 70)
+
+    for question, reference in qa_pairs:
+        # 先让 RAG 生成回答（response 里同时带着召回的 source_nodes）
+        response = query_engine.query(question)
+
+        # 忠实度 / 相关性：直接传 response，评估器会自动取出 source_nodes 当上下文
+        faith_result = faithfulness.evaluate_response(query=question, response=response)
+        rel_result = relevancy.evaluate_response(query=question, response=response)\n01-RAG评估\n三、示例代码（LlamaIndex 内置评估器）：\n三、示例代码（LlamaIndex 内置评估器）：\n1、准备一份有干扰信息的文档\n1、准备一份有干扰信息的文档\ndata\company_info.txt\ndata\company_info.txt\n代码块
+Bash
+复制
+公司名称：贝壳科技
+成立时间：2010年
+总部地点：北京
+员工人数：2000人
+上班时间：早上9:00
+下班时间：晚上18:00
+午休时间：12:00-13:00
+公司主要业务：AI软件开发、大数据服务、云计算平台
+公司福利：五险一金、带薪年假、节日福利、定期团建
+
+2023年公司调整过一次考勤制度，但后来恢复。
+某合作公司上班时间为 10:00-19:00，与我们不同。
+部分部门偶尔加班，但标准工时不变。
+另一个子公司员工数量为 300 人，注意不要混淆。
+子公司业务为销售，与总部不同。\n代码块\n公司名称：贝壳科技\n成立时间：2010年\n总部地点：北京\n员工人数：2000人\n上班时间：早上9:00\n下班时间：晚上18:00\n午休时间：12:00-13:00\n公司主要业务：AI软件开发、大数据服务、云计算平台\n公司福利：五险一金、带薪年假、节日福利、定期团建\n2023年公司调整过一次考勤制度，但后来恢复。\n某合作公司上班时间为 10:00-19:00，与我们不同。\n部分部门偶尔加班，但标准工时不变。\n另一个子公司员工数量为 300 人，注意不要混淆。\n子公司业务为销售，与总部不同。\n2、生成质量评估：Faithfulness + Relevancy + Correctness\n2、生成质量评估：Faithfulness + Relevancy + Correctness\nLlamaIndex 内置了评估器，不用自己写打分 prompt。用通义千问 qwen-plus 当评委（裁判模型），对 RAG 的回答打分。\nLlamaIndex 内置了评估器，不用自己写打分 prompt。用通义千问 qwen-plus 当评委（裁判模型），对 RAG 的回答打分。\n依赖安装：\n依赖安装：\n代码块
+Bash
+复制
+pip install llama-index-core llama-index-llms-dashscope llama-index-embeddings-dashscope\n代码块\npip install llama-index-core llama-index-llms-dashscope llama-index-embeddings-dashscope\n代码块
+Python
+复制
+"""
+RAG 生成质量评估 - LlamaIndex 内置评估器
+FaithfulnessEvaluator（忠实度，无需标准答案）
+RelevancyEvaluator（相关性，无需标准答案）
+CorrectnessEvaluator（正确性，需要标准答案 reference）
+裁判模型用通义千问 qwen-plus。
+"""
+
+import os
+
+from llama_index.core import Settings, SimpleDirectoryReader, VectorStoreIndex
+from llama_index.core.evaluation import (
+    CorrectnessEvaluator,
+    FaithfulnessEvaluator,
+    RelevancyEvaluator,
+)
+from llama_index.embeddings.dashscope import DashScopeEmbedding
+from llama_index.llms.dashscope import DashScope
+
+# ===================== 1. 全局配置（通义千问） =====================
+api_key = os.getenv("DASHSCOPE_API_KEY")
+# 评委模型温度设 0，保证打分稳定可复现
+Settings.llm = DashScope(model_name="qwen3.7-max", temperature=0, api_key=api_key)
+Settings.embed_model = DashScopeEmbedding(model_name="text-embedding-v4", api_key=api_key)
+
+# ===================== 2. 构建一个待评估的 RAG =====================
+documents = SimpleDirectoryReader(input_files=["./data/company_info.txt"]).load_data()
+index = VectorStoreIndex.from_documents(documents)
+query_engine = index.as_query_engine(similarity_top_k=3)
+
+# ===================== 3. 三个内置评估器（都用 Settings.llm 当裁判） =====================
+faithfulness = FaithfulnessEvaluator()   # 忠实度：答案是否被召回上下文支撑
+relevancy = RelevancyEvaluator()         # 相关性：答案+上下文是否切题
+correctness = CorrectnessEvaluator()     # 正确性：答案 vs 标准答案，打 1~5 分
+
+# ===================== 4. 评估若干问题 =====================
+qa_pairs = [
+    ("公司标准上下班时间是什么？", "9:00-18:00，午休 12:00-13:00"),
+    ("公司员工总数是多少？", "2000人"),
+    ("公司主营业务是什么？", "AI软件开发、大数据服务、云计算平台"),
+]
+
+if __name__ == "__main__":
+    print("=" * 70)
+    print("RAG 生成质量评估（LlamaIndex 内置评估器 + 通义千问裁判）")
+    print("=" * 70)
+
+    for question, reference in qa_pairs:
+        # 先让 RAG 生成回答（response 里同时带着召回的 source_nodes）
+        response = query_engine.query(question)
+
+        # 忠实度 / 相关性：直接传 response，评估器会自动取出 source_nodes 当上下文
+        faith_result = faithfulness.evaluate_response(query=question, response=response)
+        rel_result = relevancy.evaluate_response(query=question, response=response)\n代码块\n"""\nRAG 生成质量评估 - LlamaIndex 内置评估器\nFaithfulnessEvaluator（忠实度，无需标准答案）\nRelevancyEvaluator（相关性，无需标准答案）\nCorrectnessEvaluator（正确性，需要标准答案 reference）\n裁判模型用通义千问 qwen-plus。\n"""\nimport os\nfrom llama_index.core import Settings, SimpleDirectoryReader, VectorStoreIndex\nfrom llama_index.core.evaluation import (\nCorrectnessEvaluator,\nFaithfulnessEvaluator,\nRelevancyEvaluator,\n)\nfrom llama_index.embeddings.dashscope import DashScopeEmbedding\nfrom llama_index.llms.dashscope import DashScope\n# ===================== 1. 全局配置（通义千问） =====================\napi_key = os.getenv("DASHSCOPE_API_KEY")\n# 评委模型温度设 0，保证打分稳定可复现\nSettings.llm = DashScope(model_name="qwen3.7-max", temperature=0, api_key=api_key)\nSettings.embed_model = DashScopeEmbedding(model_name="text-embedding-v4", api_key=api_key)\n# ===================== 2. 构建一个待评估的 RAG =====================\ndocuments = SimpleDirectoryReader(input_files=["./data/company_info.txt"]).load_data()\nindex = VectorStoreIndex.from_documents(documents)\nquery_engine = index.as_query_engine(similarity_top_k=3)\n# ===================== 3. 三个内置评估器（都用 Settings.llm 当裁判） =====================\nfaithfulness = FaithfulnessEvaluator()   # 忠实度：答案是否被召回上下文支撑\nrelevancy = RelevancyEvaluator()         # 相关性：答案+上下文是否切题\ncorrectness = CorrectnessEvaluator()     # 正确性：答案 vs 标准答案，打 1~5 分\n# ===================== 4. 评估若干问题 =====================\nqa_pairs = [\n("公司标准上下班时间是什么？", "9:00-18:00，午休 12:00-13:00"),\n("公司员工总数是多少？", "2000人"),\n("公司主营业务是什么？", "AI软件开发、大数据服务、云计算平台"),\n]\nif __name__ == "__main__":\nprint("=" * 70)\nprint("RAG 生成质量评估（LlamaIndex 内置评估器 + 通义千问裁判）")\nprint("=" * 70)\nfor question, reference in qa_pairs:\n# 先让 RAG 生成回答（response 里同时带着召回的 source_nodes）\nresponse = query_engine.query(question)\n# 忠实度 / 相关性：直接传 response，评估器会自动取出 source_nodes 当上下文\nfaith_result = faithfulness.evaluate_response(query=question, response=response)\nrel_result = relevancy.evaluate_response(query=question, response=response)

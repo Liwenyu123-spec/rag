@@ -1,0 +1,102 @@
+01-RAG评估
+今天修改
+
+代码块
+Python
+复制
+        return self._inner.get_text_embedding(text)
+
+    def get_text_embedding_batch(
+        self, texts: List[str], show_progress: bool = False
+    ) -> List[List[float]]:
+        """分批调用，每批 ≤ 10，避免 DashScope 报错"""
+        BATCH_LIMIT = 10
+        all_embeddings = []
+        for i in range(0, len(texts), BATCH_LIMIT):
+            batch = texts[i : i + BATCH_LIMIT]
+            try:
+                embs = self._inner.get_text_embedding_batch(
+                    batch, show_progress=show_progress
+                )
+                if embs is None or len(embs) == 0:
+                    raise RuntimeError("DashScope 返回空 embedding")
+                all_embeddings.extend(embs)
+            except Exception as e:
+                print(f"❌ Embedding 批次失败 (batch {i//BATCH_LIMIT + 1}): {e}")
+                raise
+        return all_embeddings
+
+    async def _aget_query_embedding(self, query: str) -> List[float]:
+        return self._get_query_embedding(query)
+
+    async def _aget_text_embedding(self, text: str) -> List[float]:
+        return self._get_text_embedding(text)
+
+四、Ragas 等专业评估框架（了解）
+LlamaIndex 内置评估器适合快速、轻量地接入。如果要更系统、指标更丰富、可复现的基准评估，业界最主流的专门框架是 RAGAS。
+4.1 RAGAS 是什么
+RAGAS（Retrieval Augmented Generation Assessment）是一个专门为 RAG 流水线设计的自动化评估框架，核心理念有三点：
+1.
+Reference-free（多数指标免标注）：传统评估要为每个问题人工写标准答案，成本极高。RAGAS 的多数指标用 LLM-as-a-judge（大模型当裁判），让 LLM 对照"问题 / 答案 / 召回上下文"自动判分，无需人工标注就能算忠实度、答案相关性。
+2.
+检索 + 生成分别诊断：RAGAS 把指标明确归到"检索侧"和"生成侧"，方便定位瓶颈到底在哪一环——这正是 RAG 评估的关键诉求。
+3.
+与主流框架无缝集成：原生支持 LlamaIndex、LangChain，可以直接复用你已经搭好的 query engine、LLM 和 embedding，不用换技术栈。
+4.2 RAGAS 核心指标
+RAGAS 的四个最常用指标，正好覆盖"检索"和"生成"两个环节：
+
+
+
+指标背后的判分思路：
+•
+Faithfulness：先把答案拆成若干"论断（claim）"，再逐条判断"该论断能否由上下文支撑"，忠实度 = 被支撑的论断数 / 总论断数。
+•
+Answer Relevancy：让 LLM 根据答案"反向生成可能的问题"，再算这些问题与原始问题的相似度，越接近说明答案越切题。
+•
+Context Precision / Recall：对照参考答案（reference），判断召回上下文的"排序质量"和"信息完整度"。
+
+小结
+
+
+评估的闭环：先看检索指标定位是检索还是生成的问题 → 针对性优化（分块/重排/压缩/prompt）→ 再用同一套评估对比前后分数 → 量化收益。\n01-RAG评估\n代码块
+Python
+复制
+        return self._inner.get_text_embedding(text)
+
+    def get_text_embedding_batch(
+        self, texts: List[str], show_progress: bool = False
+    ) -> List[List[float]]:
+        """分批调用，每批 ≤ 10，避免 DashScope 报错"""
+        BATCH_LIMIT = 10
+        all_embeddings = []
+        for i in range(0, len(texts), BATCH_LIMIT):
+            batch = texts[i : i + BATCH_LIMIT]
+            try:
+                embs = self._inner.get_text_embedding_batch(
+                    batch, show_progress=show_progress
+                )
+                if embs is None or len(embs) == 0:
+                    raise RuntimeError("DashScope 返回空 embedding")
+                all_embeddings.extend(embs)
+            except Exception as e:
+                print(f"❌ Embedding 批次失败 (batch {i//BATCH_LIMIT + 1}): {e}")
+                raise
+        return all_embeddings
+
+    async def _aget_query_embedding(self, query: str) -> List[float]:
+        return self._get_query_embedding(query)
+
+    async def _aget_text_embedding(self, text: str) -> List[float]:
+        return self._get_text_embedding(text)\n代码块\nreturn self._inner.get_text_embedding(text)\ndef get_text_embedding_batch(\nself, texts: List[str], show_progress: bool = False\n) -> List[List[float]]:\n"""分批调用，每批 ≤ 10，避免 DashScope 报错"""\nBATCH_LIMIT = 10\nall_embeddings = []\nfor i in range(0, len(texts), BATCH_LIMIT):\nbatch = texts[i : i + BATCH_LIMIT]\ntry:\nembs = self._inner.get_text_embedding_batch(\nbatch, show_progress=show_progress\n)\nif embs is None or len(embs) == 0:\nraise RuntimeError("DashScope 返回空 embedding")\nall_embeddings.extend(embs)\nexcept Exception as e:\nprint(f"❌ Embedding 批次失败 (batch {i//BATCH_LIMIT + 1}): {e}")\nraise\nreturn all_embeddings\nasync def _aget_query_embedding(self, query: str) -> List[float]:\nreturn self._get_query_embedding(query)\nasync def _aget_text_embedding(self, text: str) -> List[float]:\nreturn self._get_text_embedding(text)\n四、Ragas 等专业评估框架（了解）\n四、Ragas 等专业评估框架（了解）\nLlamaIndex 内置评估器适合快速、轻量地接入。如果要更系统、指标更丰富、可复现的基准评估，业界最主流的专门框架是 RAGAS。\nLlamaIndex 内置评估器适合快速、轻量地接入。如果要更系统、指标更丰富、可复现的基准评估，业界最主流的专门框架是 RAGAS。\n4.1 RAGAS 是什么\n4.1 RAGAS 是什么\nRAGAS（Retrieval Augmented Generation Assessment）是一个专门为 RAG 流水线设计的自动化评估框架，核心理念有三点：\nRAGAS（Retrieval Augmented Generation Assessment）是一个专门为 RAG 流水线设计的自动化评估框架，核心理念有三点：\n1.
+Reference-free（多数指标免标注）：传统评估要为每个问题人工写标准答案，成本极高。RAGAS 的多数指标用 LLM-as-a-judge（大模型当裁判），让 LLM 对照"问题 / 答案 / 召回上下文"自动判分，无需人工标注就能算忠实度、答案相关性。\nReference-free（多数指标免标注）：传统评估要为每个问题人工写标准答案，成本极高。RAGAS 的多数指标用 LLM-as-a-judge（大模型当裁判），让 LLM 对照"问题 / 答案 / 召回上下文"自动判分，无需人工标注就能算忠实度、答案相关性。\n2.
+检索 + 生成分别诊断：RAGAS 把指标明确归到"检索侧"和"生成侧"，方便定位瓶颈到底在哪一环——这正是 RAG 评估的关键诉求。\n检索 + 生成分别诊断：RAGAS 把指标明确归到"检索侧"和"生成侧"，方便定位瓶颈到底在哪一环——这正是 RAG 评估的关键诉求。\n3.
+与主流框架无缝集成：原生支持 LlamaIndex、LangChain，可以直接复用你已经搭好的 query engine、LLM 和 embedding，不用换技术栈。\n与主流框架无缝集成：原生支持 LlamaIndex、LangChain，可以直接复用你已经搭好的 query engine、LLM 和 embedding，不用换技术栈。\n4.2 RAGAS 核心指标\n4.2 RAGAS 核心指标\nRAGAS 的四个最常用指标，正好覆盖"检索"和"生成"两个环节：\nRAGAS 的四个最常用指标，正好覆盖"检索"和"生成"两个环节：\n指标背后的判分思路：
+•
+Faithfulness：先把答案拆成若干"论断（claim）"，再逐条判断"该论断能否由上下文支撑"，忠实度 = 被支撑的论断数 / 总论断数。
+•
+Answer Relevancy：让 LLM 根据答案"反向生成可能的问题"，再算这些问题与原始问题的相似度，越接近说明答案越切题。
+•
+Context Precision / Recall：对照参考答案（reference），判断召回上下文的"排序质量"和"信息完整度"。\n指标背后的判分思路：\n指标背后的判分思路：\n•
+Faithfulness：先把答案拆成若干"论断（claim）"，再逐条判断"该论断能否由上下文支撑"，忠实度 = 被支撑的论断数 / 总论断数。\nFaithfulness：先把答案拆成若干"论断（claim）"，再逐条判断"该论断能否由上下文支撑"，忠实度 = 被支撑的论断数 / 总论断数。\n•
+Answer Relevancy：让 LLM 根据答案"反向生成可能的问题"，再算这些问题与原始问题的相似度，越接近说明答案越切题。\nAnswer Relevancy：让 LLM 根据答案"反向生成可能的问题"，再算这些问题与原始问题的相似度，越接近说明答案越切题。\n•
+Context Precision / Recall：对照参考答案（reference），判断召回上下文的"排序质量"和"信息完整度"。\nContext Precision / Recall：对照参考答案（reference），判断召回上下文的"排序质量"和"信息完整度"。\n小结\n小结\n评估的闭环：先看检索指标定位是检索还是生成的问题 → 针对性优化（分块/重排/压缩/prompt）→ 再用同一套评估对比前后分数 → 量化收益。\n评估的闭环：先看检索指标定位是检索还是生成的问题 → 针对性优化（分块/重排/压缩/prompt）→ 再用同一套评估对比前后分数 → 量化收益。

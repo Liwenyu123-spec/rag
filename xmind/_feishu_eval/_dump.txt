@@ -1,0 +1,1303 @@
+01-RAG评估
+今天修改
+RAG优化完毕后，必须进行评估。评估不仅能量化优化效果（比如：对比优化前后准确率提升了多少），还能帮你发现检索、生成环节的具体瓶颈。
+一、为什么要评估RAG？
+RAG 有三个核心环节都可能出问题，缺一不可评：
+1.
+检索（Retrieval）：召回的文档对不对、全不全？检索错了，后面再强的 LLM 也救不回来（garbage in, garbage out）。
+2.
+生成（Generation）：LLM 有没有忠实使用召回的资料？还是无视资料自己"编"（幻觉）？
+3.
+端到端（End-to-End）：抛开中间环节，最终答案到底准不准、是否切题、是否完整？
+评估的目标：量化质量，定位瓶颈，驱动优化。
+
+一个关键诊断思路：如果最终答案很差，先看检索指标——若检索就没召回正确文档，问题在检索侧（该优化分块/embedding/重排）；若检索召回了正确文档但答案仍错，问题在生成侧（该优化 prompt/上下文压缩/换模型）。
+
+二、核心评估指标
+RAG 评估指标分两大类，正好对应"检索"和"生成"两个环节。
+2.1 检索质量（Retrieval Quality）
+衡量"召回的文档对不对"，需要一份带标准答案的数据集（每个问题标注哪些文档/节点是正确的）。常用指标：
+
+
+
+Hit Rate 和 MRR 是最常用、最易自动化的两个检索指标。LlamaIndex 的 RetrieverEvaluator 直接内置了它们。
+
+2.2 生成质量（Generation Quality）
+衡量"答案好不好"。LlamaIndex 把生成评估拆成三个互补的维度，关键优势是前两个不需要人工标准答案：
+
+
+
+•
+忠实度只关心"答案有没有出处"，哪怕答案恰好答错了问题但忠于资料，也算忠实——所以要和相关性一起看。
+•
+相关性关心"答没答到点子上"。
+•
+正确性需要人工标注的 reference 答案，最接近"考试打分"。
+下面分别演示：检索评估（Hit Rate + MRR） 与 生成评估（Faithfulness + Relevancy + Correctness），全部使用 LlamaIndex 内置评估器，无需手写打分逻辑。
+诊断思路：
+答案差先看检索指标—— 检索没召回对，锅在分块 /embedding/ 重排；
+检索对了答案还错，锅在 prompt / 上下文 / 模型。
+
+2.3 在项目周期怎么使用\n=====\n01-RAG评估\n=====\nRAG优化完毕后，必须进行评估。评估不仅能量化优化效果（比如：对比优化前后准确率提升了多少），还能帮你发现检索、生成环节的具体瓶颈。\n=====\n一、为什么要评估RAG？\n=====\nRAG 有三个核心环节都可能出问题，缺一不可评：\n=====\n1.
+检索（Retrieval）：召回的文档对不对、全不全？检索错了，后面再强的 LLM 也救不回来（garbage in, garbage out）。\n=====\n检索（Retrieval）：召回的文档对不对、全不全？检索错了，后面再强的 LLM 也救不回来（garbage in, garbage out）。\n=====\n2.
+生成（Generation）：LLM 有没有忠实使用召回的资料？还是无视资料自己"编"（幻觉）？\n=====\n生成（Generation）：LLM 有没有忠实使用召回的资料？还是无视资料自己"编"（幻觉）？\n=====\n3.
+端到端（End-to-End）：抛开中间环节，最终答案到底准不准、是否切题、是否完整？\n=====\n端到端（End-to-End）：抛开中间环节，最终答案到底准不准、是否切题、是否完整？\n=====\n评估的目标：量化质量，定位瓶颈，驱动优化。\n=====\n一个关键诊断思路：如果最终答案很差，先看检索指标——若检索就没召回正确文档，问题在检索侧（该优化分块/embedding/重排）；若检索召回了正确文档但答案仍错，问题在生成侧（该优化 prompt/上下文压缩/换模型）。\n=====\n二、核心评估指标\n=====\nRAG 评估指标分两大类，正好对应"检索"和"生成"两个环节。\n=====\n2.1 检索质量（Retrieval Quality）\n=====\n衡量"召回的文档对不对"，需要一份带标准答案的数据集（每个问题标注哪些文档/节点是正确的）。常用指标：\n=====\nHit Rate 和 MRR 是最常用、最易自动化的两个检索指标。LlamaIndex 的 RetrieverEvaluator 直接内置了它们。\n=====\n2.2 生成质量（Generation Quality）\n=====\n衡量"答案好不好"。LlamaIndex 把生成评估拆成三个互补的维度，关键优势是前两个不需要人工标准答案：\n=====\n•
+忠实度只关心"答案有没有出处"，哪怕答案恰好答错了问题但忠于资料，也算忠实——所以要和相关性一起看。
+•
+相关性关心"答没答到点子上"。
+•
+正确性需要人工标注的 reference 答案，最接近"考试打分"。
+下面分别演示：检索评估（Hit Rate + MRR） 与 生成评估（Faithfulness + Relevancy + Correctness），全部使用 LlamaIndex 内置评估器，无需手写打分逻辑。
+诊断思路：
+答案差先看检索指标—— 检索没召回对，锅在分块 /embedding/ 重排；
+检索对了答案还错，锅在 prompt / 上下文 / 模型。\n=====\n•
+忠实度只关心"答案有没有出处"，哪怕答案恰好答错了问题但忠于资料，也算忠实——所以要和相关性一起看。\n=====\n忠实度只关心"答案有没有出处"，哪怕答案恰好答错了问题但忠于资料，也算忠实——所以要和相关性一起看。\n=====\n•
+相关性关心"答没答到点子上"。\n=====\n相关性关心"答没答到点子上"。\n=====\n•
+正确性需要人工标注的 reference 答案，最接近"考试打分"。\n=====\n正确性需要人工标注的 reference 答案，最接近"考试打分"。\n=====\n下面分别演示：检索评估（Hit Rate + MRR） 与 生成评估（Faithfulness + Relevancy + Correctness），全部使用 LlamaIndex 内置评估器，无需手写打分逻辑。\n=====\n诊断思路：\n=====\n答案差先看检索指标—— 检索没召回对，锅在分块 /embedding/ 重排；\n=====\n检索对了答案还错，锅在 prompt / 上下文 / 模型。\n=====\n2.3 在项目周期怎么使用\n=====\n01-RAG评估
+今天修改
+2.
+生成（Generation）：LLM 有没有忠实使用召回的资料？还是无视资料自己"编"（幻觉）？
+3.
+端到端（End-to-End）：抛开中间环节，最终答案到底准不准、是否切题、是否完整？
+评估的目标：量化质量，定位瓶颈，驱动优化。
+
+一个关键诊断思路：如果最终答案很差，先看检索指标——若检索就没召回正确文档，问题在检索侧（该优化分块/embedding/重排）；若检索召回了正确文档但答案仍错，问题在生成侧（该优化 prompt/上下文压缩/换模型）。
+
+二、核心评估指标
+RAG 评估指标分两大类，正好对应"检索"和"生成"两个环节。
+2.1 检索质量（Retrieval Quality）
+衡量"召回的文档对不对"，需要一份带标准答案的数据集（每个问题标注哪些文档/节点是正确的）。常用指标：
+
+
+
+Hit Rate 和 MRR 是最常用、最易自动化的两个检索指标。LlamaIndex 的 RetrieverEvaluator 直接内置了它们。
+
+2.2 生成质量（Generation Quality）
+衡量"答案好不好"。LlamaIndex 把生成评估拆成三个互补的维度，关键优势是前两个不需要人工标准答案：
+
+
+
+•
+忠实度只关心"答案有没有出处"，哪怕答案恰好答错了问题但忠于资料，也算忠实——所以要和相关性一起看。
+•
+相关性关心"答没答到点子上"。
+•
+正确性需要人工标注的 reference 答案，最接近"考试打分"。
+下面分别演示：检索评估（Hit Rate + MRR） 与 生成评估（Faithfulness + Relevancy + Correctness），全部使用 LlamaIndex 内置评估器，无需手写打分逻辑。
+诊断思路：
+答案差先看检索指标—— 检索没召回对，锅在分块 /embedding/ 重排；
+检索对了答案还错，锅在 prompt / 上下文 / 模型。
+
+2.3 在项目周期怎么使用
+
+
+
+
+三、示例代码（LlamaIndex 内置评估器）：
+1、准备一份有干扰信息的文档
+data\company_info.txt
+
+代码块
+Bash
+复制
+公司名称：贝壳科技
+成立时间：2010年
+总部地点：北京\n=====\n三、示例代码（LlamaIndex 内置评估器）：\n=====\n1、准备一份有干扰信息的文档\n=====\ndata\company_info.txt\n=====\n代码块
+Bash
+复制
+公司名称：贝壳科技
+成立时间：2010年
+总部地点：北京\n=====\n代码块\n=====\n公司名称：贝壳科技\n=====\n成立时间：2010年\n=====\n总部地点：北京\n=====\n01-RAG评估
+今天修改
+
+
+
+Hit Rate 和 MRR 是最常用、最易自动化的两个检索指标。LlamaIndex 的 RetrieverEvaluator 直接内置了它们。
+
+2.2 生成质量（Generation Quality）
+衡量"答案好不好"。LlamaIndex 把生成评估拆成三个互补的维度，关键优势是前两个不需要人工标准答案：
+
+
+
+•
+忠实度只关心"答案有没有出处"，哪怕答案恰好答错了问题但忠于资料，也算忠实——所以要和相关性一起看。
+•
+相关性关心"答没答到点子上"。
+•
+正确性需要人工标注的 reference 答案，最接近"考试打分"。
+下面分别演示：检索评估（Hit Rate + MRR） 与 生成评估（Faithfulness + Relevancy + Correctness），全部使用 LlamaIndex 内置评估器，无需手写打分逻辑。
+诊断思路：
+答案差先看检索指标—— 检索没召回对，锅在分块 /embedding/ 重排；
+检索对了答案还错，锅在 prompt / 上下文 / 模型。
+
+2.3 在项目周期怎么使用
+
+
+
+
+三、示例代码（LlamaIndex 内置评估器）：
+1、准备一份有干扰信息的文档
+data\company_info.txt
+
+代码块
+Bash
+复制
+公司名称：贝壳科技
+成立时间：2010年
+总部地点：北京
+员工人数：2000人
+上班时间：早上9:00
+下班时间：晚上18:00
+午休时间：12:00-13:00
+公司主要业务：AI软件开发、大数据服务、云计算平台
+公司福利：五险一金、带薪年假、节日福利、定期团建
+
+2023年公司调整过一次考勤制度，但后来恢复。
+某合作公司上班时间为 10:00-19:00，与我们不同。
+部分部门偶尔加班，但标准工时不变。
+另一个子公司员工数量为 300 人，注意不要混淆。
+子公司业务为销售，与总部不同。
+
+2、生成质量评估：Faithfulness + Relevancy + Correctness
+LlamaIndex 内置了评估器，不用自己写打分 prompt。用通义千问 qwen-plus 当评委（裁判模型），对 RAG 的回答打分。
+依赖安装：
+
+代码块
+Bash
+复制
+pip install llama-index-core llama-index-llms-dashscope llama-index-embeddings-dashscope\n=====\n代码块
+Bash
+复制
+公司名称：贝壳科技
+成立时间：2010年
+总部地点：北京
+员工人数：2000人
+上班时间：早上9:00
+下班时间：晚上18:00
+午休时间：12:00-13:00
+公司主要业务：AI软件开发、大数据服务、云计算平台
+公司福利：五险一金、带薪年假、节日福利、定期团建
+
+2023年公司调整过一次考勤制度，但后来恢复。
+某合作公司上班时间为 10:00-19:00，与我们不同。
+部分部门偶尔加班，但标准工时不变。
+另一个子公司员工数量为 300 人，注意不要混淆。
+子公司业务为销售，与总部不同。\n=====\n员工人数：2000人\n=====\n上班时间：早上9:00\n=====\n下班时间：晚上18:00\n=====\n午休时间：12:00-13:00\n=====\n公司主要业务：AI软件开发、大数据服务、云计算平台\n=====\n公司福利：五险一金、带薪年假、节日福利、定期团建\n=====\n2023年公司调整过一次考勤制度，但后来恢复。\n=====\n某合作公司上班时间为 10:00-19:00，与我们不同。\n=====\n部分部门偶尔加班，但标准工时不变。\n=====\n另一个子公司员工数量为 300 人，注意不要混淆。\n=====\n子公司业务为销售，与总部不同。\n=====\n2、生成质量评估：Faithfulness + Relevancy + Correctness\n=====\nLlamaIndex 内置了评估器，不用自己写打分 prompt。用通义千问 qwen-plus 当评委（裁判模型），对 RAG 的回答打分。\n=====\n依赖安装：\n=====\n代码块
+Bash
+复制
+pip install llama-index-core llama-index-llms-dashscope llama-index-embeddings-dashscope\n=====\npip install llama-index-core llama-index-llms-dashscope llama-index-embeddings-dashscope\n=====\n01-RAG评估
+今天修改
+
+
+
+
+三、示例代码（LlamaIndex 内置评估器）：
+1、准备一份有干扰信息的文档
+data\company_info.txt
+
+代码块
+Bash
+复制
+公司名称：贝壳科技
+成立时间：2010年
+总部地点：北京
+员工人数：2000人
+上班时间：早上9:00
+下班时间：晚上18:00
+午休时间：12:00-13:00
+公司主要业务：AI软件开发、大数据服务、云计算平台
+公司福利：五险一金、带薪年假、节日福利、定期团建
+
+2023年公司调整过一次考勤制度，但后来恢复。
+某合作公司上班时间为 10:00-19:00，与我们不同。
+部分部门偶尔加班，但标准工时不变。
+另一个子公司员工数量为 300 人，注意不要混淆。
+子公司业务为销售，与总部不同。
+
+2、生成质量评估：Faithfulness + Relevancy + Correctness
+LlamaIndex 内置了评估器，不用自己写打分 prompt。用通义千问 qwen-plus 当评委（裁判模型），对 RAG 的回答打分。
+依赖安装：
+
+代码块
+Bash
+复制
+pip install llama-index-core llama-index-llms-dashscope llama-index-embeddings-dashscope
+
+
+代码块
+Python
+复制
+"""
+RAG 生成质量评估 - LlamaIndex 内置评估器
+FaithfulnessEvaluator（忠实度，无需标准答案）
+RelevancyEvaluator（相关性，无需标准答案）
+CorrectnessEvaluator（正确性，需要标准答案 reference）
+裁判模型用通义千问 qwen-plus。
+"""
+
+import os
+
+from llama_index.core import Settings, SimpleDirectoryReader, VectorStoreIndex
+from llama_index.core.evaluation import (
+    CorrectnessEvaluator,
+    FaithfulnessEvaluator,
+    RelevancyEvaluator,
+)
+from llama_index.embeddings.dashscope import DashScopeEmbedding
+from llama_index.llms.dashscope import DashScope
+
+# ===================== 1. 全局配置（通义千问） =====================
+api_key = os.getenv("DASHSCOPE_API_KEY")
+# 评委模型温度设 0，保证打分稳定可复现
+Settings.llm = DashScope(model_name="qwen3.7-max", temperature=0, api_key=api_key)
+Settings.embed_model = DashScopeEmbedding(model_name="text-embedding-v4", api_key=api_key)
+
+# ===================== 2. 构建一个待评估的 RAG =====================
+documents = SimpleDirectoryReader(input_files=["./data/company_info.txt"]).load_data()
+index = VectorStoreIndex.from_documents(documents)
+query_engine = index.as_query_engine(similarity_top_k=3)\n=====\n代码块
+Python
+复制
+"""
+RAG 生成质量评估 - LlamaIndex 内置评估器
+FaithfulnessEvaluator（忠实度，无需标准答案）
+RelevancyEvaluator（相关性，无需标准答案）
+CorrectnessEvaluator（正确性，需要标准答案 reference）
+裁判模型用通义千问 qwen-plus。
+"""
+
+import os
+
+from llama_index.core import Settings, SimpleDirectoryReader, VectorStoreIndex
+from llama_index.core.evaluation import (
+    CorrectnessEvaluator,
+    FaithfulnessEvaluator,
+    RelevancyEvaluator,
+)
+from llama_index.embeddings.dashscope import DashScopeEmbedding
+from llama_index.llms.dashscope import DashScope
+
+# ===================== 1. 全局配置（通义千问） =====================
+api_key = os.getenv("DASHSCOPE_API_KEY")
+# 评委模型温度设 0，保证打分稳定可复现
+Settings.llm = DashScope(model_name="qwen3.7-max", temperature=0, api_key=api_key)
+Settings.embed_model = DashScopeEmbedding(model_name="text-embedding-v4", api_key=api_key)
+
+# ===================== 2. 构建一个待评估的 RAG =====================
+documents = SimpleDirectoryReader(input_files=["./data/company_info.txt"]).load_data()
+index = VectorStoreIndex.from_documents(documents)
+query_engine = index.as_query_engine(similarity_top_k=3)\n=====\n"""\n=====\nRAG 生成质量评估 - LlamaIndex 内置评估器\n=====\nFaithfulnessEvaluator（忠实度，无需标准答案）\n=====\nRelevancyEvaluator（相关性，无需标准答案）\n=====\nCorrectnessEvaluator（正确性，需要标准答案 reference）\n=====\n裁判模型用通义千问 qwen-plus。\n=====\nimport os\n=====\nfrom llama_index.core import Settings, SimpleDirectoryReader, VectorStoreIndex\n=====\nfrom llama_index.core.evaluation import (\n=====\nCorrectnessEvaluator,\n=====\nFaithfulnessEvaluator,\n=====\nRelevancyEvaluator,\n=====\n)\n=====\nfrom llama_index.embeddings.dashscope import DashScopeEmbedding\n=====\nfrom llama_index.llms.dashscope import DashScope\n=====\n# ===================== 1. 全局配置（通义千问） =====================\n=====\napi_key = os.getenv("DASHSCOPE_API_KEY")\n=====\n# 评委模型温度设 0，保证打分稳定可复现\n=====\nSettings.llm = DashScope(model_name="qwen3.7-max", temperature=0, api_key=api_key)\n=====\nSettings.embed_model = DashScopeEmbedding(model_name="text-embedding-v4", api_key=api_key)\n=====\n# ===================== 2. 构建一个待评估的 RAG =====================\n=====\ndocuments = SimpleDirectoryReader(input_files=["./data/company_info.txt"]).load_data()\n=====\nindex = VectorStoreIndex.from_documents(documents)\n=====\nquery_engine = index.as_query_engine(similarity_top_k=3)\n=====\n01-RAG评估
+今天修改
+
+
+
+
+三、示例代码（LlamaIndex 内置评估器）：
+1、准备一份有干扰信息的文档
+data\company_info.txt
+
+代码块
+Bash
+复制
+公司名称：贝壳科技
+成立时间：2010年
+总部地点：北京
+员工人数：2000人
+上班时间：早上9:00
+下班时间：晚上18:00
+午休时间：12:00-13:00
+公司主要业务：AI软件开发、大数据服务、云计算平台
+公司福利：五险一金、带薪年假、节日福利、定期团建
+
+2023年公司调整过一次考勤制度，但后来恢复。
+某合作公司上班时间为 10:00-19:00，与我们不同。
+部分部门偶尔加班，但标准工时不变。
+另一个子公司员工数量为 300 人，注意不要混淆。
+子公司业务为销售，与总部不同。
+
+2、生成质量评估：Faithfulness + Relevancy + Correctness
+LlamaIndex 内置了评估器，不用自己写打分 prompt。用通义千问 qwen-plus 当评委（裁判模型），对 RAG 的回答打分。
+依赖安装：
+
+代码块
+Bash
+复制
+pip install llama-index-core llama-index-llms-dashscope llama-index-embeddings-dashscope
+
+
+代码块
+Python
+复制
+"""
+RAG 生成质量评估 - LlamaIndex 内置评估器
+FaithfulnessEvaluator（忠实度，无需标准答案）
+RelevancyEvaluator（相关性，无需标准答案）
+CorrectnessEvaluator（正确性，需要标准答案 reference）
+裁判模型用通义千问 qwen-plus。
+"""
+
+import os
+
+from llama_index.core import Settings, SimpleDirectoryReader, VectorStoreIndex
+from llama_index.core.evaluation import (
+    CorrectnessEvaluator,
+    FaithfulnessEvaluator,
+    RelevancyEvaluator,
+)
+from llama_index.embeddings.dashscope import DashScopeEmbedding
+from llama_index.llms.dashscope import DashScope
+
+# ===================== 1. 全局配置（通义千问） =====================
+api_key = os.getenv("DASHSCOPE_API_KEY")
+# 评委模型温度设 0，保证打分稳定可复现
+Settings.llm = DashScope(model_name="qwen3.7-max", temperature=0, api_key=api_key)
+Settings.embed_model = DashScopeEmbedding(model_name="text-embedding-v4", api_key=api_key)
+
+# ===================== 2. 构建一个待评估的 RAG =====================
+documents = SimpleDirectoryReader(input_files=["./data/company_info.txt"]).load_data()
+index = VectorStoreIndex.from_documents(documents)
+query_engine = index.as_query_engine(similarity_top_k=3)
+
+# ===================== 3. 三个内置评估器（都用 Settings.llm 当裁判） =====================
+faithfulness = FaithfulnessEvaluator()   # 忠实度：答案是否被召回上下文支撑\n=====\n代码块
+Python
+复制
+"""
+RAG 生成质量评估 - LlamaIndex 内置评估器
+FaithfulnessEvaluator（忠实度，无需标准答案）
+RelevancyEvaluator（相关性，无需标准答案）
+CorrectnessEvaluator（正确性，需要标准答案 reference）
+裁判模型用通义千问 qwen-plus。
+"""
+
+import os
+
+from llama_index.core import Settings, SimpleDirectoryReader, VectorStoreIndex
+from llama_index.core.evaluation import (
+    CorrectnessEvaluator,
+    FaithfulnessEvaluator,
+    RelevancyEvaluator,
+)
+from llama_index.embeddings.dashscope import DashScopeEmbedding
+from llama_index.llms.dashscope import DashScope
+
+# ===================== 1. 全局配置（通义千问） =====================
+api_key = os.getenv("DASHSCOPE_API_KEY")
+# 评委模型温度设 0，保证打分稳定可复现
+Settings.llm = DashScope(model_name="qwen3.7-max", temperature=0, api_key=api_key)
+Settings.embed_model = DashScopeEmbedding(model_name="text-embedding-v4", api_key=api_key)
+
+# ===================== 2. 构建一个待评估的 RAG =====================
+documents = SimpleDirectoryReader(input_files=["./data/company_info.txt"]).load_data()
+index = VectorStoreIndex.from_documents(documents)
+query_engine = index.as_query_engine(similarity_top_k=3)
+
+# ===================== 3. 三个内置评估器（都用 Settings.llm 当裁判） =====================
+faithfulness = FaithfulnessEvaluator()   # 忠实度：答案是否被召回上下文支撑\n=====\n# ===================== 3. 三个内置评估器（都用 Settings.llm 当裁判） =====================\n=====\nfaithfulness = FaithfulnessEvaluator()   # 忠实度：答案是否被召回上下文支撑\n=====\n01-RAG评估
+今天修改
+
+
+三、示例代码（LlamaIndex 内置评估器）：
+1、准备一份有干扰信息的文档
+data\company_info.txt
+
+代码块
+Bash
+复制
+公司名称：贝壳科技
+成立时间：2010年
+总部地点：北京
+员工人数：2000人
+上班时间：早上9:00
+下班时间：晚上18:00
+午休时间：12:00-13:00
+公司主要业务：AI软件开发、大数据服务、云计算平台
+公司福利：五险一金、带薪年假、节日福利、定期团建
+
+2023年公司调整过一次考勤制度，但后来恢复。
+某合作公司上班时间为 10:00-19:00，与我们不同。
+部分部门偶尔加班，但标准工时不变。
+另一个子公司员工数量为 300 人，注意不要混淆。
+子公司业务为销售，与总部不同。
+
+2、生成质量评估：Faithfulness + Relevancy + Correctness
+LlamaIndex 内置了评估器，不用自己写打分 prompt。用通义千问 qwen-plus 当评委（裁判模型），对 RAG 的回答打分。
+依赖安装：
+
+代码块
+Bash
+复制
+pip install llama-index-core llama-index-llms-dashscope llama-index-embeddings-dashscope
+
+
+代码块
+Python
+复制
+"""
+RAG 生成质量评估 - LlamaIndex 内置评估器
+FaithfulnessEvaluator（忠实度，无需标准答案）
+RelevancyEvaluator（相关性，无需标准答案）
+CorrectnessEvaluator（正确性，需要标准答案 reference）
+裁判模型用通义千问 qwen-plus。
+"""
+
+import os
+
+from llama_index.core import Settings, SimpleDirectoryReader, VectorStoreIndex
+from llama_index.core.evaluation import (
+    CorrectnessEvaluator,
+    FaithfulnessEvaluator,
+    RelevancyEvaluator,
+)
+from llama_index.embeddings.dashscope import DashScopeEmbedding
+from llama_index.llms.dashscope import DashScope
+
+# ===================== 1. 全局配置（通义千问） =====================
+api_key = os.getenv("DASHSCOPE_API_KEY")
+# 评委模型温度设 0，保证打分稳定可复现
+Settings.llm = DashScope(model_name="qwen3.7-max", temperature=0, api_key=api_key)
+Settings.embed_model = DashScopeEmbedding(model_name="text-embedding-v4", api_key=api_key)
+
+# ===================== 2. 构建一个待评估的 RAG =====================
+documents = SimpleDirectoryReader(input_files=["./data/company_info.txt"]).load_data()
+index = VectorStoreIndex.from_documents(documents)
+query_engine = index.as_query_engine(similarity_top_k=3)
+
+# ===================== 3. 三个内置评估器（都用 Settings.llm 当裁判） =====================
+faithfulness = FaithfulnessEvaluator()   # 忠实度：答案是否被召回上下文支撑
+relevancy = RelevancyEvaluator()         # 相关性：答案+上下文是否切题
+correctness = CorrectnessEvaluator()     # 正确性：答案 vs 标准答案，打 1~5 分
+
+# ===================== 4. 评估若干问题 =====================
+qa_pairs = [
+    ("公司标准上下班时间是什么？", "9:00-18:00，午休 12:00-13:00"),
+    ("公司员工总数是多少？", "2000人"),
+    ("公司主营业务是什么？", "AI软件开发、大数据服务、云计算平台"),
+]
+
+if __name__ == "__main__":
+    print("=" * 70)
+    print("RAG 生成质量评估（LlamaIndex 内置评估器 + 通义千问裁判）")
+    print("=" * 70)
+
+    for question, reference in qa_pairs:
+        # 先让 RAG 生成回答（response 里同时带着召回的 source_nodes）
+        response = query_engine.query(question)
+
+        # 忠实度 / 相关性：直接传 response，评估器会自动取出 source_nodes 当上下文
+        faith_result = faithfulness.evaluate_response(query=question, response=response)
+        rel_result = relevancy.evaluate_response(query=question, response=response)\n=====\n代码块
+Python
+复制
+"""
+RAG 生成质量评估 - LlamaIndex 内置评估器
+FaithfulnessEvaluator（忠实度，无需标准答案）
+RelevancyEvaluator（相关性，无需标准答案）
+CorrectnessEvaluator（正确性，需要标准答案 reference）
+裁判模型用通义千问 qwen-plus。
+"""
+
+import os
+
+from llama_index.core import Settings, SimpleDirectoryReader, VectorStoreIndex
+from llama_index.core.evaluation import (
+    CorrectnessEvaluator,
+    FaithfulnessEvaluator,
+    RelevancyEvaluator,
+)
+from llama_index.embeddings.dashscope import DashScopeEmbedding
+from llama_index.llms.dashscope import DashScope
+
+# ===================== 1. 全局配置（通义千问） =====================
+api_key = os.getenv("DASHSCOPE_API_KEY")
+# 评委模型温度设 0，保证打分稳定可复现
+Settings.llm = DashScope(model_name="qwen3.7-max", temperature=0, api_key=api_key)
+Settings.embed_model = DashScopeEmbedding(model_name="text-embedding-v4", api_key=api_key)
+
+# ===================== 2. 构建一个待评估的 RAG =====================
+documents = SimpleDirectoryReader(input_files=["./data/company_info.txt"]).load_data()
+index = VectorStoreIndex.from_documents(documents)
+query_engine = index.as_query_engine(similarity_top_k=3)
+
+# ===================== 3. 三个内置评估器（都用 Settings.llm 当裁判） =====================
+faithfulness = FaithfulnessEvaluator()   # 忠实度：答案是否被召回上下文支撑
+relevancy = RelevancyEvaluator()         # 相关性：答案+上下文是否切题
+correctness = CorrectnessEvaluator()     # 正确性：答案 vs 标准答案，打 1~5 分
+
+# ===================== 4. 评估若干问题 =====================
+qa_pairs = [
+    ("公司标准上下班时间是什么？", "9:00-18:00，午休 12:00-13:00"),
+    ("公司员工总数是多少？", "2000人"),
+    ("公司主营业务是什么？", "AI软件开发、大数据服务、云计算平台"),
+]
+
+if __name__ == "__main__":
+    print("=" * 70)
+    print("RAG 生成质量评估（LlamaIndex 内置评估器 + 通义千问裁判）")
+    print("=" * 70)
+
+    for question, reference in qa_pairs:
+        # 先让 RAG 生成回答（response 里同时带着召回的 source_nodes）
+        response = query_engine.query(question)
+
+        # 忠实度 / 相关性：直接传 response，评估器会自动取出 source_nodes 当上下文
+        faith_result = faithfulness.evaluate_response(query=question, response=response)
+        rel_result = relevancy.evaluate_response(query=question, response=response)\n=====\nrelevancy = RelevancyEvaluator()         # 相关性：答案+上下文是否切题\n=====\ncorrectness = CorrectnessEvaluator()     # 正确性：答案 vs 标准答案，打 1~5 分\n=====\n# ===================== 4. 评估若干问题 =====================\n=====\nqa_pairs = [\n=====\n("公司标准上下班时间是什么？", "9:00-18:00，午休 12:00-13:00"),\n=====\n("公司员工总数是多少？", "2000人"),\n=====\n("公司主营业务是什么？", "AI软件开发、大数据服务、云计算平台"),\n=====\n]\n=====\nif __name__ == "__main__":\n=====\nprint("=" * 70)\n=====\nprint("RAG 生成质量评估（LlamaIndex 内置评估器 + 通义千问裁判）")\n=====\nfor question, reference in qa_pairs:\n=====\n# 先让 RAG 生成回答（response 里同时带着召回的 source_nodes）\n=====\nresponse = query_engine.query(question)\n=====\n# 忠实度 / 相关性：直接传 response，评估器会自动取出 source_nodes 当上下文\n=====\nfaith_result = faithfulness.evaluate_response(query=question, response=response)\n=====\nrel_result = relevancy.evaluate_response(query=question, response=response)\n=====\n01-RAG评估
+今天修改
+
+代码块
+Python
+复制
+    print("RAG 生成质量评估（LlamaIndex 内置评估器 + 通义千问裁判）")
+    print("=" * 70)
+
+    for question, reference in qa_pairs:
+        # 先让 RAG 生成回答（response 里同时带着召回的 source_nodes）
+        response = query_engine.query(question)
+
+        # 忠实度 / 相关性：直接传 response，评估器会自动取出 source_nodes 当上下文
+        faith_result = faithfulness.evaluate_response(query=question, response=response)
+        rel_result = relevancy.evaluate_response(query=question, response=response)
+        # 正确性：需要标准答案 reference
+        corr_result = correctness.evaluate(
+            query=question, response=str(response), reference=reference
+        )
+
+        print(f"\n📌 问题：{question}")
+        print(f"   回答：{response}")
+        print(f"   ✅ 忠实度 Faithfulness：{'通过' if faith_result.passing else '不通过'}")
+        print(f"   ✅ 相关性 Relevancy：   {'通过' if rel_result.passing else '不通过'}")
+        print(f"   ✅ 正确性 Correctness： {corr_result.score}/5（{'通过' if corr_result.passing else '不通过'}）")
+
+
+•
+evaluate_response(query, response)：直接把查询引擎返回的 response 丢进去，评估器会自动从 response.source_nodes 里取召回上下文，无需手动拼接。
+•
+忠实度、相关性返回 .passing（True/False）和 .score（0/1）；正确性返回 .score（1~5 分）和 .feedback（评语）。
+
+3、检索质量评估：Hit Rate + MRR(Mean Reciprocal Rank[平均倒数排名])
+生成评估只能告诉你"答案好不好"，但定位不了"是检索的锅还是生成的锅"。检索评估专门衡量"召回的文档对不对"。LlamaIndex 用 RetrieverEvaluator，并能用 LLM 自动生成"问题→正确节点"的评测数据集，省去人工标注。
+
+代码块
+Python
+复制
+"""
+RAG 检索质量评估 - LlamaIndex RetrieverEvaluator
+手动构造评测集 + 用 RetrieverEvaluator 算 Hit Rate 和 MRR
+
+本脚本演示如何手动构建评估数据集，并通过自定义逻辑计算检索系统的两个关键指标：
+1. Hit Rate (命中率): 检索结果中是否包含至少一个相关文档。
+2. MRR (Mean Reciprocal Rank, 平均倒数排名): 第一个相关文档在检索结果中的排名倒数的平均值。
+"""
+
+import asyncio
+import os
+
+from llama_index.core import Settings, SimpleDirectoryReader, VectorStoreIndex
+from llama_index.core.node_parser import SentenceSplitter
+from llama_index.embeddings.dashscope import DashScopeEmbedding
+from llama_index.llms.dashscope import DashScope
+
+# ===================== 1. 全局配置（通义千问） =====================
+# 从环境变量获取 API Key，确保安全性
+api_key = os.getenv("DASHSCOPE_API_KEY")
+
+# 配置大语言模型 (LLM) 用于后续可能的生成任务或评估
+Settings.llm = DashScope(model_name="qwen3.7-max", temperature=0, api_key=api_key)
+
+# 配置嵌入模型 (Embedding Model) 用于将文本转换为向量
+Settings.embed_model = DashScopeEmbedding(model_name="text-embedding-v4", api_key=api_key)
+
+# ===================== 2. 分块建索引 =====================
+# 加载本地文档数据
+documents = SimpleDirectoryReader(input_files=["./data/company_info.txt"]).load_data()
+
+# 使用句子分割器对文档进行分块，设置块大小和重叠部分以保留上下文信息
+nodes = SentenceSplitter(chunk_size=120, chunk_overlap=20).get_nodes_from_documents(documents)
+
+# 基于分块后的节点构建向量索引
+index = VectorStoreIndex(nodes)
+
+# 创建检索器，设置每次检索返回最相似的 2 个节点 (top_k=2)
+retriever = index.as_retriever(similarity_top_k=2)
+
+# ===================== 3. 手动定义评估数据集 =====================
+# 为每个测试问题定义关键词，用于后续判断检索结果是否相关
+# 注意：在实际生产中，通常使用人工标注的相关文档 ID 作为黄金标准 (Ground Truth)
+eval_questions = [
+    {
+        "query": "国家天文台的主要职责是什么？",
+        # 关键词列表：只要检索到的文本中包含任一关键词，即视为相关
+        "keywords": ["天文台", "职责", "研究", "观测"]  # 根据实际文档内容调整
+    },
+    {
+        "query": "天文台的地理位置在哪里？",
+        "keywords": ["位置", "地址", "位于", "北京"]
+    },
+    {
+        "query": "公司的核心业务是什么？",
+        "keywords": ["业务", "服务", "产品", "客户"]
+    },
+]\n=====\n代码块
+Python
+复制
+    print("RAG 生成质量评估（LlamaIndex 内置评估器 + 通义千问裁判）")
+    print("=" * 70)
+
+    for question, reference in qa_pairs:
+        # 先让 RAG 生成回答（response 里同时带着召回的 source_nodes）
+        response = query_engine.query(question)
+
+        # 忠实度 / 相关性：直接传 response，评估器会自动取出 source_nodes 当上下文
+        faith_result = faithfulness.evaluate_response(query=question, response=response)
+        rel_result = relevancy.evaluate_response(query=question, response=response)
+        # 正确性：需要标准答案 reference
+        corr_result = correctness.evaluate(
+            query=question, response=str(response), reference=reference
+        )
+
+        print(f"\n📌 问题：{question}")
+        print(f"   回答：{response}")
+        print(f"   ✅ 忠实度 Faithfulness：{'通过' if faith_result.passing else '不通过'}")
+        print(f"   ✅ 相关性 Relevancy：   {'通过' if rel_result.passing else '不通过'}")
+        print(f"   ✅ 正确性 Correctness： {corr_result.score}/5（{'通过' if corr_result.passing else '不通过'}）")\n=====\n# 正确性：需要标准答案 reference\n=====\ncorr_result = correctness.evaluate(\n=====\nquery=question, response=str(response), reference=reference\n=====\nprint(f"\n📌 问题：{question}")\n=====\nprint(f"   回答：{response}")\n=====\nprint(f"   ✅ 忠实度 Faithfulness：{'通过' if faith_result.passing else '不通过'}")\n=====\nprint(f"   ✅ 相关性 Relevancy：   {'通过' if rel_result.passing else '不通过'}")\n=====\nprint(f"   ✅ 正确性 Correctness： {corr_result.score}/5（{'通过' if corr_result.passing else '不通过'}）")\n=====\n•
+evaluate_response(query, response)：直接把查询引擎返回的 response 丢进去，评估器会自动从 response.source_nodes 里取召回上下文，无需手动拼接。
+•
+忠实度、相关性返回 .passing（True/False）和 .score（0/1）；正确性返回 .score（1~5 分）和 .feedback（评语）。\n=====\n•
+evaluate_response(query, response)：直接把查询引擎返回的 response 丢进去，评估器会自动从 response.source_nodes 里取召回上下文，无需手动拼接。\n=====\nevaluate_response(query, response)：直接把查询引擎返回的 response 丢进去，评估器会自动从 response.source_nodes 里取召回上下文，无需手动拼接。\n=====\n•
+忠实度、相关性返回 .passing（True/False）和 .score（0/1）；正确性返回 .score（1~5 分）和 .feedback（评语）。\n=====\n忠实度、相关性返回 .passing（True/False）和 .score（0/1）；正确性返回 .score（1~5 分）和 .feedback（评语）。\n=====\n3、检索质量评估：Hit Rate + MRR(Mean Reciprocal Rank[平均倒数排名])\n=====\n生成评估只能告诉你"答案好不好"，但定位不了"是检索的锅还是生成的锅"。检索评估专门衡量"召回的文档对不对"。LlamaIndex 用 RetrieverEvaluator，并能用 LLM 自动生成"问题→正确节点"的评测数据集，省去人工标注。\n=====\n代码块
+Python
+复制
+"""
+RAG 检索质量评估 - LlamaIndex RetrieverEvaluator
+手动构造评测集 + 用 RetrieverEvaluator 算 Hit Rate 和 MRR
+
+本脚本演示如何手动构建评估数据集，并通过自定义逻辑计算检索系统的两个关键指标：
+1. Hit Rate (命中率): 检索结果中是否包含至少一个相关文档。
+2. MRR (Mean Reciprocal Rank, 平均倒数排名): 第一个相关文档在检索结果中的排名倒数的平均值。
+"""
+
+import asyncio
+import os
+
+from llama_index.core import Settings, SimpleDirectoryReader, VectorStoreIndex
+from llama_index.core.node_parser import SentenceSplitter
+from llama_index.embeddings.dashscope import DashScopeEmbedding
+from llama_index.llms.dashscope import DashScope
+
+# ===================== 1. 全局配置（通义千问） =====================
+# 从环境变量获取 API Key，确保安全性
+api_key = os.getenv("DASHSCOPE_API_KEY")
+
+# 配置大语言模型 (LLM) 用于后续可能的生成任务或评估
+Settings.llm = DashScope(model_name="qwen3.7-max", temperature=0, api_key=api_key)
+
+# 配置嵌入模型 (Embedding Model) 用于将文本转换为向量
+Settings.embed_model = DashScopeEmbedding(model_name="text-embedding-v4", api_key=api_key)
+
+# ===================== 2. 分块建索引 =====================
+# 加载本地文档数据
+documents = SimpleDirectoryReader(input_files=["./data/company_info.txt"]).load_data()
+
+# 使用句子分割器对文档进行分块，设置块大小和重叠部分以保留上下文信息
+nodes = SentenceSplitter(chunk_size=120, chunk_overlap=20).get_nodes_from_documents(documents)
+
+# 基于分块后的节点构建向量索引
+index = VectorStoreIndex(nodes)
+
+# 创建检索器，设置每次检索返回最相似的 2 个节点 (top_k=2)
+retriever = index.as_retriever(similarity_top_k=2)
+
+# ===================== 3. 手动定义评估数据集 =====================
+# 为每个测试问题定义关键词，用于后续判断检索结果是否相关
+# 注意：在实际生产中，通常使用人工标注的相关文档 ID 作为黄金标准 (Ground Truth)
+eval_questions = [
+    {
+        "query": "国家天文台的主要职责是什么？",
+        # 关键词列表：只要检索到的文本中包含任一关键词，即视为相关
+        "keywords": ["天文台", "职责", "研究", "观测"]  # 根据实际文档内容调整
+    },
+    {
+        "query": "天文台的地理位置在哪里？",
+        "keywords": ["位置", "地址", "位于", "北京"]
+    },
+    {
+        "query": "公司的核心业务是什么？",
+        "keywords": ["业务", "服务", "产品", "客户"]
+    },
+]\n=====\nRAG 检索质量评估 - LlamaIndex RetrieverEvaluator\n=====\n手动构造评测集 + 用 RetrieverEvaluator 算 Hit Rate 和 MRR\n=====\n本脚本演示如何手动构建评估数据集，并通过自定义逻辑计算检索系统的两个关键指标：\n=====\n1. Hit Rate (命中率): 检索结果中是否包含至少一个相关文档。\n=====\n2. MRR (Mean Reciprocal Rank, 平均倒数排名): 第一个相关文档在检索结果中的排名倒数的平均值。\n=====\nimport asyncio\n=====\nfrom llama_index.core.node_parser import SentenceSplitter\n=====\n# 从环境变量获取 API Key，确保安全性\n=====\n# 配置大语言模型 (LLM) 用于后续可能的生成任务或评估\n=====\n# 配置嵌入模型 (Embedding Model) 用于将文本转换为向量\n=====\n# ===================== 2. 分块建索引 =====================\n=====\n# 加载本地文档数据\n=====\n# 使用句子分割器对文档进行分块，设置块大小和重叠部分以保留上下文信息\n=====\nnodes = SentenceSplitter(chunk_size=120, chunk_overlap=20).get_nodes_from_documents(documents)\n=====\n# 基于分块后的节点构建向量索引\n=====\nindex = VectorStoreIndex(nodes)\n=====\n# 创建检索器，设置每次检索返回最相似的 2 个节点 (top_k=2)\n=====\nretriever = index.as_retriever(similarity_top_k=2)\n=====\n# ===================== 3. 手动定义评估数据集 =====================\n=====\n# 为每个测试问题定义关键词，用于后续判断检索结果是否相关\n=====\n# 注意：在实际生产中，通常使用人工标注的相关文档 ID 作为黄金标准 (Ground Truth)\n=====\neval_questions = [\n=====\n{\n=====\n"query": "国家天文台的主要职责是什么？",\n=====\n# 关键词列表：只要检索到的文本中包含任一关键词，即视为相关\n=====\n"keywords": ["天文台", "职责", "研究", "观测"]  # 根据实际文档内容调整\n=====\n},\n=====\n"query": "天文台的地理位置在哪里？",\n=====\n"keywords": ["位置", "地址", "位于", "北京"]\n=====\n"query": "公司的核心业务是什么？",\n=====\n"keywords": ["业务", "服务", "产品", "客户"]\n=====\n01-RAG评估
+今天修改
+
+代码块
+Python
+复制
+    Args:
+        retrieved_nodes: 检索器返回的节点列表
+        keywords: 用于判断相关性的关键词列表
+        
+    Returns:
+        bool: 如果任一节点包含任一关键词，返回 True (命中)，否则返回 False
+    """
+    for node in retrieved_nodes:
+        text_lower = node.text.lower()
+        # 如果任一关键词出现在文本中，认为命中
+        if any(keyword in text_lower for keyword in keywords):
+            return True
+    return False
+
+
+async def main():
+    """
+    主异步函数：执行检索评估流程
+    """
+    print("\n开始评估...")
+
+    results = []
+    # 遍历每个评估问题
+    for item in eval_questions:
+        question = item["query"]
+        keywords = item["keywords"]
+
+        # 执行异步检索，获取与问题最相似的节点
+        retrieved_nodes = await retriever.aretrieve(question)
+
+        # 检查是否命中：是否存在至少一个相关文档
+        is_hit = check_relevance(retrieved_nodes, keywords)
+
+        # 计算 MRR（Mean Reciprocal Rank）
+        # MRR = 1 / rank_of_first_relevant_document
+        # 如果没有相关文档，MRR 为 0
+        mrr = 0.0
+        for rank, node in enumerate(retrieved_nodes, 1):
+            # 检查当前节点是否包含任一关键词
+            if any(keyword in node.text.lower() for keyword in keywords):
+                mrr = 1.0 / rank  # 找到第一个相关文档，计算其倒数排名
+                break  # MRR 只关心第一个相关文档的位置
+
+        # 保存当前问题的评估结果
+        results.append({
+            "query": question,
+            "hit": is_hit,
+            "mrr": mrr
+        })
+
+        # 打印单个问题的实时状态
+        status = "✅ 命中" if is_hit else "❌ 未命中"
+        print(f"  {status} | {question[:40]}...")
+
+    # ===================== 5. 计算并输出总体指标 =====================
+    # 计算 Hit Rate: 命中次数 / 总问题数
+    hit_rate = sum(1 for r in results if r["hit"]) / len(results)
+    
+    # 计算平均 MRR: 所有问题 MRR 之和 / 总问题数
+    avg_mrr = sum(r["mrr"] for r in results) / len(results)
+
+    # 打印分隔线和标题
+    print("\n" + "=" * 60)
+    print(f"检索评估结果（共 {len(results)} 个问题）")
+    print("=" * 60)
+    
+    # 打印核心指标，保留三位小数
+    print(f"Hit Rate（命中率）：{hit_rate:.3f}")
+    print(f"MRR（平均倒数排名）：{avg_mrr:.3f}")
+    print("=" * 60)
+
+    # 显示每个问题的详细评估结果
+    print("\n详细结果：")
+    for i, r in enumerate(results, 1):
+        print(f"  {i}. {'✅' if r['hit'] else '❌'} MRR={r['mrr']:.3f} | {r['query'][:50]}")
+
+
+if __name__ == "__main__":
+    # 运行异步主函数
+    asyncio.run(main())
+
+
+通过调整 similarity_top_k、分块大小、是否加重排器（见上一章），观察 Hit Rate / MRR 的变化，就能量化判断某个检索优化到底有没有用。
+
+4、对比"基础 RAG vs 优化 RAG"：批量评估
+评估最大的用处是量化优化效果——对比优化前后分数提升了多少。多个问题逐个 evaluate 太慢，LlamaIndex 提供了 BatchEvalRunner 异步批量跑。下面对比"基础检索（top_k=2）"和"加重排的优化检索"在忠实度/相关性上的差异。
+
+代码块
+Python
+复制
+"""
+基础 RAG vs 优化 RAG：批量评估对比 - LlamaIndex BatchEvalRunner
+对同一组问题，分别评估两套查询引擎的 Faithfulness / Relevancy，量化优化收益。
+这里的向量模型需要用到批量添加的自定义模型
+"""
+
+import asyncio
+import os
+
+from llama_index.core import Settings, SimpleDirectoryReader, VectorStoreIndex
+from llama_index.core.evaluation import (
+    BatchEvalRunner,
+    FaithfulnessEvaluator,
+    RelevancyEvaluator,
+)
+from llama_index.core.postprocessor import SentenceEmbeddingOptimizer
+from llama_index.embeddings.dashscope import DashScopeEmbedding
+from llama_index.llms.dashscope import DashScope
+
+# ===================== 1. 全局配置 =====================
+api_key = os.getenv("DASHSCOPE_API_KEY")
+Settings.llm = DashScope(model_name="qwen-plus", temperature=0, api_key=api_key)
+Settings.embed_model = DashScopeEmbedding(model_name="text-embedding-v3", api_key=api_key)
+
+documents = SimpleDirectoryReader(input_files=["./data/company_info.txt"]).load_data()
+index = VectorStoreIndex.from_documents(documents)
+
+# 两套查询引擎：基础 vs 优化（优化版加了上下文压缩，过滤干扰句）
+basic_engine = index.as_query_engine(similarity_top_k=3)
+optimized_engine = index.as_query_engine(
+    similarity_top_k=3,
+    node_postprocessors=[SentenceEmbeddingOptimizer(percentile_cutoff=0.5)],
+)
+
+# ===================== 2. 批量评估器 =====================
+runner = BatchEvalRunner(
+    {"faithfulness": FaithfulnessEvaluator(), "relevancy": RelevancyEvaluator()},
+    workers=4,
+)
+
+questions = [
+    "公司标准上下班时间是什么？",
+    "公司员工总数是多少？",
+    "公司主营业务是什么？",
+]
+
+
+async def eval_engine(name, engine):
+    results = await runner.aevaluate_queries(engine, queries=questions)
+    faith = sum(r.passing for r in results["faithfulness"]) / len(questions)
+    rel = sum(r.passing for r in results["relevancy"]) / len(questions)
+    print(f"【{name}】忠实度通过率：{faith:.2f} | 相关性通过率：{rel:.2f}")
+
+
+async def main():
+    print("=" * 60)
+    print("基础 RAG 🆚 优化 RAG 批量评估对比")
+    print("=" * 60)
+    await eval_engine("基础 RAG", basic_engine)\n=====\n代码块
+Python
+复制
+    Args:
+        retrieved_nodes: 检索器返回的节点列表
+        keywords: 用于判断相关性的关键词列表
+        
+    Returns:
+        bool: 如果任一节点包含任一关键词，返回 True (命中)，否则返回 False
+    """
+    for node in retrieved_nodes:
+        text_lower = node.text.lower()
+        # 如果任一关键词出现在文本中，认为命中
+        if any(keyword in text_lower for keyword in keywords):
+            return True
+    return False
+
+
+async def main():
+    """
+    主异步函数：执行检索评估流程
+    """
+    print("\n开始评估...")
+
+    results = []
+    # 遍历每个评估问题
+    for item in eval_questions:
+        question = item["query"]
+        keywords = item["keywords"]
+
+        # 执行异步检索，获取与问题最相似的节点
+        retrieved_nodes = await retriever.aretrieve(question)
+
+        # 检查是否命中：是否存在至少一个相关文档
+        is_hit = check_relevance(retrieved_nodes, keywords)
+
+        # 计算 MRR（Mean Reciprocal Rank）
+        # MRR = 1 / rank_of_first_relevant_document
+        # 如果没有相关文档，MRR 为 0
+        mrr = 0.0
+        for rank, node in enumerate(retrieved_nodes, 1):
+            # 检查当前节点是否包含任一关键词
+            if any(keyword in node.text.lower() for keyword in keywords):
+                mrr = 1.0 / rank  # 找到第一个相关文档，计算其倒数排名
+                break  # MRR 只关心第一个相关文档的位置
+
+        # 保存当前问题的评估结果
+        results.append({
+            "query": question,
+            "hit": is_hit,
+            "mrr": mrr
+        })
+
+        # 打印单个问题的实时状态
+        status = "✅ 命中" if is_hit else "❌ 未命中"
+        print(f"  {status} | {question[:40]}...")
+
+    # ===================== 5. 计算并输出总体指标 =====================
+    # 计算 Hit Rate: 命中次数 / 总问题数
+    hit_rate = sum(1 for r in results if r["hit"]) / len(results)
+    
+    # 计算平均 MRR: 所有问题 MRR 之和 / 总问题数
+    avg_mrr = sum(r["mrr"] for r in results) / len(results)
+
+    # 打印分隔线和标题
+    print("\n" + "=" * 60)
+    print(f"检索评估结果（共 {len(results)} 个问题）")
+    print("=" * 60)
+    
+    # 打印核心指标，保留三位小数
+    print(f"Hit Rate（命中率）：{hit_rate:.3f}")
+    print(f"MRR（平均倒数排名）：{avg_mrr:.3f}")
+    print("=" * 60)
+
+    # 显示每个问题的详细评估结果
+    print("\n详细结果：")
+    for i, r in enumerate(results, 1):
+        print(f"  {i}. {'✅' if r['hit'] else '❌'} MRR={r['mrr']:.3f} | {r['query'][:50]}")
+
+
+if __name__ == "__main__":
+    # 运行异步主函数
+    asyncio.run(main())\n=====\nArgs:\n=====\nretrieved_nodes: 检索器返回的节点列表\n=====\nkeywords: 用于判断相关性的关键词列表\n=====\nReturns:\n=====\nbool: 如果任一节点包含任一关键词，返回 True (命中)，否则返回 False\n=====\nfor node in retrieved_nodes:\n=====\ntext_lower = node.text.lower()\n=====\n# 如果任一关键词出现在文本中，认为命中\n=====\nif any(keyword in text_lower for keyword in keywords):\n=====\nreturn True\n=====\nreturn False\n=====\nasync def main():\n=====\n主异步函数：执行检索评估流程\n=====\nprint("\n开始评估...")\n=====\nresults = []\n=====\n# 遍历每个评估问题\n=====\nfor item in eval_questions:\n=====\nquestion = item["query"]\n=====\nkeywords = item["keywords"]\n=====\n# 执行异步检索，获取与问题最相似的节点\n=====\nretrieved_nodes = await retriever.aretrieve(question)\n=====\n# 检查是否命中：是否存在至少一个相关文档\n=====\nis_hit = check_relevance(retrieved_nodes, keywords)\n=====\n# 计算 MRR（Mean Reciprocal Rank）\n=====\n# MRR = 1 / rank_of_first_relevant_document\n=====\n# 如果没有相关文档，MRR 为 0\n=====\nmrr = 0.0\n=====\nfor rank, node in enumerate(retrieved_nodes, 1):\n=====\n# 检查当前节点是否包含任一关键词\n=====\nif any(keyword in node.text.lower() for keyword in keywords):\n=====\nmrr = 1.0 / rank  # 找到第一个相关文档，计算其倒数排名\n=====\nbreak  # MRR 只关心第一个相关文档的位置\n=====\n# 保存当前问题的评估结果\n=====\nresults.append({\n=====\n"query": question,\n=====\n"hit": is_hit,\n=====\n"mrr": mrr\n=====\n})\n=====\n# 打印单个问题的实时状态\n=====\nstatus = "✅ 命中" if is_hit else "❌ 未命中"\n=====\nprint(f"  {status} | {question[:40]}...")\n=====\n# ===================== 5. 计算并输出总体指标 =====================\n=====\n# 计算 Hit Rate: 命中次数 / 总问题数\n=====\nhit_rate = sum(1 for r in results if r["hit"]) / len(results)\n=====\n# 计算平均 MRR: 所有问题 MRR 之和 / 总问题数\n=====\navg_mrr = sum(r["mrr"] for r in results) / len(results)\n=====\n# 打印分隔线和标题\n=====\nprint("\n" + "=" * 60)\n=====\nprint(f"检索评估结果（共 {len(results)} 个问题）")\n=====\nprint("=" * 60)\n=====\n# 打印核心指标，保留三位小数\n=====\nprint(f"Hit Rate（命中率）：{hit_rate:.3f}")\n=====\nprint(f"MRR（平均倒数排名）：{avg_mrr:.3f}")\n=====\n# 显示每个问题的详细评估结果\n=====\nprint("\n详细结果：")\n=====\nfor i, r in enumerate(results, 1):\n=====\nprint(f"  {i}. {'✅' if r['hit'] else '❌'} MRR={r['mrr']:.3f} | {r['query'][:50]}")\n=====\n# 运行异步主函数\n=====\nasyncio.run(main())\n=====\n通过调整 similarity_top_k、分块大小、是否加重排器（见上一章），观察 Hit Rate / MRR 的变化，就能量化判断某个检索优化到底有没有用。\n=====\n4、对比"基础 RAG vs 优化 RAG"：批量评估\n=====\n评估最大的用处是量化优化效果——对比优化前后分数提升了多少。多个问题逐个 evaluate 太慢，LlamaIndex 提供了 BatchEvalRunner 异步批量跑。下面对比"基础检索（top_k=2）"和"加重排的优化检索"在忠实度/相关性上的差异。\n=====\n代码块
+Python
+复制
+"""
+基础 RAG vs 优化 RAG：批量评估对比 - LlamaIndex BatchEvalRunner
+对同一组问题，分别评估两套查询引擎的 Faithfulness / Relevancy，量化优化收益。
+这里的向量模型需要用到批量添加的自定义模型
+"""
+
+import asyncio
+import os
+
+from llama_index.core import Settings, SimpleDirectoryReader, VectorStoreIndex
+from llama_index.core.evaluation import (
+    BatchEvalRunner,
+    FaithfulnessEvaluator,
+    RelevancyEvaluator,
+)
+from llama_index.core.postprocessor import SentenceEmbeddingOptimizer
+from llama_index.embeddings.dashscope import DashScopeEmbedding
+from llama_index.llms.dashscope import DashScope
+
+# ===================== 1. 全局配置 =====================
+api_key = os.getenv("DASHSCOPE_API_KEY")
+Settings.llm = DashScope(model_name="qwen-plus", temperature=0, api_key=api_key)
+Settings.embed_model = DashScopeEmbedding(model_name="text-embedding-v3", api_key=api_key)
+
+documents = SimpleDirectoryReader(input_files=["./data/company_info.txt"]).load_data()
+index = VectorStoreIndex.from_documents(documents)
+
+# 两套查询引擎：基础 vs 优化（优化版加了上下文压缩，过滤干扰句）
+basic_engine = index.as_query_engine(similarity_top_k=3)
+optimized_engine = index.as_query_engine(
+    similarity_top_k=3,
+    node_postprocessors=[SentenceEmbeddingOptimizer(percentile_cutoff=0.5)],
+)
+
+# ===================== 2. 批量评估器 =====================
+runner = BatchEvalRunner(
+    {"faithfulness": FaithfulnessEvaluator(), "relevancy": RelevancyEvaluator()},
+    workers=4,
+)
+
+questions = [
+    "公司标准上下班时间是什么？",
+    "公司员工总数是多少？",
+    "公司主营业务是什么？",
+]
+
+
+async def eval_engine(name, engine):
+    results = await runner.aevaluate_queries(engine, queries=questions)
+    faith = sum(r.passing for r in results["faithfulness"]) / len(questions)
+    rel = sum(r.passing for r in results["relevancy"]) / len(questions)
+    print(f"【{name}】忠实度通过率：{faith:.2f} | 相关性通过率：{rel:.2f}")
+
+
+async def main():
+    print("=" * 60)
+    print("基础 RAG 🆚 优化 RAG 批量评估对比")
+    print("=" * 60)
+    await eval_engine("基础 RAG", basic_engine)\n=====\n基础 RAG vs 优化 RAG：批量评估对比 - LlamaIndex BatchEvalRunner\n=====\n对同一组问题，分别评估两套查询引擎的 Faithfulness / Relevancy，量化优化收益。\n=====\n这里的向量模型需要用到批量添加的自定义模型\n=====\nBatchEvalRunner,\n=====\nfrom llama_index.core.postprocessor import SentenceEmbeddingOptimizer\n=====\n# ===================== 1. 全局配置 =====================\n=====\nSettings.llm = DashScope(model_name="qwen-plus", temperature=0, api_key=api_key)\n=====\nSettings.embed_model = DashScopeEmbedding(model_name="text-embedding-v3", api_key=api_key)\n=====\n# 两套查询引擎：基础 vs 优化（优化版加了上下文压缩，过滤干扰句）\n=====\nbasic_engine = index.as_query_engine(similarity_top_k=3)\n=====\noptimized_engine = index.as_query_engine(\n=====\nsimilarity_top_k=3,\n=====\nnode_postprocessors=[SentenceEmbeddingOptimizer(percentile_cutoff=0.5)],\n=====\n# ===================== 2. 批量评估器 =====================\n=====\nrunner = BatchEvalRunner(\n=====\n{"faithfulness": FaithfulnessEvaluator(), "relevancy": RelevancyEvaluator()},\n=====\nworkers=4,\n=====\nquestions = [\n=====\n"公司标准上下班时间是什么？",\n=====\n"公司员工总数是多少？",\n=====\n"公司主营业务是什么？",\n=====\nasync def eval_engine(name, engine):\n=====\nresults = await runner.aevaluate_queries(engine, queries=questions)\n=====\nfaith = sum(r.passing for r in results["faithfulness"]) / len(questions)\n=====\nrel = sum(r.passing for r in results["relevancy"]) / len(questions)\n=====\nprint(f"【{name}】忠实度通过率：{faith:.2f} | 相关性通过率：{rel:.2f}")\n=====\nprint("基础 RAG 🆚 优化 RAG 批量评估对比")\n=====\nawait eval_engine("基础 RAG", basic_engine)\n=====\n01-RAG评估
+今天修改
+
+代码块
+Python
+复制
+        return self._inner.get_text_embedding(text)
+
+    def get_text_embedding_batch(
+        self, texts: List[str], show_progress: bool = False
+    ) -> List[List[float]]:
+        """分批调用，每批 ≤ 10，避免 DashScope 报错"""
+        BATCH_LIMIT = 10
+        all_embeddings = []
+        for i in range(0, len(texts), BATCH_LIMIT):
+            batch = texts[i : i + BATCH_LIMIT]
+            try:
+                embs = self._inner.get_text_embedding_batch(
+                    batch, show_progress=show_progress
+                )
+                if embs is None or len(embs) == 0:
+                    raise RuntimeError("DashScope 返回空 embedding")
+                all_embeddings.extend(embs)
+            except Exception as e:
+                print(f"❌ Embedding 批次失败 (batch {i//BATCH_LIMIT + 1}): {e}")
+                raise
+        return all_embeddings
+
+    async def _aget_query_embedding(self, query: str) -> List[float]:
+        return self._get_query_embedding(query)
+
+    async def _aget_text_embedding(self, text: str) -> List[float]:
+        return self._get_text_embedding(text)
+
+四、Ragas 等专业评估框架（了解）
+LlamaIndex 内置评估器适合快速、轻量地接入。如果要更系统、指标更丰富、可复现的基准评估，业界最主流的专门框架是 RAGAS。
+4.1 RAGAS 是什么
+RAGAS（Retrieval Augmented Generation Assessment）是一个专门为 RAG 流水线设计的自动化评估框架，核心理念有三点：
+1.
+Reference-free（多数指标免标注）：传统评估要为每个问题人工写标准答案，成本极高。RAGAS 的多数指标用 LLM-as-a-judge（大模型当裁判），让 LLM 对照"问题 / 答案 / 召回上下文"自动判分，无需人工标注就能算忠实度、答案相关性。
+2.
+检索 + 生成分别诊断：RAGAS 把指标明确归到"检索侧"和"生成侧"，方便定位瓶颈到底在哪一环——这正是 RAG 评估的关键诉求。
+3.
+与主流框架无缝集成：原生支持 LlamaIndex、LangChain，可以直接复用你已经搭好的 query engine、LLM 和 embedding，不用换技术栈。
+4.2 RAGAS 核心指标
+RAGAS 的四个最常用指标，正好覆盖"检索"和"生成"两个环节：
+
+
+
+指标背后的判分思路：
+•
+Faithfulness：先把答案拆成若干"论断（claim）"，再逐条判断"该论断能否由上下文支撑"，忠实度 = 被支撑的论断数 / 总论断数。
+•
+Answer Relevancy：让 LLM 根据答案"反向生成可能的问题"，再算这些问题与原始问题的相似度，越接近说明答案越切题。
+•
+Context Precision / Recall：对照参考答案（reference），判断召回上下文的"排序质量"和"信息完整度"。
+
+小结
+
+
+评估的闭环：先看检索指标定位是检索还是生成的问题 → 针对性优化（分块/重排/压缩/prompt）→ 再用同一套评估对比前后分数 → 量化收益。\n=====\n代码块
+Python
+复制
+        return self._inner.get_text_embedding(text)
+
+    def get_text_embedding_batch(
+        self, texts: List[str], show_progress: bool = False
+    ) -> List[List[float]]:
+        """分批调用，每批 ≤ 10，避免 DashScope 报错"""
+        BATCH_LIMIT = 10
+        all_embeddings = []
+        for i in range(0, len(texts), BATCH_LIMIT):
+            batch = texts[i : i + BATCH_LIMIT]
+            try:
+                embs = self._inner.get_text_embedding_batch(
+                    batch, show_progress=show_progress
+                )
+                if embs is None or len(embs) == 0:
+                    raise RuntimeError("DashScope 返回空 embedding")
+                all_embeddings.extend(embs)
+            except Exception as e:
+                print(f"❌ Embedding 批次失败 (batch {i//BATCH_LIMIT + 1}): {e}")
+                raise
+        return all_embeddings
+
+    async def _aget_query_embedding(self, query: str) -> List[float]:
+        return self._get_query_embedding(query)
+
+    async def _aget_text_embedding(self, text: str) -> List[float]:
+        return self._get_text_embedding(text)\n=====\nreturn self._inner.get_text_embedding(text)\n=====\ndef get_text_embedding_batch(\n=====\nself, texts: List[str], show_progress: bool = False\n=====\n) -> List[List[float]]:\n=====\n"""分批调用，每批 ≤ 10，避免 DashScope 报错"""\n=====\nBATCH_LIMIT = 10\n=====\nall_embeddings = []\n=====\nfor i in range(0, len(texts), BATCH_LIMIT):\n=====\nbatch = texts[i : i + BATCH_LIMIT]\n=====\ntry:\n=====\nembs = self._inner.get_text_embedding_batch(\n=====\nbatch, show_progress=show_progress\n=====\nif embs is None or len(embs) == 0:\n=====\nraise RuntimeError("DashScope 返回空 embedding")\n=====\nall_embeddings.extend(embs)\n=====\nexcept Exception as e:\n=====\nprint(f"❌ Embedding 批次失败 (batch {i//BATCH_LIMIT + 1}): {e}")\n=====\nraise\n=====\nreturn all_embeddings\n=====\nasync def _aget_query_embedding(self, query: str) -> List[float]:\n=====\nreturn self._get_query_embedding(query)\n=====\nasync def _aget_text_embedding(self, text: str) -> List[float]:\n=====\nreturn self._get_text_embedding(text)\n=====\n四、Ragas 等专业评估框架（了解）\n=====\nLlamaIndex 内置评估器适合快速、轻量地接入。如果要更系统、指标更丰富、可复现的基准评估，业界最主流的专门框架是 RAGAS。\n=====\n4.1 RAGAS 是什么\n=====\nRAGAS（Retrieval Augmented Generation Assessment）是一个专门为 RAG 流水线设计的自动化评估框架，核心理念有三点：\n=====\n1.
+Reference-free（多数指标免标注）：传统评估要为每个问题人工写标准答案，成本极高。RAGAS 的多数指标用 LLM-as-a-judge（大模型当裁判），让 LLM 对照"问题 / 答案 / 召回上下文"自动判分，无需人工标注就能算忠实度、答案相关性。\n=====\nReference-free（多数指标免标注）：传统评估要为每个问题人工写标准答案，成本极高。RAGAS 的多数指标用 LLM-as-a-judge（大模型当裁判），让 LLM 对照"问题 / 答案 / 召回上下文"自动判分，无需人工标注就能算忠实度、答案相关性。\n=====\n2.
+检索 + 生成分别诊断：RAGAS 把指标明确归到"检索侧"和"生成侧"，方便定位瓶颈到底在哪一环——这正是 RAG 评估的关键诉求。\n=====\n检索 + 生成分别诊断：RAGAS 把指标明确归到"检索侧"和"生成侧"，方便定位瓶颈到底在哪一环——这正是 RAG 评估的关键诉求。\n=====\n3.
+与主流框架无缝集成：原生支持 LlamaIndex、LangChain，可以直接复用你已经搭好的 query engine、LLM 和 embedding，不用换技术栈。\n=====\n与主流框架无缝集成：原生支持 LlamaIndex、LangChain，可以直接复用你已经搭好的 query engine、LLM 和 embedding，不用换技术栈。\n=====\n4.2 RAGAS 核心指标\n=====\nRAGAS 的四个最常用指标，正好覆盖"检索"和"生成"两个环节：\n=====\n指标背后的判分思路：
+•
+Faithfulness：先把答案拆成若干"论断（claim）"，再逐条判断"该论断能否由上下文支撑"，忠实度 = 被支撑的论断数 / 总论断数。
+•
+Answer Relevancy：让 LLM 根据答案"反向生成可能的问题"，再算这些问题与原始问题的相似度，越接近说明答案越切题。
+•
+Context Precision / Recall：对照参考答案（reference），判断召回上下文的"排序质量"和"信息完整度"。\n=====\n指标背后的判分思路：\n=====\n•
+Faithfulness：先把答案拆成若干"论断（claim）"，再逐条判断"该论断能否由上下文支撑"，忠实度 = 被支撑的论断数 / 总论断数。\n=====\nFaithfulness：先把答案拆成若干"论断（claim）"，再逐条判断"该论断能否由上下文支撑"，忠实度 = 被支撑的论断数 / 总论断数。\n=====\n•
+Answer Relevancy：让 LLM 根据答案"反向生成可能的问题"，再算这些问题与原始问题的相似度，越接近说明答案越切题。\n=====\nAnswer Relevancy：让 LLM 根据答案"反向生成可能的问题"，再算这些问题与原始问题的相似度，越接近说明答案越切题。\n=====\n•
+Context Precision / Recall：对照参考答案（reference），判断召回上下文的"排序质量"和"信息完整度"。\n=====\nContext Precision / Recall：对照参考答案（reference），判断召回上下文的"排序质量"和"信息完整度"。\n=====\n小结\n=====\n评估的闭环：先看检索指标定位是检索还是生成的问题 → 针对性优化（分块/重排/压缩/prompt）→ 再用同一套评估对比前后分数 → 量化收益。\n=====\n01-RAG评估
+今天修改
+
+代码块
+Python
+复制
+        """分批调用，每批 ≤ 10，避免 DashScope 报错"""
+        BATCH_LIMIT = 10
+        all_embeddings = []
+        for i in range(0, len(texts), BATCH_LIMIT):
+            batch = texts[i : i + BATCH_LIMIT]
+            try:
+                embs = self._inner.get_text_embedding_batch(
+                    batch, show_progress=show_progress
+                )
+                if embs is None or len(embs) == 0:
+                    raise RuntimeError("DashScope 返回空 embedding")
+                all_embeddings.extend(embs)
+            except Exception as e:
+                print(f"❌ Embedding 批次失败 (batch {i//BATCH_LIMIT + 1}): {e}")
+                raise
+        return all_embeddings
+
+    async def _aget_query_embedding(self, query: str) -> List[float]:
+        return self._get_query_embedding(query)
+
+    async def _aget_text_embedding(self, text: str) -> List[float]:
+        return self._get_text_embedding(text)
+
+四、Ragas 等专业评估框架（了解）
+LlamaIndex 内置评估器适合快速、轻量地接入。如果要更系统、指标更丰富、可复现的基准评估，业界最主流的专门框架是 RAGAS。
+4.1 RAGAS 是什么
+RAGAS（Retrieval Augmented Generation Assessment）是一个专门为 RAG 流水线设计的自动化评估框架，核心理念有三点：
+1.
+Reference-free（多数指标免标注）：传统评估要为每个问题人工写标准答案，成本极高。RAGAS 的多数指标用 LLM-as-a-judge（大模型当裁判），让 LLM 对照"问题 / 答案 / 召回上下文"自动判分，无需人工标注就能算忠实度、答案相关性。
+2.
+检索 + 生成分别诊断：RAGAS 把指标明确归到"检索侧"和"生成侧"，方便定位瓶颈到底在哪一环——这正是 RAG 评估的关键诉求。
+3.
+与主流框架无缝集成：原生支持 LlamaIndex、LangChain，可以直接复用你已经搭好的 query engine、LLM 和 embedding，不用换技术栈。
+4.2 RAGAS 核心指标
+RAGAS 的四个最常用指标，正好覆盖"检索"和"生成"两个环节：
+
+
+
+指标背后的判分思路：
+•
+Faithfulness：先把答案拆成若干"论断（claim）"，再逐条判断"该论断能否由上下文支撑"，忠实度 = 被支撑的论断数 / 总论断数。
+•
+Answer Relevancy：让 LLM 根据答案"反向生成可能的问题"，再算这些问题与原始问题的相似度，越接近说明答案越切题。
+•
+Context Precision / Recall：对照参考答案（reference），判断召回上下文的"排序质量"和"信息完整度"。
+
+小结
+
+
+评估的闭环：先看检索指标定位是检索还是生成的问题 → 针对性优化（分块/重排/压缩/prompt）→ 再用同一套评估对比前后分数 → 量化收益。\n=====\n代码块
+Python
+复制
+        """分批调用，每批 ≤ 10，避免 DashScope 报错"""
+        BATCH_LIMIT = 10
+        all_embeddings = []
+        for i in range(0, len(texts), BATCH_LIMIT):
+            batch = texts[i : i + BATCH_LIMIT]
+            try:
+                embs = self._inner.get_text_embedding_batch(
+                    batch, show_progress=show_progress
+                )
+                if embs is None or len(embs) == 0:
+                    raise RuntimeError("DashScope 返回空 embedding")
+                all_embeddings.extend(embs)
+            except Exception as e:
+                print(f"❌ Embedding 批次失败 (batch {i//BATCH_LIMIT + 1}): {e}")
+                raise
+        return all_embeddings
+
+    async def _aget_query_embedding(self, query: str) -> List[float]:
+        return self._get_query_embedding(query)
+
+    async def _aget_text_embedding(self, text: str) -> List[float]:
+        return self._get_text_embedding(text)\n=====\n01-RAG评估
+今天修改
+
+代码块
+Python
+复制
+                raise
+        return all_embeddings
+
+    async def _aget_query_embedding(self, query: str) -> List[float]:
+        return self._get_query_embedding(query)
+
+    async def _aget_text_embedding(self, text: str) -> List[float]:
+        return self._get_text_embedding(text)
+
+四、Ragas 等专业评估框架（了解）
+LlamaIndex 内置评估器适合快速、轻量地接入。如果要更系统、指标更丰富、可复现的基准评估，业界最主流的专门框架是 RAGAS。
+4.1 RAGAS 是什么
+RAGAS（Retrieval Augmented Generation Assessment）是一个专门为 RAG 流水线设计的自动化评估框架，核心理念有三点：
+1.
+Reference-free（多数指标免标注）：传统评估要为每个问题人工写标准答案，成本极高。RAGAS 的多数指标用 LLM-as-a-judge（大模型当裁判），让 LLM 对照"问题 / 答案 / 召回上下文"自动判分，无需人工标注就能算忠实度、答案相关性。
+2.
+检索 + 生成分别诊断：RAGAS 把指标明确归到"检索侧"和"生成侧"，方便定位瓶颈到底在哪一环——这正是 RAG 评估的关键诉求。
+3.
+与主流框架无缝集成：原生支持 LlamaIndex、LangChain，可以直接复用你已经搭好的 query engine、LLM 和 embedding，不用换技术栈。
+4.2 RAGAS 核心指标
+RAGAS 的四个最常用指标，正好覆盖"检索"和"生成"两个环节：
+
+
+
+指标背后的判分思路：
+•
+Faithfulness：先把答案拆成若干"论断（claim）"，再逐条判断"该论断能否由上下文支撑"，忠实度 = 被支撑的论断数 / 总论断数。
+•
+Answer Relevancy：让 LLM 根据答案"反向生成可能的问题"，再算这些问题与原始问题的相似度，越接近说明答案越切题。
+•
+Context Precision / Recall：对照参考答案（reference），判断召回上下文的"排序质量"和"信息完整度"。
+
+小结
+
+
+评估的闭环：先看检索指标定位是检索还是生成的问题 → 针对性优化（分块/重排/压缩/prompt）→ 再用同一套评估对比前后分数 → 量化收益。\n=====\n代码块
+Python
+复制
+                raise
+        return all_embeddings
+
+    async def _aget_query_embedding(self, query: str) -> List[float]:
+        return self._get_query_embedding(query)
+
+    async def _aget_text_embedding(self, text: str) -> List[float]:
+        return self._get_text_embedding(text)\n=====\n01-RAG评估
+今天修改
+
+代码块
+Python
+复制
+
+    async def _aget_query_embedding(self, query: str) -> List[float]:
+        return self._get_query_embedding(query)
+
+    async def _aget_text_embedding(self, text: str) -> List[float]:
+        return self._get_text_embedding(text)
+
+四、Ragas 等专业评估框架（了解）
+LlamaIndex 内置评估器适合快速、轻量地接入。如果要更系统、指标更丰富、可复现的基准评估，业界最主流的专门框架是 RAGAS。
+4.1 RAGAS 是什么
+RAGAS（Retrieval Augmented Generation Assessment）是一个专门为 RAG 流水线设计的自动化评估框架，核心理念有三点：
+1.
+Reference-free（多数指标免标注）：传统评估要为每个问题人工写标准答案，成本极高。RAGAS 的多数指标用 LLM-as-a-judge（大模型当裁判），让 LLM 对照"问题 / 答案 / 召回上下文"自动判分，无需人工标注就能算忠实度、答案相关性。
+2.
+检索 + 生成分别诊断：RAGAS 把指标明确归到"检索侧"和"生成侧"，方便定位瓶颈到底在哪一环——这正是 RAG 评估的关键诉求。
+3.
+与主流框架无缝集成：原生支持 LlamaIndex、LangChain，可以直接复用你已经搭好的 query engine、LLM 和 embedding，不用换技术栈。
+4.2 RAGAS 核心指标
+RAGAS 的四个最常用指标，正好覆盖"检索"和"生成"两个环节：
+
+
+
+指标背后的判分思路：
+•
+Faithfulness：先把答案拆成若干"论断（claim）"，再逐条判断"该论断能否由上下文支撑"，忠实度 = 被支撑的论断数 / 总论断数。
+•
+Answer Relevancy：让 LLM 根据答案"反向生成可能的问题"，再算这些问题与原始问题的相似度，越接近说明答案越切题。
+•
+Context Precision / Recall：对照参考答案（reference），判断召回上下文的"排序质量"和"信息完整度"。
+
+小结
+
+
+评估的闭环：先看检索指标定位是检索还是生成的问题 → 针对性优化（分块/重排/压缩/prompt）→ 再用同一套评估对比前后分数 → 量化收益。\n=====\n代码块
+Python
+复制
+
+    async def _aget_query_embedding(self, query: str) -> List[float]:
+        return self._get_query_embedding(query)
+
+    async def _aget_text_embedding(self, text: str) -> List[float]:
+        return self._get_text_embedding(text)

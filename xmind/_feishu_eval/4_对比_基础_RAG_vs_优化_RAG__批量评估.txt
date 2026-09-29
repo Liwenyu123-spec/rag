@@ -1,0 +1,298 @@
+01-RAG评估
+今天修改
+
+代码块
+Python
+复制
+    Args:
+        retrieved_nodes: 检索器返回的节点列表
+        keywords: 用于判断相关性的关键词列表
+        
+    Returns:
+        bool: 如果任一节点包含任一关键词，返回 True (命中)，否则返回 False
+    """
+    for node in retrieved_nodes:
+        text_lower = node.text.lower()
+        # 如果任一关键词出现在文本中，认为命中
+        if any(keyword in text_lower for keyword in keywords):
+            return True
+    return False
+
+
+async def main():
+    """
+    主异步函数：执行检索评估流程
+    """
+    print("\n开始评估...")
+
+    results = []
+    # 遍历每个评估问题
+    for item in eval_questions:
+        question = item["query"]
+        keywords = item["keywords"]
+
+        # 执行异步检索，获取与问题最相似的节点
+        retrieved_nodes = await retriever.aretrieve(question)
+
+        # 检查是否命中：是否存在至少一个相关文档
+        is_hit = check_relevance(retrieved_nodes, keywords)
+
+        # 计算 MRR（Mean Reciprocal Rank）
+        # MRR = 1 / rank_of_first_relevant_document
+        # 如果没有相关文档，MRR 为 0
+        mrr = 0.0
+        for rank, node in enumerate(retrieved_nodes, 1):
+            # 检查当前节点是否包含任一关键词
+            if any(keyword in node.text.lower() for keyword in keywords):
+                mrr = 1.0 / rank  # 找到第一个相关文档，计算其倒数排名
+                break  # MRR 只关心第一个相关文档的位置
+
+        # 保存当前问题的评估结果
+        results.append({
+            "query": question,
+            "hit": is_hit,
+            "mrr": mrr
+        })
+
+        # 打印单个问题的实时状态
+        status = "✅ 命中" if is_hit else "❌ 未命中"
+        print(f"  {status} | {question[:40]}...")
+
+    # ===================== 5. 计算并输出总体指标 =====================
+    # 计算 Hit Rate: 命中次数 / 总问题数
+    hit_rate = sum(1 for r in results if r["hit"]) / len(results)
+    
+    # 计算平均 MRR: 所有问题 MRR 之和 / 总问题数
+    avg_mrr = sum(r["mrr"] for r in results) / len(results)
+
+    # 打印分隔线和标题
+    print("\n" + "=" * 60)
+    print(f"检索评估结果（共 {len(results)} 个问题）")
+    print("=" * 60)
+    
+    # 打印核心指标，保留三位小数
+    print(f"Hit Rate（命中率）：{hit_rate:.3f}")
+    print(f"MRR（平均倒数排名）：{avg_mrr:.3f}")
+    print("=" * 60)
+
+    # 显示每个问题的详细评估结果
+    print("\n详细结果：")
+    for i, r in enumerate(results, 1):
+        print(f"  {i}. {'✅' if r['hit'] else '❌'} MRR={r['mrr']:.3f} | {r['query'][:50]}")
+
+
+if __name__ == "__main__":
+    # 运行异步主函数
+    asyncio.run(main())
+
+
+通过调整 similarity_top_k、分块大小、是否加重排器（见上一章），观察 Hit Rate / MRR 的变化，就能量化判断某个检索优化到底有没有用。
+
+4、对比"基础 RAG vs 优化 RAG"：批量评估
+评估最大的用处是量化优化效果——对比优化前后分数提升了多少。多个问题逐个 evaluate 太慢，LlamaIndex 提供了 BatchEvalRunner 异步批量跑。下面对比"基础检索（top_k=2）"和"加重排的优化检索"在忠实度/相关性上的差异。
+
+代码块
+Python
+复制
+"""
+基础 RAG vs 优化 RAG：批量评估对比 - LlamaIndex BatchEvalRunner
+对同一组问题，分别评估两套查询引擎的 Faithfulness / Relevancy，量化优化收益。
+这里的向量模型需要用到批量添加的自定义模型
+"""
+
+import asyncio
+import os
+
+from llama_index.core import Settings, SimpleDirectoryReader, VectorStoreIndex
+from llama_index.core.evaluation import (
+    BatchEvalRunner,
+    FaithfulnessEvaluator,
+    RelevancyEvaluator,
+)
+from llama_index.core.postprocessor import SentenceEmbeddingOptimizer
+from llama_index.embeddings.dashscope import DashScopeEmbedding
+from llama_index.llms.dashscope import DashScope
+
+# ===================== 1. 全局配置 =====================
+api_key = os.getenv("DASHSCOPE_API_KEY")
+Settings.llm = DashScope(model_name="qwen-plus", temperature=0, api_key=api_key)
+Settings.embed_model = DashScopeEmbedding(model_name="text-embedding-v3", api_key=api_key)
+
+documents = SimpleDirectoryReader(input_files=["./data/company_info.txt"]).load_data()
+index = VectorStoreIndex.from_documents(documents)
+
+# 两套查询引擎：基础 vs 优化（优化版加了上下文压缩，过滤干扰句）
+basic_engine = index.as_query_engine(similarity_top_k=3)
+optimized_engine = index.as_query_engine(
+    similarity_top_k=3,
+    node_postprocessors=[SentenceEmbeddingOptimizer(percentile_cutoff=0.5)],
+)
+
+# ===================== 2. 批量评估器 =====================
+runner = BatchEvalRunner(
+    {"faithfulness": FaithfulnessEvaluator(), "relevancy": RelevancyEvaluator()},
+    workers=4,
+)
+
+questions = [
+    "公司标准上下班时间是什么？",
+    "公司员工总数是多少？",
+    "公司主营业务是什么？",
+]
+
+
+async def eval_engine(name, engine):
+    results = await runner.aevaluate_queries(engine, queries=questions)
+    faith = sum(r.passing for r in results["faithfulness"]) / len(questions)
+    rel = sum(r.passing for r in results["relevancy"]) / len(questions)
+    print(f"【{name}】忠实度通过率：{faith:.2f} | 相关性通过率：{rel:.2f}")
+
+
+async def main():
+    print("=" * 60)
+    print("基础 RAG 🆚 优化 RAG 批量评估对比")
+    print("=" * 60)
+    await eval_engine("基础 RAG", basic_engine)\n01-RAG评估\n代码块
+Python
+复制
+    Args:
+        retrieved_nodes: 检索器返回的节点列表
+        keywords: 用于判断相关性的关键词列表
+        
+    Returns:
+        bool: 如果任一节点包含任一关键词，返回 True (命中)，否则返回 False
+    """
+    for node in retrieved_nodes:
+        text_lower = node.text.lower()
+        # 如果任一关键词出现在文本中，认为命中
+        if any(keyword in text_lower for keyword in keywords):
+            return True
+    return False
+
+
+async def main():
+    """
+    主异步函数：执行检索评估流程
+    """
+    print("\n开始评估...")
+
+    results = []
+    # 遍历每个评估问题
+    for item in eval_questions:
+        question = item["query"]
+        keywords = item["keywords"]
+
+        # 执行异步检索，获取与问题最相似的节点
+        retrieved_nodes = await retriever.aretrieve(question)
+
+        # 检查是否命中：是否存在至少一个相关文档
+        is_hit = check_relevance(retrieved_nodes, keywords)
+
+        # 计算 MRR（Mean Reciprocal Rank）
+        # MRR = 1 / rank_of_first_relevant_document
+        # 如果没有相关文档，MRR 为 0
+        mrr = 0.0
+        for rank, node in enumerate(retrieved_nodes, 1):
+            # 检查当前节点是否包含任一关键词
+            if any(keyword in node.text.lower() for keyword in keywords):
+                mrr = 1.0 / rank  # 找到第一个相关文档，计算其倒数排名
+                break  # MRR 只关心第一个相关文档的位置
+
+        # 保存当前问题的评估结果
+        results.append({
+            "query": question,
+            "hit": is_hit,
+            "mrr": mrr
+        })
+
+        # 打印单个问题的实时状态
+        status = "✅ 命中" if is_hit else "❌ 未命中"
+        print(f"  {status} | {question[:40]}...")
+
+    # ===================== 5. 计算并输出总体指标 =====================
+    # 计算 Hit Rate: 命中次数 / 总问题数
+    hit_rate = sum(1 for r in results if r["hit"]) / len(results)
+    
+    # 计算平均 MRR: 所有问题 MRR 之和 / 总问题数
+    avg_mrr = sum(r["mrr"] for r in results) / len(results)
+
+    # 打印分隔线和标题
+    print("\n" + "=" * 60)
+    print(f"检索评估结果（共 {len(results)} 个问题）")
+    print("=" * 60)
+    
+    # 打印核心指标，保留三位小数
+    print(f"Hit Rate（命中率）：{hit_rate:.3f}")
+    print(f"MRR（平均倒数排名）：{avg_mrr:.3f}")
+    print("=" * 60)
+
+    # 显示每个问题的详细评估结果
+    print("\n详细结果：")
+    for i, r in enumerate(results, 1):
+        print(f"  {i}. {'✅' if r['hit'] else '❌'} MRR={r['mrr']:.3f} | {r['query'][:50]}")
+
+
+if __name__ == "__main__":
+    # 运行异步主函数
+    asyncio.run(main())\n代码块\nArgs:\nretrieved_nodes: 检索器返回的节点列表\nkeywords: 用于判断相关性的关键词列表\nReturns:\nbool: 如果任一节点包含任一关键词，返回 True (命中)，否则返回 False\n"""\nfor node in retrieved_nodes:\ntext_lower = node.text.lower()\n# 如果任一关键词出现在文本中，认为命中\nif any(keyword in text_lower for keyword in keywords):\nreturn True\nreturn False\nasync def main():\n"""\n主异步函数：执行检索评估流程\n"""\nprint("\n开始评估...")\nresults = []\n# 遍历每个评估问题\nfor item in eval_questions:\nquestion = item["query"]\nkeywords = item["keywords"]\n# 执行异步检索，获取与问题最相似的节点\nretrieved_nodes = await retriever.aretrieve(question)\n# 检查是否命中：是否存在至少一个相关文档\nis_hit = check_relevance(retrieved_nodes, keywords)\n# 计算 MRR（Mean Reciprocal Rank）\n# MRR = 1 / rank_of_first_relevant_document\n# 如果没有相关文档，MRR 为 0\nmrr = 0.0\nfor rank, node in enumerate(retrieved_nodes, 1):\n# 检查当前节点是否包含任一关键词\nif any(keyword in node.text.lower() for keyword in keywords):\nmrr = 1.0 / rank  # 找到第一个相关文档，计算其倒数排名\nbreak  # MRR 只关心第一个相关文档的位置\n# 保存当前问题的评估结果\nresults.append({\n"query": question,\n"hit": is_hit,\n"mrr": mrr\n})\n# 打印单个问题的实时状态\nstatus = "✅ 命中" if is_hit else "❌ 未命中"\nprint(f"  {status} | {question[:40]}...")\n# ===================== 5. 计算并输出总体指标 =====================\n# 计算 Hit Rate: 命中次数 / 总问题数\nhit_rate = sum(1 for r in results if r["hit"]) / len(results)\n# 计算平均 MRR: 所有问题 MRR 之和 / 总问题数\navg_mrr = sum(r["mrr"] for r in results) / len(results)\n# 打印分隔线和标题\nprint("\n" + "=" * 60)\nprint(f"检索评估结果（共 {len(results)} 个问题）")\nprint("=" * 60)\n# 打印核心指标，保留三位小数\nprint(f"Hit Rate（命中率）：{hit_rate:.3f}")\nprint(f"MRR（平均倒数排名）：{avg_mrr:.3f}")\nprint("=" * 60)\n# 显示每个问题的详细评估结果\nprint("\n详细结果：")\nfor i, r in enumerate(results, 1):\nprint(f"  {i}. {'✅' if r['hit'] else '❌'} MRR={r['mrr']:.3f} | {r['query'][:50]}")\nif __name__ == "__main__":\n# 运行异步主函数\nasyncio.run(main())\n通过调整 similarity_top_k、分块大小、是否加重排器（见上一章），观察 Hit Rate / MRR 的变化，就能量化判断某个检索优化到底有没有用。\n通过调整 similarity_top_k、分块大小、是否加重排器（见上一章），观察 Hit Rate / MRR 的变化，就能量化判断某个检索优化到底有没有用。\n通过调整 similarity_top_k、分块大小、是否加重排器（见上一章），观察 Hit Rate / MRR 的变化，就能量化判断某个检索优化到底有没有用。\n4、对比"基础 RAG vs 优化 RAG"：批量评估\n4、对比"基础 RAG vs 优化 RAG"：批量评估\n评估最大的用处是量化优化效果——对比优化前后分数提升了多少。多个问题逐个 evaluate 太慢，LlamaIndex 提供了 BatchEvalRunner 异步批量跑。下面对比"基础检索（top_k=2）"和"加重排的优化检索"在忠实度/相关性上的差异。\n评估最大的用处是量化优化效果——对比优化前后分数提升了多少。多个问题逐个 evaluate 太慢，LlamaIndex 提供了 BatchEvalRunner 异步批量跑。下面对比"基础检索（top_k=2）"和"加重排的优化检索"在忠实度/相关性上的差异。\n代码块
+Python
+复制
+"""
+基础 RAG vs 优化 RAG：批量评估对比 - LlamaIndex BatchEvalRunner
+对同一组问题，分别评估两套查询引擎的 Faithfulness / Relevancy，量化优化收益。
+这里的向量模型需要用到批量添加的自定义模型
+"""
+
+import asyncio
+import os
+
+from llama_index.core import Settings, SimpleDirectoryReader, VectorStoreIndex
+from llama_index.core.evaluation import (
+    BatchEvalRunner,
+    FaithfulnessEvaluator,
+    RelevancyEvaluator,
+)
+from llama_index.core.postprocessor import SentenceEmbeddingOptimizer
+from llama_index.embeddings.dashscope import DashScopeEmbedding
+from llama_index.llms.dashscope import DashScope
+
+# ===================== 1. 全局配置 =====================
+api_key = os.getenv("DASHSCOPE_API_KEY")
+Settings.llm = DashScope(model_name="qwen-plus", temperature=0, api_key=api_key)
+Settings.embed_model = DashScopeEmbedding(model_name="text-embedding-v3", api_key=api_key)
+
+documents = SimpleDirectoryReader(input_files=["./data/company_info.txt"]).load_data()
+index = VectorStoreIndex.from_documents(documents)
+
+# 两套查询引擎：基础 vs 优化（优化版加了上下文压缩，过滤干扰句）
+basic_engine = index.as_query_engine(similarity_top_k=3)
+optimized_engine = index.as_query_engine(
+    similarity_top_k=3,
+    node_postprocessors=[SentenceEmbeddingOptimizer(percentile_cutoff=0.5)],
+)
+
+# ===================== 2. 批量评估器 =====================
+runner = BatchEvalRunner(
+    {"faithfulness": FaithfulnessEvaluator(), "relevancy": RelevancyEvaluator()},
+    workers=4,
+)
+
+questions = [
+    "公司标准上下班时间是什么？",
+    "公司员工总数是多少？",
+    "公司主营业务是什么？",
+]
+
+
+async def eval_engine(name, engine):
+    results = await runner.aevaluate_queries(engine, queries=questions)
+    faith = sum(r.passing for r in results["faithfulness"]) / len(questions)
+    rel = sum(r.passing for r in results["relevancy"]) / len(questions)
+    print(f"【{name}】忠实度通过率：{faith:.2f} | 相关性通过率：{rel:.2f}")
+
+
+async def main():
+    print("=" * 60)
+    print("基础 RAG 🆚 优化 RAG 批量评估对比")
+    print("=" * 60)
+    await eval_engine("基础 RAG", basic_engine)\n代码块\n"""\n基础 RAG vs 优化 RAG：批量评估对比 - LlamaIndex BatchEvalRunner\n对同一组问题，分别评估两套查询引擎的 Faithfulness / Relevancy，量化优化收益。\n这里的向量模型需要用到批量添加的自定义模型\n"""\nimport asyncio\nimport os\nfrom llama_index.core import Settings, SimpleDirectoryReader, VectorStoreIndex\nfrom llama_index.core.evaluation import (\nBatchEvalRunner,\nFaithfulnessEvaluator,\nRelevancyEvaluator,\n)\nfrom llama_index.core.postprocessor import SentenceEmbeddingOptimizer\nfrom llama_index.embeddings.dashscope import DashScopeEmbedding\nfrom llama_index.llms.dashscope import DashScope\n# ===================== 1. 全局配置 =====================\napi_key = os.getenv("DASHSCOPE_API_KEY")\nSettings.llm = DashScope(model_name="qwen-plus", temperature=0, api_key=api_key)\nSettings.embed_model = DashScopeEmbedding(model_name="text-embedding-v3", api_key=api_key)\ndocuments = SimpleDirectoryReader(input_files=["./data/company_info.txt"]).load_data()\nindex = VectorStoreIndex.from_documents(documents)\n# 两套查询引擎：基础 vs 优化（优化版加了上下文压缩，过滤干扰句）\nbasic_engine = index.as_query_engine(similarity_top_k=3)\noptimized_engine = index.as_query_engine(\nsimilarity_top_k=3,\nnode_postprocessors=[SentenceEmbeddingOptimizer(percentile_cutoff=0.5)],\n)\n# ===================== 2. 批量评估器 =====================\nrunner = BatchEvalRunner(\n{"faithfulness": FaithfulnessEvaluator(), "relevancy": RelevancyEvaluator()},\nworkers=4,\n)\nquestions = [\n"公司标准上下班时间是什么？",\n"公司员工总数是多少？",\n"公司主营业务是什么？",\n]\nasync def eval_engine(name, engine):\nresults = await runner.aevaluate_queries(engine, queries=questions)\nfaith = sum(r.passing for r in results["faithfulness"]) / len(questions)\nrel = sum(r.passing for r in results["relevancy"]) / len(questions)\nprint(f"【{name}】忠实度通过率：{faith:.2f} | 相关性通过率：{rel:.2f}")\nasync def main():\nprint("=" * 60)\nprint("基础 RAG 🆚 优化 RAG 批量评估对比")\nprint("=" * 60)\nawait eval_engine("基础 RAG", basic_engine)

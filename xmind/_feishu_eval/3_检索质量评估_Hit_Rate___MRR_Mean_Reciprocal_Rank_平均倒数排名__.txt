@@ -1,0 +1,184 @@
+01-RAG评估
+今天修改
+
+代码块
+Python
+复制
+    print("RAG 生成质量评估（LlamaIndex 内置评估器 + 通义千问裁判）")
+    print("=" * 70)
+
+    for question, reference in qa_pairs:
+        # 先让 RAG 生成回答（response 里同时带着召回的 source_nodes）
+        response = query_engine.query(question)
+
+        # 忠实度 / 相关性：直接传 response，评估器会自动取出 source_nodes 当上下文
+        faith_result = faithfulness.evaluate_response(query=question, response=response)
+        rel_result = relevancy.evaluate_response(query=question, response=response)
+        # 正确性：需要标准答案 reference
+        corr_result = correctness.evaluate(
+            query=question, response=str(response), reference=reference
+        )
+
+        print(f"\n📌 问题：{question}")
+        print(f"   回答：{response}")
+        print(f"   ✅ 忠实度 Faithfulness：{'通过' if faith_result.passing else '不通过'}")
+        print(f"   ✅ 相关性 Relevancy：   {'通过' if rel_result.passing else '不通过'}")
+        print(f"   ✅ 正确性 Correctness： {corr_result.score}/5（{'通过' if corr_result.passing else '不通过'}）")
+
+
+•
+evaluate_response(query, response)：直接把查询引擎返回的 response 丢进去，评估器会自动从 response.source_nodes 里取召回上下文，无需手动拼接。
+•
+忠实度、相关性返回 .passing（True/False）和 .score（0/1）；正确性返回 .score（1~5 分）和 .feedback（评语）。
+
+3、检索质量评估：Hit Rate + MRR(Mean Reciprocal Rank[平均倒数排名])
+生成评估只能告诉你"答案好不好"，但定位不了"是检索的锅还是生成的锅"。检索评估专门衡量"召回的文档对不对"。LlamaIndex 用 RetrieverEvaluator，并能用 LLM 自动生成"问题→正确节点"的评测数据集，省去人工标注。
+
+代码块
+Python
+复制
+"""
+RAG 检索质量评估 - LlamaIndex RetrieverEvaluator
+手动构造评测集 + 用 RetrieverEvaluator 算 Hit Rate 和 MRR
+
+本脚本演示如何手动构建评估数据集，并通过自定义逻辑计算检索系统的两个关键指标：
+1. Hit Rate (命中率): 检索结果中是否包含至少一个相关文档。
+2. MRR (Mean Reciprocal Rank, 平均倒数排名): 第一个相关文档在检索结果中的排名倒数的平均值。
+"""
+
+import asyncio
+import os
+
+from llama_index.core import Settings, SimpleDirectoryReader, VectorStoreIndex
+from llama_index.core.node_parser import SentenceSplitter
+from llama_index.embeddings.dashscope import DashScopeEmbedding
+from llama_index.llms.dashscope import DashScope
+
+# ===================== 1. 全局配置（通义千问） =====================
+# 从环境变量获取 API Key，确保安全性
+api_key = os.getenv("DASHSCOPE_API_KEY")
+
+# 配置大语言模型 (LLM) 用于后续可能的生成任务或评估
+Settings.llm = DashScope(model_name="qwen3.7-max", temperature=0, api_key=api_key)
+
+# 配置嵌入模型 (Embedding Model) 用于将文本转换为向量
+Settings.embed_model = DashScopeEmbedding(model_name="text-embedding-v4", api_key=api_key)
+
+# ===================== 2. 分块建索引 =====================
+# 加载本地文档数据
+documents = SimpleDirectoryReader(input_files=["./data/company_info.txt"]).load_data()
+
+# 使用句子分割器对文档进行分块，设置块大小和重叠部分以保留上下文信息
+nodes = SentenceSplitter(chunk_size=120, chunk_overlap=20).get_nodes_from_documents(documents)
+
+# 基于分块后的节点构建向量索引
+index = VectorStoreIndex(nodes)
+
+# 创建检索器，设置每次检索返回最相似的 2 个节点 (top_k=2)
+retriever = index.as_retriever(similarity_top_k=2)
+
+# ===================== 3. 手动定义评估数据集 =====================
+# 为每个测试问题定义关键词，用于后续判断检索结果是否相关
+# 注意：在实际生产中，通常使用人工标注的相关文档 ID 作为黄金标准 (Ground Truth)
+eval_questions = [
+    {
+        "query": "国家天文台的主要职责是什么？",
+        # 关键词列表：只要检索到的文本中包含任一关键词，即视为相关
+        "keywords": ["天文台", "职责", "研究", "观测"]  # 根据实际文档内容调整
+    },
+    {
+        "query": "天文台的地理位置在哪里？",
+        "keywords": ["位置", "地址", "位于", "北京"]
+    },
+    {
+        "query": "公司的核心业务是什么？",
+        "keywords": ["业务", "服务", "产品", "客户"]
+    },
+]\n01-RAG评估\n代码块
+Python
+复制
+    print("RAG 生成质量评估（LlamaIndex 内置评估器 + 通义千问裁判）")
+    print("=" * 70)
+
+    for question, reference in qa_pairs:
+        # 先让 RAG 生成回答（response 里同时带着召回的 source_nodes）
+        response = query_engine.query(question)
+
+        # 忠实度 / 相关性：直接传 response，评估器会自动取出 source_nodes 当上下文
+        faith_result = faithfulness.evaluate_response(query=question, response=response)
+        rel_result = relevancy.evaluate_response(query=question, response=response)
+        # 正确性：需要标准答案 reference
+        corr_result = correctness.evaluate(
+            query=question, response=str(response), reference=reference
+        )
+
+        print(f"\n📌 问题：{question}")
+        print(f"   回答：{response}")
+        print(f"   ✅ 忠实度 Faithfulness：{'通过' if faith_result.passing else '不通过'}")
+        print(f"   ✅ 相关性 Relevancy：   {'通过' if rel_result.passing else '不通过'}")
+        print(f"   ✅ 正确性 Correctness： {corr_result.score}/5（{'通过' if corr_result.passing else '不通过'}）")\n代码块\nprint("RAG 生成质量评估（LlamaIndex 内置评估器 + 通义千问裁判）")\nprint("=" * 70)\nfor question, reference in qa_pairs:\n# 先让 RAG 生成回答（response 里同时带着召回的 source_nodes）\nresponse = query_engine.query(question)\n# 忠实度 / 相关性：直接传 response，评估器会自动取出 source_nodes 当上下文\nfaith_result = faithfulness.evaluate_response(query=question, response=response)\nrel_result = relevancy.evaluate_response(query=question, response=response)\n# 正确性：需要标准答案 reference\ncorr_result = correctness.evaluate(\nquery=question, response=str(response), reference=reference\n)\nprint(f"\n📌 问题：{question}")\nprint(f"   回答：{response}")\nprint(f"   ✅ 忠实度 Faithfulness：{'通过' if faith_result.passing else '不通过'}")\nprint(f"   ✅ 相关性 Relevancy：   {'通过' if rel_result.passing else '不通过'}")\nprint(f"   ✅ 正确性 Correctness： {corr_result.score}/5（{'通过' if corr_result.passing else '不通过'}）")\n•
+evaluate_response(query, response)：直接把查询引擎返回的 response 丢进去，评估器会自动从 response.source_nodes 里取召回上下文，无需手动拼接。
+•
+忠实度、相关性返回 .passing（True/False）和 .score（0/1）；正确性返回 .score（1~5 分）和 .feedback（评语）。\n•
+evaluate_response(query, response)：直接把查询引擎返回的 response 丢进去，评估器会自动从 response.source_nodes 里取召回上下文，无需手动拼接。\nevaluate_response(query, response)：直接把查询引擎返回的 response 丢进去，评估器会自动从 response.source_nodes 里取召回上下文，无需手动拼接。\n•
+忠实度、相关性返回 .passing（True/False）和 .score（0/1）；正确性返回 .score（1~5 分）和 .feedback（评语）。\n忠实度、相关性返回 .passing（True/False）和 .score（0/1）；正确性返回 .score（1~5 分）和 .feedback（评语）。\n3、检索质量评估：Hit Rate + MRR(Mean Reciprocal Rank[平均倒数排名])\n3、检索质量评估：Hit Rate + MRR(Mean Reciprocal Rank[平均倒数排名])\n生成评估只能告诉你"答案好不好"，但定位不了"是检索的锅还是生成的锅"。检索评估专门衡量"召回的文档对不对"。LlamaIndex 用 RetrieverEvaluator，并能用 LLM 自动生成"问题→正确节点"的评测数据集，省去人工标注。\n生成评估只能告诉你"答案好不好"，但定位不了"是检索的锅还是生成的锅"。检索评估专门衡量"召回的文档对不对"。LlamaIndex 用 RetrieverEvaluator，并能用 LLM 自动生成"问题→正确节点"的评测数据集，省去人工标注。\n代码块
+Python
+复制
+"""
+RAG 检索质量评估 - LlamaIndex RetrieverEvaluator
+手动构造评测集 + 用 RetrieverEvaluator 算 Hit Rate 和 MRR
+
+本脚本演示如何手动构建评估数据集，并通过自定义逻辑计算检索系统的两个关键指标：
+1. Hit Rate (命中率): 检索结果中是否包含至少一个相关文档。
+2. MRR (Mean Reciprocal Rank, 平均倒数排名): 第一个相关文档在检索结果中的排名倒数的平均值。
+"""
+
+import asyncio
+import os
+
+from llama_index.core import Settings, SimpleDirectoryReader, VectorStoreIndex
+from llama_index.core.node_parser import SentenceSplitter
+from llama_index.embeddings.dashscope import DashScopeEmbedding
+from llama_index.llms.dashscope import DashScope
+
+# ===================== 1. 全局配置（通义千问） =====================
+# 从环境变量获取 API Key，确保安全性
+api_key = os.getenv("DASHSCOPE_API_KEY")
+
+# 配置大语言模型 (LLM) 用于后续可能的生成任务或评估
+Settings.llm = DashScope(model_name="qwen3.7-max", temperature=0, api_key=api_key)
+
+# 配置嵌入模型 (Embedding Model) 用于将文本转换为向量
+Settings.embed_model = DashScopeEmbedding(model_name="text-embedding-v4", api_key=api_key)
+
+# ===================== 2. 分块建索引 =====================
+# 加载本地文档数据
+documents = SimpleDirectoryReader(input_files=["./data/company_info.txt"]).load_data()
+
+# 使用句子分割器对文档进行分块，设置块大小和重叠部分以保留上下文信息
+nodes = SentenceSplitter(chunk_size=120, chunk_overlap=20).get_nodes_from_documents(documents)
+
+# 基于分块后的节点构建向量索引
+index = VectorStoreIndex(nodes)
+
+# 创建检索器，设置每次检索返回最相似的 2 个节点 (top_k=2)
+retriever = index.as_retriever(similarity_top_k=2)
+
+# ===================== 3. 手动定义评估数据集 =====================
+# 为每个测试问题定义关键词，用于后续判断检索结果是否相关
+# 注意：在实际生产中，通常使用人工标注的相关文档 ID 作为黄金标准 (Ground Truth)
+eval_questions = [
+    {
+        "query": "国家天文台的主要职责是什么？",
+        # 关键词列表：只要检索到的文本中包含任一关键词，即视为相关
+        "keywords": ["天文台", "职责", "研究", "观测"]  # 根据实际文档内容调整
+    },
+    {
+        "query": "天文台的地理位置在哪里？",
+        "keywords": ["位置", "地址", "位于", "北京"]
+    },
+    {
+        "query": "公司的核心业务是什么？",
+        "keywords": ["业务", "服务", "产品", "客户"]
+    },
+]\n代码块\n"""\nRAG 检索质量评估 - LlamaIndex RetrieverEvaluator\n手动构造评测集 + 用 RetrieverEvaluator 算 Hit Rate 和 MRR\n本脚本演示如何手动构建评估数据集，并通过自定义逻辑计算检索系统的两个关键指标：\n1. Hit Rate (命中率): 检索结果中是否包含至少一个相关文档。\n2. MRR (Mean Reciprocal Rank, 平均倒数排名): 第一个相关文档在检索结果中的排名倒数的平均值。\n"""\nimport asyncio\nimport os\nfrom llama_index.core import Settings, SimpleDirectoryReader, VectorStoreIndex\nfrom llama_index.core.node_parser import SentenceSplitter\nfrom llama_index.embeddings.dashscope import DashScopeEmbedding\nfrom llama_index.llms.dashscope import DashScope\n# ===================== 1. 全局配置（通义千问） =====================\n# 从环境变量获取 API Key，确保安全性\napi_key = os.getenv("DASHSCOPE_API_KEY")\n# 配置大语言模型 (LLM) 用于后续可能的生成任务或评估\nSettings.llm = DashScope(model_name="qwen3.7-max", temperature=0, api_key=api_key)\n# 配置嵌入模型 (Embedding Model) 用于将文本转换为向量\nSettings.embed_model = DashScopeEmbedding(model_name="text-embedding-v4", api_key=api_key)\n# ===================== 2. 分块建索引 =====================\n# 加载本地文档数据\ndocuments = SimpleDirectoryReader(input_files=["./data/company_info.txt"]).load_data()\n# 使用句子分割器对文档进行分块，设置块大小和重叠部分以保留上下文信息\nnodes = SentenceSplitter(chunk_size=120, chunk_overlap=20).get_nodes_from_documents(documents)\n# 基于分块后的节点构建向量索引\nindex = VectorStoreIndex(nodes)\n# 创建检索器，设置每次检索返回最相似的 2 个节点 (top_k=2)\nretriever = index.as_retriever(similarity_top_k=2)\n# ===================== 3. 手动定义评估数据集 =====================\n# 为每个测试问题定义关键词，用于后续判断检索结果是否相关\n# 注意：在实际生产中，通常使用人工标注的相关文档 ID 作为黄金标准 (Ground Truth)\neval_questions = [\n{\n"query": "国家天文台的主要职责是什么？",\n# 关键词列表：只要检索到的文本中包含任一关键词，即视为相关\n"keywords": ["天文台", "职责", "研究", "观测"]  # 根据实际文档内容调整\n},\n{\n"query": "天文台的地理位置在哪里？",\n"keywords": ["位置", "地址", "位于", "北京"]\n},\n{\n"query": "公司的核心业务是什么？",\n"keywords": ["业务", "服务", "产品", "客户"]\n},\n]
