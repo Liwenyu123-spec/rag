@@ -77,13 +77,31 @@ class CragInfo(BaseModel):  # Corrective RAG 过程信息
     message: str = "skipped"  # filtered / rewrote_and_filtered / ...
 
 
-class AskRequest(BaseModel):  # POST /ask：基础 RAG + 检索前优化
+class AskRequest(BaseModel):  # POST /ask：基础 RAG + 可选优化链路
     question: str = Field(..., description="用户问题", min_length=1)  # 必填用户问题
     k: int = Field(5, description="检索条数", ge=1, le=100)  # 最终返回来源条数
-    strategy: str = Field(  # 检索前策略名
+    # ----- 检索前 -----
+    use_pre: bool = Field(True, description="是否启用检索前优化")
+    strategy: str = Field(  # 仅 use_pre=True 时生效
         "rewrite",  # 默认：清洗 + 重写双路检索
-        description="检索前策略: none / clean / rewrite / hyde",  # OpenAPI 说明
-    )  # 策略字段结束
+        description="检索前策略: none / clean / rewrite / hyde（use_pre=false 时忽略）",
+    )
+    # ----- 检索中 / 检索后 / CRAG（勾选开关；None 表示跟从服务端 .env 默认）-----
+    use_hybrid: bool | None = Field(None, description="混合检索 向量+BM25；null=跟配置")
+    use_rerank: bool | None = Field(None, description="重排序；null=跟配置")
+    use_compress: bool | None = Field(None, description="上下文压缩；null=跟配置")
+    use_reorder: bool | None = Field(None, description="长上下文重排；null=跟配置")
+    use_crag: bool | None = Field(None, description="Corrective RAG；null=跟配置")
+
+
+class OptimizeFlags(BaseModel):  # 本次实际生效的优化开关（回显给前端）
+    use_pre: bool = True
+    strategy: str = "rewrite"
+    use_hybrid: bool = True
+    use_rerank: bool = True
+    use_compress: bool = True
+    use_reorder: bool = True
+    use_crag: bool = True
 
 
 class AskResponse(BaseModel):  # /ask 的响应体
@@ -92,3 +110,4 @@ class AskResponse(BaseModel):  # /ask 的响应体
     sources: List[DocumentResponse] = Field(default_factory=list)  # 真实知识库引用来源
     pre_retrieval: PreRetrievalInfo  # 检索前优化过程信息
     crag: CragInfo | None = None  # Corrective RAG 过程（可选）
+    optimizations: OptimizeFlags | None = None  # 本次实际开启的优化项
