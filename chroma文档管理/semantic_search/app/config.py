@@ -17,7 +17,7 @@ load_dotenv(PACKAGE_DIR / ".env")  # 包目录 .env
 
 
 def _reg_get(root, path: str, name: str) -> str | None:  # 从 Windows 注册表读单个环境变量
-    """从 Windows 注册表读取用户/系统环境变量。"""
+    """从 Windows 注册表读取用户/系统环境变量。"""  # 文档：注册表读取说明
     if sys.platform != "win32":  # 非 Windows 直接返回空
         return None  # 非 Windows 无注册表可读
     import winreg  # 仅在 Windows 才导入注册表模块
