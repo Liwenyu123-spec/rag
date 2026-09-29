@@ -26,7 +26,7 @@ TREE = topic(
     note=(
         "根据飞书讲义整理：认知阶段、提示词、RAG整体认知、Embedding、向量数据库、"
         "Native RAG、Advanced RAG、检索前/中/后优化（Pre / Retrieval / Post-retrieval）、"
-        "Self-RAG、Corrective RAG（CRAG）。"
+        "Self-RAG、Corrective RAG（CRAG）、RAG 评估。"
     ),
     children=[
         topic(
@@ -2902,6 +2902,7 @@ TREE = topic(
                         topic("第 11 章：Self-RAG 专训（查不查 + 生成反思）"),
                         topic("第 12 章：CRAG 专训（查错了怎么办 + 库内/外搜修正）"),
                         topic("第 13 章：chroma文档管理 全链路文件/API/开关对照"),
+                        topic("第 14 章：RAG 评估（Hit/MRR + Faithfulness 等，量化优化）"),
                     ],
                 ),
             ],
@@ -4412,6 +4413,7 @@ CHAPTER_COLORS = [
     ("#CA8A04", "#FEF9C3"),  # 11 金（Self-RAG）
     ("#9333EA", "#F3E8FF"),  # 12 紫（CRAG）
     ("#0F766E", "#CCFBF1"),  # 13 深青（项目对照）
+    ("#B45309", "#FEF3C7"),  # 14 棕金（RAG评估）
 ]
 
 
@@ -4518,11 +4520,16 @@ def make_sheet(title: str, root: dict) -> dict:
 def main():
     import copy
 
-    # 追加 Self-RAG / CRAG / 项目全链路对照（飞书 05/06 + chroma文档管理）
+    # 追加 Self-RAG / CRAG / 项目对照 / RAG评估（飞书 + chroma文档管理）
     from _chapters_11_12 import chapters as _extra_chapters
 
-    if not any(c.get("title", "").startswith("11 ") for c in TREE.get("children", {}).get("attached", [])):
-        TREE.setdefault("children", {}).setdefault("attached", []).extend(_extra_chapters(topic))
+    attached = TREE.setdefault("children", {}).setdefault("attached", [])
+    if not any(c.get("title", "").startswith("11 ") for c in attached):
+        attached.extend(_extra_chapters(topic))
+    elif not any(c.get("title", "").startswith("14 ") for c in attached):
+        from _chapters_14_eval import make_chapter as make_ch14
+
+        attached.append(make_ch14(topic))
 
     chapters = copy.deepcopy(TREE.get("children", {}).get("attached", []))
     sheets = [make_sheet("00 总览", make_overview(chapters))]

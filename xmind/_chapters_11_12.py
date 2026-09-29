@@ -1065,8 +1065,11 @@ def chapters(topic):
                     topic("P2：CRAG strip 级 Knowledge Refinement（对齐论文 Correct 路径）"),
                     topic("P3：可选 Web 补充（仅公网场景；内网知识库慎开）"),
                     topic("P4：多目录多路召回 + channel 元数据（第 09 进阶）"),
+                    topic("P5：接第 14 章评估闭环——开关 A/B + Hit/MRR/Faithfulness 回归"),
                 ],
             ),
         ],
     )
-    return [ch11, ch12, ch13]
+    from _chapters_14_eval import make_chapter as make_ch14
+
+    return [ch11, ch12, ch13, make_ch14(topic)]
