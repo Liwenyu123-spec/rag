@@ -195,18 +195,32 @@ class SemanticSearchEngine:  # Native RAG 引擎主体
             self._bm25_nodes_cache = nodes_from_index(self.index, self.collection)
         return self._bm25_nodes_cache
 
-    def _build_retriever(self, k: int = SIMILARITY_TOP_K):
-        """检索中：按配置构建纯向量或 向量+BM25 融合检索器。"""
+    def _build_retriever(self, k: int = SIMILARITY_TOP_K, *, hybrid_enabled: bool | None = None):
+        """检索中：按配置（可被请求覆盖）构建纯向量或 向量+BM25 融合检索器。"""
+        use_hybrid = HYBRID_ENABLED if hybrid_enabled is None else bool(hybrid_enabled)
         return build_hybrid_retriever(
             self.index,
             final_k=k,
             collection=self.collection,
-            nodes_cache=self._bm25_nodes() if HYBRID_ENABLED else None,
+            nodes_cache=self._bm25_nodes() if use_hybrid else None,
+            hybrid_enabled=use_hybrid,
         )
 
-    def _build_postprocessors(self, k: int = SIMILARITY_TOP_K) -> list:
-        """检索后：重排 → 压缩 → 长上下文重排。"""
-        return build_node_postprocessors(k)
+    def _build_postprocessors(
+        self,
+        k: int = SIMILARITY_TOP_K,
+        *,
+        rerank_enabled: bool | None = None,
+        compress_enabled: bool | None = None,
+        reorder_enabled: bool | None = None,
+    ) -> list:
+        """检索后：重排 → 压缩 → 长上下文重排（可被请求覆盖）。"""
+        return build_node_postprocessors(
+            k,
+            rerank_enabled=rerank_enabled,
+            compress_enabled=compress_enabled,
+            reorder_enabled=reorder_enabled,
+        )
 
     def _require_llm(self) -> None:  # 问答前检查 LLM 是否可用
         if Settings.llm is None:  # 全局 LLM 未初始化

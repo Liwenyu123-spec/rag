@@ -84,12 +84,14 @@ def build_hybrid_retriever(
     final_k: int,
     collection: Any = None,
     nodes_cache: Optional[List[Any]] = None,
+    hybrid_enabled: Optional[bool] = None,
 ) -> "BaseRetriever":
     """同库混合：稠密向量 + BM25，经 QueryFusionRetriever 融合。失败则回退纯向量。"""
     cand_k = candidate_top_k(final_k)
     vector_retriever = index.as_retriever(similarity_top_k=cand_k)
 
-    if not HYBRID_ENABLED:
+    use_hybrid = HYBRID_ENABLED if hybrid_enabled is None else bool(hybrid_enabled)
+    if not use_hybrid:
         return vector_retriever
 
     try:
@@ -157,17 +159,26 @@ def _build_reranker(top_n: int) -> Any | None:
         return None
 
 
-def build_node_postprocessors(final_k: int) -> List["BaseNodePostprocessor"]:
-    """按配置组装：重排 → 压缩 → 长上下文重排。"""
+def build_node_postprocessors(
+    final_k: int,
+    *,
+    rerank_enabled: Optional[bool] = None,
+    compress_enabled: Optional[bool] = None,
+    reorder_enabled: Optional[bool] = None,
+) -> List["BaseNodePostprocessor"]:
+    """按配置（可被请求覆盖）组装：重排 → 压缩 → 长上下文重排。"""
     processors: List[Any] = []
     top_n = rerank_top_n(final_k)
+    do_rerank = RERANK_ENABLED if rerank_enabled is None else bool(rerank_enabled)
+    do_compress = COMPRESS_ENABLED if compress_enabled is None else bool(compress_enabled)
+    do_reorder = REORDER_ENABLED if reorder_enabled is None else bool(reorder_enabled)
 
-    if RERANK_ENABLED and RERANK_PROVIDER not in {"", "none", "off", "false"}:
+    if do_rerank and RERANK_PROVIDER not in {"", "none", "off", "false"}:
         reranker = _build_reranker(top_n)
         if reranker is not None:
             processors.append(reranker)
 
-    if COMPRESS_ENABLED:
+    if do_compress:
         try:
             from llama_index.core.postprocessor import SentenceEmbeddingOptimizer
 
@@ -181,7 +192,7 @@ def build_node_postprocessors(final_k: int) -> List["BaseNodePostprocessor"]:
         except Exception as exc:  # noqa: BLE001
             print(f"警告: 初始化 SentenceEmbeddingOptimizer 失败，跳过压缩: {exc}")
 
-    if REORDER_ENABLED:
+    if do_reorder:
         try:
             from llama_index.core.postprocessor import LongContextReorder
 
@@ -197,11 +208,20 @@ def apply_postprocessors(
     query: str,
     final_k: int,
     processors: Optional[List["BaseNodePostprocessor"]] = None,
+    *,
+    rerank_enabled: Optional[bool] = None,
+    compress_enabled: Optional[bool] = None,
+    reorder_enabled: Optional[bool] = None,
 ) -> List[NodeWithScore]:
     """对已召回节点串行跑后处理器（供 /ask 手工 synthesize 路径使用）。"""
     if not nodes:
         return []
-    procs = processors if processors is not None else build_node_postprocessors(final_k)
+    procs = processors if processors is not None else build_node_postprocessors(
+        final_k,
+        rerank_enabled=rerank_enabled,
+        compress_enabled=compress_enabled,
+        reorder_enabled=reorder_enabled,
+    )
     current = list(nodes)
     for proc in procs:
         try:
