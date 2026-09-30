@@ -23,7 +23,7 @@ _FILLER_PATTERNS = [  # 要剔除的口语填充正则列表
     r"麻烦",  # 客套话
     r"一下",  # 弱化语气词
     r"咋样",  # 口语
-]  # 列表结束
+]  # 填充词列表结束
 
 # 简单术语表：口语 → 制度用语（方法1 Step3）
 _TERM_MAP = {  # 把用户口语映射成知识库更可能出现的正式词
@@ -32,27 +32,27 @@ _TERM_MAP = {  # 把用户口语映射成知识库更可能出现的正式词
     "咋扣钱": "如何扣款",  # 口语问法 → 检索友好问法
     "扣钱": "扣款",  # 统一扣款术语
     "请假咋": "请假如何",  # 口语 → 规范表达
-}  # 字典/集合结束
+}  # 术语映射结束
 
 
-REWRITE_PROMPT = """你是检索改写助手。把用户问题改写成更适合知识库向量检索的中文问句。  # 赋值 REWRITE_PROMPT
-要求：  # 执行本行逻辑
-1. 只输出改写后的一句问句，不要解释、不要引号  # 执行本行逻辑
-2. 补全实体与关键词，保留原意  # 执行本行逻辑
-3. 可加入同义术语，不要编造不存在的产品或制度名  # 执行本行逻辑
-4. 去掉口语废话  # 执行本行逻辑
+REWRITE_PROMPT = """你是检索改写助手。把用户问题改写成更适合知识库向量检索的中文问句。
+要求：
+1. 只输出改写后的一句问句，不要解释、不要引号
+2. 补全实体与关键词，保留原意
+3. 可加入同义术语，不要编造不存在的产品或制度名
+4. 去掉口语废话
 
-用户问题：{query}  # 执行本行逻辑
+用户问题：{query}
 改写："""  # 查询重写提示词模板，{query} 会被填入清洗后的问题
 
-HYDE_PROMPT = """请写一段可能回答下列问题的「制度/说明文」片段，用于向量检索。  # 赋值 HYDE_PROMPT
-要求：  # 执行本行逻辑
-1. 用说明文/制度口吻，不要对话、不要第一人称闲聊  # 执行本行逻辑
-2. 100～200 字，包含可能出现在正式文档里的关键词  # 执行本行逻辑
-3. 只输出假想文档正文，不要标题、不要解释  # 执行本行逻辑
-4. 内容可以是合理推测，仅用于检索，不是最终答案  # 执行本行逻辑
+HYDE_PROMPT = """请写一段可能回答下列问题的「制度/说明文」片段，用于向量检索。
+要求：
+1. 用说明文/制度口吻，不要对话、不要第一人称闲聊
+2. 100～200 字，包含可能出现在正式文档里的关键词
+3. 只输出假想文档正文，不要标题、不要解释
+4. 内容可以是合理推测，仅用于检索，不是最终答案
 
-问题：{query}  # 执行本行逻辑
+问题：{query}
 假想文档："""  # HyDE 提示词：生成假想答案文档，仅用于检索
 
 
@@ -85,7 +85,7 @@ def _llm_text(llm: Any, prompt: str) -> str:  # 调用 LLM 并抽出纯文本
     # 去掉模型偶发的引号包裹
     if (text.startswith("「") and text.endswith("」")) or (  # 中文直角引号包裹
         len(text) >= 2 and text[0] == text[-1] and text[0] in "\"'`"  # 成对英文/反引号包裹
-    ):  # 参数列表结束
+    ):  # 或条件结束
         text = text[1:-1].strip()  # 剥掉首尾引号再 trim
     return text  # 返回干净文本
 
@@ -102,18 +102,35 @@ def hyde_document(llm: Any, query: str) -> str:  # 方法5：HyDE 假想文档
     return hypo or query  # 失败则退回原 query，避免检索无输入
 
 
+STEP_BACK_PROMPT = """你是检索助手。请把用户问题抽象成更上位、更通用的「原理/概念」问题（Step-Back），便于先检索宏观知识再落到原问题。
+要求：
+1. 只输出一句中文问句，不要解释、不要引号
+2. 不要比原问题更窄；要更抽象一层（例如「请假怎么扣钱」→「公司考勤与扣款制度如何规定」）
+3. 保留领域（制度/技术/产品），不要空泛到没有检索价值
+
+用户问题：{query}
+上位问题："""  # Step-Back 提示词：生成更抽象的上位检索问句
+
+
+def step_back_query(llm: Any, query: str) -> str:  # Modular RAG：Step-Back 上位问题
+    """Modular RAG 算子 Step-Back：生成上位检索问句。"""  # 函数说明
+    back = _llm_text(llm, STEP_BACK_PROMPT.format(query=query))  # 填模板生成上位问句
+    return back or query  # 空输出时回退原 query
+
+
 def prepare_retrieval_queries(  # 按策略组装检索用查询列表
     question: str,  # 用户原问题
-    strategy: str,  # none / clean / rewrite / hyde
-    llm: Any | None = None,  # 需要重写/HyDE 时传入全局 LLM
+    strategy: str,  # none / clean / rewrite / hyde / step_back
+    llm: Any | None = None,  # 需要重写/HyDE/Step-Back 时传入全局 LLM
 ) -> dict:  # 返回中间产物字典，供 API 与前端展示
     """按策略产出检索用查询列表与中间产物。
 
     strategy:
       - none: 原问题直接检索
       - clean: 仅清洗
-      - rewrite: 清洗 + 重写（原句+改写句双路，防改歪）
-      - hyde: 清洗 + HyDE（原句+假想文档双路，对应 include_original=True）
+      - rewrite: 清洗 + 重写（原句+改写句双路）
+      - hyde: 清洗 + HyDE（原句+假想文档双路）
+      - step_back: 清洗 + Step-Back 上位问题（原句+上位句双路）
     """  # 策略说明文档
     strategy = (strategy or "rewrite").strip().lower()  # 默认 rewrite，并统一小写
     original = (question or "").strip()  # 规范化原问题
@@ -125,8 +142,9 @@ def prepare_retrieval_queries(  # 按策略组装检索用查询列表
         "clean_query": cleaned,  # 清洗后的问题
         "rewritten_query": None,  # 重写结果（rewrite 时填）
         "hyde_doc": None,  # 假想文档（hyde 时填）
+        "step_back_query": None,  # 上位问题（step_back 时填）
         "retrieval_queries": [],  # 真正拿去 retriever 的查询列表
-    }  # 字典/集合结束
+    }  # 元数据骨架结束
 
     if strategy == "none":  # 不做任何优化
         meta["retrieval_queries"] = [original]  # 只用原问题检索
@@ -143,7 +161,6 @@ def prepare_retrieval_queries(  # 按策略组装检索用查询列表
     if strategy == "hyde":  # HyDE：假想文档检索
         hypo = hyde_document(llm, cleaned or original)  # 生成假想说明文
         meta["hyde_doc"] = hypo  # 记录假想文档（不当最终答案引用）
-        # 假想文档 + 原清洗句两路（讲义强烈建议保留原查询）
         queries = []  # 去重后的双路查询
         for q in (cleaned, hypo):  # 先清洗句，再假想文档
             if q and q not in queries:  # 非空且未重复
@@ -151,8 +168,17 @@ def prepare_retrieval_queries(  # 按策略组装检索用查询列表
         meta["retrieval_queries"] = queries  # 写入检索列表
         return meta  # HyDE 分支结束
 
-    # 默认 rewrite
-    rewritten = rewrite_query(llm, cleaned or original)  # 清洗后再重写
+    if strategy == "step_back":  # Step-Back：上位问题 + 原清洗句
+        back = step_back_query(llm, cleaned or original)  # 生成上位检索问句
+        meta["step_back_query"] = back  # 记录上位问题
+        queries = []  # 双路：清洗句 + 上位句
+        for q in (cleaned, back):  # 遍历两路
+            if q and q not in queries:  # 去重追加
+                queries.append(q)  # 追加一路查询
+        meta["retrieval_queries"] = queries  # 写入检索列表
+        return meta  # Step-Back 分支结束
+
+    rewritten = rewrite_query(llm, cleaned or original)  # 默认 rewrite：清洗后再重写
     meta["rewritten_query"] = rewritten  # 记录改写句
     queries = []  # 双路：清洗句 + 改写句，防改歪漏检
     for q in (cleaned, rewritten):  # 遍历两路

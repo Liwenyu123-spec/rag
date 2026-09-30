@@ -1,0 +1,25 @@
+# Modular RAG 默认编排（飞书 01_Modular RAG 第 3.3 节：从 YAML 读配置）
+# 优先级：请求体显式字段 > preset > 本文件 > .env
+
+default_preset: custom
+
+pre_retrieval:
+  enabled: true
+  # 算子：none | clean | rewrite | hyde | step_back
+  operator: rewrite
+
+retrieval:
+  hybrid: true
+  # simple | reciprocal_rerank | relative_score
+  fusion_mode: reciprocal_rerank
+  num_queries: 1
+
+post_retrieval:
+  rerank: true
+  compress: true
+  reorder: true
+
+generation:
+  crag: true
+  self_rag: false
+  eval: false

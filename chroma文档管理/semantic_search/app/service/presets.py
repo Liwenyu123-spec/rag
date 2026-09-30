@@ -43,6 +43,19 @@ PRESETS: dict[str, dict] = {  # 预设名 → 开关字典
         "use_self_rag": False,  # 关 Self-RAG
         "use_eval": False,  # 关评估
     },  # advanced 结束
+    "step_back": {
+        "use_pre": True,
+        "strategy": "step_back",
+        "use_hybrid": True,
+        "fusion_mode": "reciprocal_rerank",
+        "num_queries": 1,
+        "use_rerank": True,
+        "use_compress": True,
+        "use_reorder": True,
+        "use_crag": False,
+        "use_self_rag": False,
+        "use_eval": False,
+    },
     "full_optimization": {  # 全优化：HyDE + 多查询 + 后处理 + CRAG
         "use_pre": True,  # 开检索前
         "strategy": "hyde",  # HyDE 假想文档
@@ -63,6 +76,7 @@ PRESET_LABELS = {  # 前端展示用中文标签
     "hybrid_search": "混合检索（RRF）",  # hybrid 文案
     "advanced": "进阶（多查询+重排+压缩）",  # advanced 文案
     "full_optimization": "全优化（HyDE+多查询+后处理+CRAG）",  # full 文案
+    "step_back": "Step-Back（上位问题+混合检索+后处理）",
     "custom": "自定义（下方勾选）",  # 自定义档
 }  # PRESET_LABELS 结束
 

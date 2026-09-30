@@ -59,11 +59,12 @@ class ChatResponse(BaseModel):  # /chat 的响应体
 
 
 class PreRetrievalInfo(BaseModel):  # 检索前优化中间产物（便于作业演示）
-    strategy: str  # none / clean / rewrite / hyde
+    strategy: str  # none / clean / rewrite / hyde / step_back
     original_query: str  # 用户原问题
     clean_query: str  # 清洗后
     rewritten_query: str | None = None  # 重写句（rewrite 策略）
     hyde_doc: str | None = None  # 假想文档（hyde 策略，仅用于检索）
+    step_back_query: str | None = None  # Step-Back 上位问题（step_back 策略）
     retrieval_queries: List[str] = Field(default_factory=list)  # 实际用于检索的查询列表
 
 
@@ -89,7 +90,7 @@ class AskRequest(BaseModel):  # POST /ask：基础 RAG + 可选优化链路
     use_pre: bool | None = Field(None, description="是否启用检索前优化；null 跟预设/.env")  # 检索前总开关
     strategy: str | None = Field(  # 检索前策略名
         None,  # 默认跟预设或 .env
-        description="检索前策略: none / clean / rewrite / hyde",  # OpenAPI 字段说明
+        description="检索前策略: none / clean / rewrite / hyde / step_back",  # OpenAPI 字段说明
     )  # strategy 字段结束
     # ----- 检索中 / 检索后 / CRAG（勾选开关；None 表示跟从预设或 .env）-----
     use_hybrid: bool | None = Field(None, description="混合检索 向量+BM25；null=跟配置")  # 混合检索开关

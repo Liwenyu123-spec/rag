@@ -1071,5 +1071,6 @@ def chapters(topic):
         ],
     )
     from _chapters_14_eval import make_chapter as make_ch14
+    from _chapters_15_modular import make_chapter as make_ch15
 
-    return [ch11, ch12, ch13, make_ch14(topic)]
+    return [ch11, ch12, ch13, make_ch14(topic), make_ch15(topic)]

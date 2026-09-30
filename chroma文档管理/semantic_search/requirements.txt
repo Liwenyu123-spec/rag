@@ -4,6 +4,7 @@ chromadb
 python-dotenv
 openai
 pydantic
+pyyaml
 requests
 llama-index-core
 llama-index-embeddings-dashscope
@@ -17,3 +18,4 @@ llama-index-postprocessor-dashscope-rerank
 sentence-transformers
 jieba
 rank-bm25
+neo4j

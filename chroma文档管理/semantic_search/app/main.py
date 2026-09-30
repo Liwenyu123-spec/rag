@@ -47,6 +47,7 @@ from semantic_search.app.schemas import (  # Pydantic 请求/响应模型，给�
     SearchRequest,  # 语义搜索请求体
     SearchResponse,  # 语义搜索响应体
 )  # 括号结束
+from semantic_search.app.modular_config import describe_module_graph, yaml_as_ask_defaults
 from semantic_search.app.service import RagAskService  # 业务编排：pre-retrieval → 检索 → 生成
 from semantic_search.app.service.rag_eval import DEFAULT_RETRIEVAL_CASES, evaluate_retrieval_cases  # 检索评测默认集与评估函数
 from semantic_search.app.service.retrieval_optimize import apply_postprocessors  # 检索后：重排/压缩/重排版
@@ -92,7 +93,7 @@ async def lifespan(app: FastAPI):  # FastAPI 启动和关闭时都会走到这�
 
 app = FastAPI(  # 创建 FastAPI 应用实例
     title="Native RAG 语义搜索引擎",  # 出现在 /docs 顶部的标题
-    description="LlamaIndex + DeepSeek + Chroma：基础 RAG + 检索前优化（清洗/重写/HyDE）",  # API 文档说明
+    description="LlamaIndex + DeepSeek + Chroma：基础 RAG + Modular RAG（YAML / Step-Back / CRAG / Self-RAG）",  # API 文档说明
     version="2.1.0",  # 接口版本号
     lifespan=lifespan,  # 绑定上面的启动/关闭钩子
 )  # 括号结束
@@ -123,10 +124,17 @@ async def api_info():  # 方便程序或调试查看有哪些入口
         "search": "/search?q=你的查询内容",  # GET 搜索示例
         "query": "/query?q=根据知识库回答问题",  # GET 问答示例
         "ask": "POST /ask",  # 可勾选优化 + 可选生成评估
+        "modules": "GET /modules",  # Modular RAG 三层抽象 + YAML
         "eval_retrieval": "POST /eval/retrieval",  # Hit Rate / MRR
         "chat": "POST /chat",  # 多轮对话接口
         "ingest": "POST /ingest",  # 本地文件导入接口
     }  # 字典/集合结束
+
+
+@app.get("/modules")
+async def list_modules():
+    """Modular RAG 三层抽象：Module Type → Module → Operator，以及 YAML 默认编排。"""
+    return describe_module_graph(yaml_as_ask_defaults())
 
 
 @app.post("/ask", response_model=AskResponse)  # 作业主接口：可勾选优化方向的 RAG 问答
@@ -137,21 +145,23 @@ async def ask(request: AskRequest):  # 请求体含 question / k / 各优化开�
     显式开关会覆盖预设对应项。
     """  # OpenAPI 多行说明：预设与开关优先级
     strategy = (request.strategy or "").strip().lower() if request.strategy else None  # 规范化策略名；空则 None
-    if strategy and strategy not in {"none", "clean", "rewrite", "hyde"}:  # 非法策略名
-        raise HTTPException(  # 参数错误
-            status_code=400,  # Bad Request
-            detail="strategy 只能是 none / clean / rewrite / hyde",  # 合法取值说明
-        )  # raise 结束
-    if request.preset and request.preset not in {  # 传了预设但名字不在白名单
-        "basic",  # 基础 RAG
-        "hybrid_search",  # 混合检索预设
-        "advanced",  # 进阶优化预设
-        "full_optimization",  # 全开优化预设
-    }:  # 合法预设集合结束
-        raise HTTPException(  # 参数错误
-            status_code=400,  # Bad Request
-            detail="preset 只能是 basic / hybrid_search / advanced / full_optimization",  # 合法取值说明
-        )  # raise 结束
+    if strategy and strategy not in {"none", "clean", "rewrite", "hyde", "step_back"}:
+        raise HTTPException(
+            status_code=400,
+            detail="strategy 只能是 none / clean / rewrite / hyde / step_back",
+        )
+    if request.preset and request.preset not in {
+        "basic",
+        "hybrid_search",
+        "advanced",
+        "full_optimization",
+        "custom",
+        "step_back",
+    }:
+        raise HTTPException(
+            status_code=400,
+            detail="preset 只能是 basic / hybrid_search / advanced / full_optimization / custom / step_back",
+        )
     try:  # 业务层可能抛 ValueError / RuntimeError
         payload = RagAskService(_require_engine(app)).ask(  # 编排：检索前→检索→生成→可选评估
             request.question,  # 用户问题

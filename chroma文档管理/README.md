@@ -1,22 +1,20 @@
 # chroma文档管理综合案例（FastAPI 工程化）
 
+作业向的模块说明（哪块干什么、怎么演示）见：**[项目说明.md](./项目说明.md)**。
+
 ```powershell
 python chroma文档管理/run.py
 # 或（兼容旧命令）
 python -m semantic_search
 ```
 
-打开 http://127.0.0.1:8003/
-
+打开 http://127.0.0.1:8003/  
 代码在 `chroma文档管理/semantic_search/`。
 
-## 作业主流程：基础 RAG + 检索前优化
+## 作业主流程（POST /ask）
 
-1. 浏览器打开对话页（默认「知识库问答」模式）
-2. 侧栏可选检索前策略：`rewrite`（清洗+重写）/ `hyde` / `clean` / `none`
-3. 前端调用 `POST /ask`，返回最终答案 + 来源 + 检索前中间信息
-
-接口示例：
+浏览器默认「RAG 知识库问答」：可选预设或勾选检索前/中/后、Self-RAG、CRAG、生成评估。  
+前端调用 `POST /ask`，返回答案、来源、各模块过程信息。
 
 ```http
 POST /ask
@@ -25,6 +23,8 @@ Content-Type: application/json
 {
   "question": "嗯那个帮我看看请假咋扣钱啊???",
   "k": 5,
-  "strategy": "rewrite"
+  "preset": "full_optimization"
 }
 ```
+
+检索评估：`POST /eval/retrieval`（页面按钮「跑 Hit Rate / MRR」）。

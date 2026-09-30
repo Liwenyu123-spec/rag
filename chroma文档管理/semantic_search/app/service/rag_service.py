@@ -23,7 +23,8 @@ from semantic_search.app.config import (  # 从配置读取各优化开关与默
 )  # 配置常量导入结束
 from semantic_search.app.service.crag import apply_crag, filter_relevant_nodes  # CRAG 纠错与相关性过滤
 from semantic_search.app.service.pre_retrieval import prepare_retrieval_queries  # 检索前：清洗/改写/HyDE
-from semantic_search.app.service.presets import apply_preset  # 按预设名合并各优化开关
+from semantic_search.app.modular_config import yaml_as_ask_defaults
+from semantic_search.app.service.presets import apply_preset
 from semantic_search.app.service.rag_eval import evaluate_generation  # 生成质量评估（忠实度等）
 from semantic_search.app.service.retrieval_optimize import apply_postprocessors  # 检索后：重排/压缩/重排序
 from semantic_search.app.service.self_rag import (  # Self-RAG：决定是否检索、生成后校验
@@ -240,7 +241,9 @@ class RagAskService:  # RAG 问答编排服务
                 "use_eval": use_eval,  # 评估
             },  # 原始开关结束
         )  # 得到合并后的 resolved
-        # 显式请求字段覆盖预设；未传则用预设；都没有则跟 .env / 默认
+        for key, value in yaml_as_ask_defaults().items():
+            resolved.setdefault(key, value)
+        # 显式请求字段覆盖预设；未传则用预设；都没有则跟 YAML / .env
         if use_pre is not None:  # 请求显式传了 use_pre
             flag_pre = bool(use_pre)  # 以请求为准
         elif "use_pre" in resolved:  # 否则看预设是否提供
@@ -250,7 +253,7 @@ class RagAskService:  # RAG 问答编排服务
 
         raw_strategy = strategy if strategy is not None else resolved.get("strategy")  # 策略：请求优先于预设
         effective_strategy = str(raw_strategy or ("rewrite" if flag_pre else "none")).strip().lower()  # 规范化策略名
-        if effective_strategy not in {"none", "clean", "rewrite", "hyde"}:  # 非法策略名
+        if effective_strategy not in {"none", "clean", "rewrite", "hyde", "step_back"}:  # 非法策略名
             effective_strategy = "rewrite" if flag_pre else "none"  # 回退到合理默认
         if not flag_pre:  # 关闭检索前时强制 none
             effective_strategy = "none"  # 不做清洗/改写/HyDE
@@ -308,8 +311,9 @@ class RagAskService:  # RAG 问答编排服务
             "original_query": question,  # 原始问题
             "clean_query": question,  # 未清洗时等同原文
             "rewritten_query": None,  # 无改写
-            "hyde_doc": None,  # 无 HyDE 文档
-            "retrieval_queries": [],  # 无检索查询列表
+            "hyde_doc": None,
+            "step_back_query": None,
+            "retrieval_queries": [],
         }  # empty_pre 结束
         self_info = _empty_self_rag()  # 先放 Self-RAG 占位
         self_info["enabled"] = flag_self  # 标记本次是否启用 Self-RAG

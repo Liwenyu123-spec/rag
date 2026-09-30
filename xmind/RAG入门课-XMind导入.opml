@@ -1774,6 +1774,7 @@
           <outline text="第 12 章：CRAG 专训（查错了怎么办 + 库内/外搜修正）"/>
           <outline text="第 13 章：chroma文档管理 全链路文件/API/开关对照"/>
           <outline text="第 14 章：RAG 评估（Hit/MRR + Faithfulness 等，量化优化）"/>
+          <outline text="第 15 章：Modular RAG（模块化编排 + 配置驱动，对齐飞书 01）"/>
         </outline>
       </outline>
       <outline text="08 检索前优化（Pre-retrieval）">
@@ -3481,6 +3482,419 @@
             <outline text="Relevancy 低 → 改写问句、提高精排、检查干扰文档"/>
             <outline text="Correctness 低但检索好 → 换生成模型/加强「仅依据资料」"/>
           </outline>
+        </outline>
+      </outline>
+      <outline text="15 Modular RAG（模块化）">
+        <outline text="〇、总览">
+          <outline text="一句话：像搭积木一样组合查询改写、多路检索、融合、重排、压缩，用配置控制顺序与启停"/>
+          <outline text="论文：Gao et al. Retrieval-Augmented Generation for Large Language Models: A Survey（2023/2024）"/>
+          <outline text="从「一条固定流水线」走向「可编排框架」（orchestration）"/>
+          <outline text="作业落点：chroma文档管理 的预设 + 勾选 = 线性可插拔 Modular RAG"/>
+        </outline>
+        <outline text="术语定义（本章必背）">
+          <outline text="Modular RAG：把 RAG 拆成独立、可插拔、可重配置模块的架构范式"/>
+          <outline text="Orchestration（编排）：用流程控制模块的执行顺序、条件与分支"/>
+          <outline text="Module Type（模块类型）：Pre-Retrieval / Retrieval / Post-Retrieval / Generation"/>
+          <outline text="Module（模块）：类型下的功能单元，如 Hybrid Search、Rerank、Compress"/>
+          <outline text="Operator（算子）：模块下可替换实现，如 DashScopeRerank vs 本地 bge"/>
+          <outline text="Naive RAG：查询→向量检索→生成，无前后优化"/>
+          <outline text="Advanced RAG：在固定线性上加检索前/后优化（改写、重排、压缩）"/>
+          <outline text="QueryFusionRetriever：LlamaIndex 多路融合器，常用 RRF（reciprocal_rerank）"/>
+          <outline text="Multi-Query：LLM 生成多个查询变体再检索融合（num_queries&gt;1）"/>
+          <outline text="HyDE：先写假想答案文档再检索；假想文不当事实引用"/>
+          <outline text="PRESETS：basic / hybrid_search / advanced / full_optimization 一键组合"/>
+        </outline>
+        <outline text="第一部分：理论介绍">
+          <outline text="1.1 什么是 Modular RAG？">
+            <outline text="拆分：独立 + 可插拔 + 可重配置"/>
+            <outline text="对比传统「向量检索 + 生成」：可增删替换模块，不绑死顺序"/>
+            <outline text="三代对照（讲义示意图）">
+              <outline text="Naive RAG：查询 → 向量检索 → 大模型 → 答案"/>
+              <outline text="Advanced RAG：查询 →[检索前/改写]→ 向量检索 →[重排/压缩]→ 大模型 → 答案"/>
+              <outline text="Modular RAG：查询 →[改写]→[多路检索]→[融合]→[重排]→[压缩]→[生成]；中间可按配置增删换序"/>
+            </outline>
+          </outline>
+          <outline text="1.2 RAG 的三个发展阶段">
+            <outline text="第一代 Naive RAG（朴素）">
+              <outline text="特征：检索 → 生成，一条直线流水线"/>
+              <outline text="局限：检索质量差、召回不准、上下文冗余、易幻觉"/>
+            </outline>
+            <outline text="第二代 Advanced RAG（高级）">
+              <outline text="特征：检索前后加入优化——查询改写、分块、重排、压缩"/>
+              <outline text="局限：流程仍是固定线性，难以针对不同查询动态调整"/>
+            </outline>
+            <outline text="第三代 Modular RAG（模块化）">
+              <outline text="特征：模块化 + 可编排；支持新模块、条件/分支/循环/自适应"/>
+              <outline text="代价：工程复杂度更高，需要编排框架支撑"/>
+            </outline>
+            <outline text="两个关键突破">
+              <outline text="新模块 New Modules：Search / Memory / Routing / Predict / Task Adapter 等"/>
+              <outline text="新模式 New Patterns：条件、分支、循环、自适应（Rewrite-Retrieve-Read、Recursive、Self-RAG 等）"/>
+            </outline>
+          </outline>
+          <outline text="1.3 核心模块（讲义落地的那一组）">
+            <outline text="Indexing：文档→切块→向量索引"/>
+            <outline text="Query Transformation：HyDE / Multi-Query / 清洗重写"/>
+            <outline text="Retrieval：稠密向量 + 稀疏 BM25（jieba）"/>
+            <outline text="Fusion：RRF / relative_score / simple"/>
+            <outline text="Reranking：Cross-Encoder 精排"/>
+            <outline text="Compression：句子级上下文压缩"/>
+            <outline text="Generation：RetrieverQueryEngine / synthesizer + LLM"/>
+            <outline text="综述里还可有：多源 Search、Memory、Routing、Predict、Task Adapter（本仓库未全做）"/>
+          </outline>
+          <outline text="1.4 三层抽象：模块类型 → 模块 → 算子">
+            <outline text="模块类型：Pre-Retrieval / Retrieval / Post-Retrieval / Generation"/>
+            <outline text="模块：Query Transformation、Hybrid Search、Rerank、Compress …"/>
+            <outline text="算子：同一模块换实现——HyDE vs Multi-Query vs Step-Back；DashScopeRerank vs SentenceTransformerRerank"/>
+            <outline text="例子：Pre-Retrieval → Query Transformation → {HyDE, Multi-Query, Step-Back}"/>
+            <outline text="工程含义：换重排算法、加一路检索 = 插拔算子，不必重写整条流水线"/>
+          </outline>
+          <outline text="1.5 编排：RAG Flow 的典型模式">
+            <outline text="线性 Linear：改写→检索→融合→重排→压缩→生成（demo /ask 主路径）"/>
+            <outline text="条件 Conditional：先路由——闲聊直接答、知识题才检索（本仓库 Self-RAG Retrieve）"/>
+            <outline text="分支 Branching：多路检索/多数据源并行再融合（向量+BM25）"/>
+            <outline text="循环 Loop：检索→生成→评估，不行就改写再检（CRAG、Self-RAG ISSUP）"/>
+            <outline text="讲义主类先落地「线性可插拔」：config 开关启停，不改主流程代码"/>
+          </outline>
+          <outline text="1.6 模块化设计的优势">
+            <outline text="可组合性：混合+重排，或纯向量"/>
+            <outline text="可扩展性：新加一路检索器不影响其余模块"/>
+            <outline text="可替换性：换 embedding / rerank 算子"/>
+            <outline text="可测试性：模块可独立测、独立评估（接第 14 章）"/>
+            <outline text="可优化性：针对瓶颈模块专项优化"/>
+          </outline>
+        </outline>
+        <outline text="第二部分：LlamaIndex 完整实现（= demo01_modular_rag.py）">
+          <outline text="能力清单（讲义打勾项）">
+            <outline text="jieba 中文分词 BM25"/>
+            <outline text="HyDE / Multi-Query"/>
+            <outline text="向量 + BM25 多路"/>
+            <outline text="QueryFusionRetriever RRF"/>
+            <outline text="重排（讲义 DashScopeRerank；本仓库默认可本地 bge）"/>
+            <outline text="SentenceEmbeddingOptimizer 压缩"/>
+            <outline text="RetrieverQueryEngine + LLM 生成"/>
+            <outline text="配置驱动模块开关"/>
+          </outline>
+          <outline text="2.1～2.2 环境与全局配置">
+            <outline text="pip：llama-index-core、bm25、jieba；可选 dashscope embedding/llm/rerank"/>
+            <outline text="Settings.embed_model + Settings.llm"/>
+            <outline text="SafeDashScopeEmbedding：每批≤10，避开千问批量硬限制"/>
+            <outline text="LLM temperature 宜偏低，便于改写/判断稳定"/>
+          </outline>
+          <outline text="2.3 Indexing">
+            <outline text="Document → SentenceSplitter → VectorStoreIndex"/>
+            <outline text="nodes 要留给 BM25 复用，避免重复分块"/>
+            <outline text="本仓库：engine.py 切块写入 Chroma"/>
+          </outline>
+          <outline text="2.4 Retrieval：向量 + BM25">
+            <outline text="路1：index.as_retriever 稠密语义"/>
+            <outline text="路2：BM25Retriever + jieba.cut 关键词"/>
+            <outline text="本仓库：retrieval_optimize.build_hybrid_retriever"/>
+          </outline>
+          <outline text="2.5 Fusion + Multi-Query">
+            <outline text="QueryFusionRetriever(retrievers, mode, num_queries)"/>
+            <outline text="num_queries=1：只多路融合；&gt;1：再生成查询变体"/>
+            <outline text="mode：reciprocal_rerank（RRF）/ relative_score / simple"/>
+            <outline text="本仓库：AskRequest.num_queries + fusion_mode"/>
+          </outline>
+          <outline text="2.6 HyDE">
+            <outline text="讲义：HyDEQueryTransform(include_original=True) 包一层 TransformQueryEngine"/>
+            <outline text="本仓库：strategy=hyde，清洗句+假想文档双路检索，假想文不进 sources"/>
+          </outline>
+          <outline text="2.7～2.8 重排与压缩">
+            <outline text="node_postprocessors 串行：先精排再压缩"/>
+            <outline text="讲义重排：DashScopeRerank(qwen3.7-text-rerank)"/>
+            <outline text="压缩：SentenceEmbeddingOptimizer + 中文分句；percentile_cutoff=0.5"/>
+            <outline text="本仓库另加 LongContextReorder（对抗 Lost in the Middle）"/>
+          </outline>
+          <outline text="2.9 ModularRAG 主类 + PRESETS">
+            <outline text="index_documents：Indexing → 两路检索 → Fusion → postprocessors → QueryEngine → 可选 HyDE 外包"/>
+            <outline text="query()：query_engine.query，打印 source_nodes 与答案"/>
+            <outline text="basic：simple 融合，关重排/压缩/HyDE"/>
+            <outline text="hybrid_search：RRF，关后处理"/>
+            <outline text="advanced：num_queries=3 + 重排 + 压缩"/>
+            <outline text="full_optimization：再开 HyDE"/>
+            <outline text="本仓库 presets.py 同名四档，并映射 use_pre/CRAG 等作业开关"/>
+          </outline>
+          <outline text="2.10 调用测试：preset=full_optimization，对示例库问 RAG/Python/ML/BM25"/>
+        </outline>
+        <outline text="第三部分：用配置驱动模块编排">
+          <outline text="3.1 代码字典控制逻辑">
+            <outline text="三个模块类：检索前 / 检索中 / 检索后，各自只干一类事"/>
+            <outline text="主类按 config 字典 if 开关组装，不写死流水线"/>
+            <outline text="调用文件只传配置 + 提问"/>
+          </outline>
+          <outline text="3.2 完整案例目录（讲义 rag_tools）">
+            <outline text="shared.py：共享 LLM/Embedding/工具"/>
+            <outline text="before_refine.py：检索前"/>
+            <outline text="middle_refine.py：检索中"/>
+            <outline text="after_refine.py：检索后"/>
+            <outline text="rag_main.py：主类编排"/>
+            <outline text="main.py：入口"/>
+            <outline text="对照本仓库">
+              <outline text="before ≈ pre_retrieval.py"/>
+              <outline text="middle ≈ retrieval_optimize.build_hybrid_retriever"/>
+              <outline text="after ≈ apply_postprocessors + crag/self_rag"/>
+              <outline text="rag_main ≈ rag_service.RagAskService"/>
+              <outline text="main ≈ app/main.py + static/index.html 勾选"/>
+            </outline>
+          </outline>
+          <outline text="3.3 YAML 读配置">
+            <outline text="讲义：YAML 描述开关，代码读取后交给主类"/>
+            <outline text="本仓库：.env（HYBRID/RERANK/…）+ 请求体 JSON 覆盖 + 前端预设"/>
+          </outline>
+          <outline text="3.4 强类型配置类">
+            <outline text="讲义：dataclass / 类型化 Config，减少字典拼写错误"/>
+            <outline text="本仓库：Pydantic AskRequest / OptimizeFlags（OpenAPI 即文档）"/>
+          </outline>
+        </outline>
+        <outline text="对照 chroma文档管理（交作业用）">
+          <outline text="线性可插拔：/ask 按勾选组装，对应讲义 ModularRAG"/>
+          <outline text="条件：Self-RAG Retrieve 闲聊不检索"/>
+          <outline text="分支：向量+BM25 融合"/>
+          <outline text="循环：CRAG 改写重检；ISSUP 不足则重写答案"/>
+          <outline text="预设四档名称与 demo01 对齐，full_optimization 本仓库还叠了 CRAG"/>
+          <outline text="未按讲义做：YAML 配置文件、Step-Back 算子、TransformQueryEngine 外包 HyDE"/>
+          <outline text="多出来：Chroma 持久化、Web 勾选、CRAG、Self-RAG、Hit/MRR 评估"/>
+          <outline text="演示：页面选 full_optimization 或 advanced，看「本次优化」标签讲模块插拔"/>
+        </outline>
+      </outline>
+      <outline text="16 知识图谱（Neo4j / GraphRAG）">
+        <outline text="〇、总览">
+          <outline text="一句话：用图（实体-关系-属性）存结构化知识，支持多跳推理；无大模型也可独立使用"/>
+          <outline text="2012 谷歌提出 Knowledge Graph；与大数据、深度学习并称驱动 AI 的核心力量之一"/>
+          <outline text="本仓库落点：先装 Neo4j + JDK，再用 Cypher / Python neo4j 做 GraphRAG 双通道"/>
+        </outline>
+        <outline text="术语定义（本章必背）">
+          <outline text="知识图谱 KG：用图结构表示知识；节点=实体/概念，边=关系/属性"/>
+          <outline text="实体 Entity：具体事物（人、公司、产品）；概念 Concept：抽象类型"/>
+          <outline text="三元组 SPO：Subject-Predicate-Object，数据层基本单元"/>
+          <outline text="模式层 Schema / 本体 Ontology：类型、属性、关系、约束的「骨架」"/>
+          <outline text="数据层 Data Layer：具体实例与事实（「血肉」）"/>
+          <outline text="GraphRAG：用图查询做全局聚合/多跳推理，而非只找相似文本"/>
+          <outline text="实体链接 Entity Linking：把查询里的提及对齐到图谱实体"/>
+          <outline text="Cypher：Neo4j 声明式图查询语言（类比 SQL）"/>
+          <outline text="Neo4j：Java 实现的开源图数据库；社区版免费单点，企业版收费高可用"/>
+        </outline>
+        <outline text="一、知识图谱介绍">
+          <outline text="1、没有大模型的知识图谱架构">
+            <outline text="用户查询（自然语言或结构化）"/>
+            <outline text="关键词/规则匹配 → 实体识别"/>
+            <outline text="或直接写 Cypher / SPARQL"/>
+            <outline text="图数据库执行（Neo4j / JanusGraph）→ 精确结果"/>
+            <outline text="模板化回答 / 直接展示图谱路径"/>
+            <outline text="要点：KG 比大模型早很多年，传统上可独立使用"/>
+          </outline>
+          <outline text="2、大模型增强图谱 vs 传统方案">
+            <outline text="构建成本：传统高（人工 schema/规则）｜LLM 增强低（自动抽取）"/>
+            <outline text="灵活性：传统低（预定义问法）｜LLM 高（开放域问答）"/>
+            <outline text="准确率：传统极高（结构化查询）｜LLM 中等（有幻觉风险）"/>
+            <outline text="推理深度：传统受图遍历步数限制｜LLM 可增强复杂推理"/>
+            <outline text="维护成本：传统高｜LLM 增强相对低（可动态更新）"/>
+            <outline text="响应速度：传统毫秒级｜LLM 秒级（含模型调用）"/>
+            <outline text="可解释性：传统白盒可追溯路径｜LLM 灰盒"/>
+          </outline>
+          <outline text="3、介绍与定义">
+            <outline text="3.1 什么是知识图谱">
+              <outline text="3.1.1 什么是知识">
+                <outline text="数据：226.1cm、229cm —— 无语境的客观数值"/>
+                <outline text="信息：「姚明臂展 226.1cm」「身高 229cm」—— 事实陈述"/>
+                <outline text="知识：把属性整合抽象，形成对姚明的认知（比普通人高）"/>
+              </outline>
+              <outline text="3.1.2 什么是图谱">
+                <outline text="Graph：图论中事物与事物相互连接的结构"/>
+                <outline text="由节点 Vertex + 边 Edge 构成；多关系图可有多类节点/边"/>
+              </outline>
+              <outline text="3.1.3 知识图谱">
+                <outline text="本质：语义网络；节点=概念/实体，边=关系/属性"/>
+                <outline text="简化说法：实体 + 实体间关系"/>
+                <outline text="组成三件套：Entity / Relation / Attribute"/>
+              </outline>
+              <outline text="3.1.4 示例（苹果/乔布斯）">
+                <outline text="文本：「苹果创始人是乔布斯，1976 成立，总部库比蒂诺」"/>
+                <outline text="图：乔布斯─创始人→苹果─成立于→1976；苹果─总部→库比蒂诺"/>
+              </outline>
+            </outline>
+            <outline text="3.2 知识图谱检索 vs 向量检索">
+              <outline text="向量：语义相似、模糊召回，弱于精确关系与多跳"/>
+              <outline text="图谱：精确路径、多跳遍历、全局聚合；弱于开放语义"/>
+              <outline text="实践：二者互补 → 混合双通道"/>
+            </outline>
+            <outline text="3.3 在 RAG 中的三种应用模式">
+              <outline text="模式1 GraphRAG · 全局推理">
+                <outline text="例：公司所有产品的共同技术？"/>
+                <outline text="传统 RAG：需塞入大量产品文本，易漏、上下文爆炸"/>
+                <outline text="GraphRAG：公司─produces→产品─uses→技术 X，直接聚合"/>
+                <outline text="升级：从「找相似文本」→「执行图查询」"/>
+              </outline>
+              <outline text="模式2 实体链接增强 · 精准定位">
+                <outline text="例：乔布斯的创业伙伴？"/>
+                <outline text="向量：可能命中传记任意段落"/>
+                <outline text="图谱：识别实体→遍历联合创始人→沃兹尼亚克 + 文本"/>
+                <outline text="优势：消歧 + 精准召回关系型信息"/>
+              </outline>
+              <outline text="模式3 混合架构 · 向量+图谱双通道">
+                <outline text="向量通道：语义相似检索"/>
+                <outline text="图谱通道：实体识别 → 1~2 跳子图 → 对应文本"/>
+                <outline text="结果融合后再交给 LLM"/>
+              </outline>
+            </outline>
+            <outline text="3.4 知识图谱构建流程">
+              <outline text="1 实体抽取 NER：人名/地名/组织/产品（spaCy、BERT-NER、GPT）"/>
+              <outline text="2 关系抽取：「乔布斯」─创立→「苹果」"/>
+              <outline text="3 图谱存储：Neo4j / NebulaGraph / RDF 三元组"/>
+              <outline text="4 与向量库关联：实体/关系链回原文，支持图谱↔文本双向导航"/>
+            </outline>
+            <outline text="3.5 优势场景">
+              <outline text="多跳关系问答、股权穿透、依赖链路"/>
+              <outline text="需精确实体对齐、可解释路径的场景"/>
+              <outline text="与向量检索互补，而非替代"/>
+            </outline>
+            <outline text="3.6 典型应用">
+              <outline text="搜索引擎 / 智能助手问答"/>
+              <outline text="金融：风控、评级、反欺诈"/>
+              <outline text="医疗：知识库、辅助诊断、药物研发"/>
+              <outline text="教育：知识点图谱、智能答疑"/>
+              <outline text="电商推荐 / 社交关系挖掘 / 物联网"/>
+              <outline text="商业 KG：工商股权投资关系分析"/>
+              <outline text="教育 KG：教材笔记→知识点组织→问答底座"/>
+            </outline>
+            <outline text="3.7 挑战">
+              <outline text="构建与维护成本、schema 演进"/>
+              <outline text="抽取噪声、实体对齐与冲突消解"/>
+              <outline text="与向量结果的融合策略设计"/>
+            </outline>
+            <outline text="3.8 与 Advanced / Modular RAG 对比">
+              <outline text="已有：Multi-Query→混合检索→RRF→Rerank→LLM"/>
+              <outline text="升级：并行加「实体识别→图谱查询→子图召回」再融合"/>
+              <outline text="策略建议：图谱结果优先处理关系/多跳，向量结果补充语义"/>
+            </outline>
+          </outline>
+        </outline>
+        <outline text="二、分层架构">
+          <outline text="总述：模式层=骨架；数据层=血肉；相互依存"/>
+          <outline text="1、模式层 Schema Layer">
+            <outline text="1.1 定义：概念模型与逻辑结构；类比数据库表结构设计"/>
+            <outline text="1.2 关键组成（本体 Ontology）">
+              <outline text="实体类型 Class：人 / 电影 / 公司"/>
+              <outline text="数据属性 Data Property：连实体→基本类型"/>
+              <outline text="对象属性 Object Property：连实体→实体（即关系）"/>
+              <outline text="关系类型 Relation Type：执导 / 就职于 / 位于"/>
+              <outline text="约束 Constraint：如一人一个出生日期、评分 1–10"/>
+            </outline>
+            <outline text="1.3 核心作用">
+              <outline text="统一表示标准，减少歧义"/>
+              <outline text="支撑逻辑推理"/>
+              <outline text="简化查询；指导抽取与融合质量"/>
+            </outline>
+            <outline text="1.4 常见表示语言">
+              <outline text="RDFS：基础模式定义"/>
+              <outline text="OWL：更强本体与推理"/>
+              <outline text="SHACL：RDF 数据约束"/>
+            </outline>
+          </outline>
+          <outline text="2、数据层 Data Layer">
+            <outline text="2.1 定义：模式的实例化；大量 SPO 三元组"/>
+            <outline text="2.2 组成">
+              <outline text="实体实例：吴京、《流浪地球2》"/>
+              <outline text="属性值实例：出生日期=1974-04-03"/>
+              <outline text="关系实例：吴京参演《流浪地球2》"/>
+            </outline>
+            <outline text="2.3 作用：承载内容、支撑问答/推荐/搜索、可持续扩实例"/>
+          </outline>
+          <outline text="3、两层关系">
+            <outline text="模板与实例：数据必须符合模式定义"/>
+            <outline text="抽象与具体：模式是概括，数据是事实"/>
+            <outline text="相互促进：数据积累可反馈扩展模式（如新增「客串」关系）"/>
+          </outline>
+        </outline>
+        <outline text="三、技术架构">
+          <outline text="1、数据获取">
+            <outline text="业务库表（结构化，半公开/内部）"/>
+            <outline text="网络公开网页（非结构化）"/>
+            <outline text="三种形态：结构化 / 半结构化 / 非结构化 → 不同处理法"/>
+          </outline>
+          <outline text="2、信息抽取 IE【核心】">
+            <outline text="目标：从异构源自动抽候选知识单元"/>
+            <outline text="实体抽取 Entity Extraction">
+              <outline text="NER：人/地/组织/日期/货币等"/>
+              <outline text="方法：规则、统计、深度学习"/>
+            </outline>
+            <outline text="关系抽取 Relation Extraction">
+              <outline text="作者/工作/亲属等关系"/>
+              <outline text="方法：有监督统计或深度学习"/>
+            </outline>
+            <outline text="属性抽取 Attribute Extraction">
+              <outline text="实体特征：职业、经纬度等"/>
+              <outline text="可把「实体-属性值」看作名词性关系 → 常转为关系抽取"/>
+            </outline>
+          </outline>
+          <outline text="3、知识融合 Knowledge Fusion">
+            <outline text="消除冗余、统一表达、解决冲突、知识扩展"/>
+            <outline text="关键技术：指代消解、实体消歧/链接、实体对齐、关系对齐"/>
+          </outline>
+          <outline text="4、知识加工 Knowledge Processing">
+            <outline text="本体构建：定义层级与约束（人工或半自动）"/>
+            <outline text="知识推理：规则 / TransE·RotatE 嵌入 / 路径推理 → 知识补全"/>
+            <outline text="质量评估：可信度打分与人工甄别"/>
+            <outline text="结果：零散事实 → 结构化、网络化、可推理的知识体系"/>
+          </outline>
+        </outline>
+        <outline text="四、Neo4j 数据库">
+          <outline text="1、介绍">
+            <outline text="Java 实现的开源 NoSQL 图库；2003 研发，2007 首版"/>
+            <outline text="完整数据库特性：ACID、集群、备份与故障转移"/>
+            <outline text="企业版：付费，高可用/热备份；社区版：免费，单点"/>
+          </outline>
+          <outline text="2、图数据概念">
+            <outline text="节点 Node：主数据元素；可有多属性、多标签（类比表/表名）"/>
+            <outline text="关系 Relationship：有向；可有属性"/>
+            <outline text="属性 Property：键值对；可索引与约束"/>
+            <outline text="标签 Label：分组节点；建索引加速查找"/>
+          </outline>
+          <outline text="3、Windows 安装四步（讲义）">
+            <outline text="第一步：安装 JDK">
+              <outline text="Oracle JDK 或 OpenJDK 17+"/>
+              <outline text="验证：java --version"/>
+            </outline>
+            <outline text="第二步：下载 Neo4j Community">
+              <outline text="https://neo4j.com/deployment-center/?community"/>
+              <outline text="解压路径不要含中文"/>
+            </outline>
+            <outline text="第三步：环境变量">
+              <outline text="新建 NEO4J_HOME = 解压目录"/>
+              <outline text="Path 追加 %NEO4J_HOME%\bin"/>
+            </outline>
+            <outline text="第四步：启动">
+              <outline text="cmd：neo4j console"/>
+              <outline text="浏览器：http://localhost:7474/"/>
+              <outline text="默认用户/密码均为 neo4j，首次登录须改密"/>
+              <outline text="若报错缺 Java → 先装好 JDK"/>
+            </outline>
+          </outline>
+          <outline text="4、Cypher 简介">
+            <outline text="声明式图查询语言；Neo4j 是标准制定者（openCypher）"/>
+            <outline text="4.1 基本符号">
+              <outline text="() 节点；(n) 任意节点"/>
+              <outline text="(:Label) 如 (p:Person)"/>
+              <outline text="({key:value}) 如 (p:Person {name:'乔布斯'})"/>
+              <outline text="--&gt; 有向关系；-[:TYPE]-&gt; 带类型"/>
+              <outline text="-[:TYPE {prop:val}]-&gt; 带属性关系"/>
+            </outline>
+            <outline text="4.2 CRUD 要点">
+              <outline text="CREATE：创建节点/关系"/>
+              <outline text="MERGE：不存在才创建（条件创建）"/>
+              <outline text="MATCH … WHERE：查询与条件过滤"/>
+              <outline text="例：CREATE (a:Person {name:'张三疯', age:30})"/>
+              <outline text="例：先 MATCH 两节点再 CREATE 关系"/>
+            </outline>
+          </outline>
+        </outline>
+        <outline text="五、本机环境清单">
+          <outline text="JDK 17+（JAVA_HOME）"/>
+          <outline text="Neo4j Community（NEO4J_HOME + neo4j console）"/>
+          <outline text="Python：pip install neo4j（官方驱动）"/>
+          <outline text="可选：llama-index 图谱相关包、spaCy NER（后续实验再加）"/>
         </outline>
       </outline>
     </outline>

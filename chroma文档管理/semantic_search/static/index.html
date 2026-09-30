@@ -381,14 +381,16 @@
           <option value="hybrid_search">预设 · hybrid_search 混合检索</option>
           <option value="advanced">预设 · advanced 进阶</option>
           <option value="full_optimization">预设 · full_optimization 全优化</option>
+          <option value="step_back">预设 · step_back 上位问题</option>
         </select>
         <div class="opt-list">
           <label class="opt-item">
             <input type="checkbox" v-model="optUsePre" @change="askPreset='custom'" />
-            <span>检索前优化<small>清洗 / 重写 / HyDE</small></span>
+            <span>检索前优化<small>清洗 / 重写 / HyDE / Step-Back</small></span>
           </label>
           <select v-model="askStrategy" :disabled="!optUsePre" @change="askPreset='custom'">
             <option value="rewrite">清洗 + 查询重写（推荐）</option>
+            <option value="step_back">清洗 + Step-Back 上位问题</option>
             <option value="hyde">清洗 + HyDE 假想文档</option>
             <option value="clean">仅查询清洗</option>
           </select>
@@ -396,6 +398,11 @@
             <input type="checkbox" v-model="optUseHybrid" @change="askPreset='custom'" />
             <span>检索中 · 混合检索<small>向量 + BM25 融合</small></span>
           </label>
+          <select v-model="fusionMode" :disabled="!optUseHybrid" @change="askPreset='custom'">
+            <option value="reciprocal_rerank">融合 · RRF（reciprocal_rerank）</option>
+            <option value="simple">融合 · 简单拼接（simple）</option>
+            <option value="relative_score">融合 · 相对分（relative_score）</option>
+          </select>
           <label class="opt-item">
             <input type="checkbox" v-model="optUseMultiQuery" @change="askPreset='custom'" />
             <span>检索中 · Multi-Query<small>LLM 生成多查询变体再融合</small></span>
@@ -431,6 +438,15 @@
             placeholder="可选：标准答案（填了才算 Correctness）"
             style="width:100%;resize:vertical;color:#dce3ef;font-size:12px;border:1px solid rgba(255,255,255,.12);border-radius:10px;background:rgba(0,0,0,.2);padding:8px 10px;"
           ></textarea>
+        </div>
+        <div class="upload-msg" v-if="moduleLayers.length" style="margin-top:8px;text-align:left;opacity:.9;">
+          <strong>编排（YAML 默认）</strong>
+          <div v-for="(layer, i) in moduleLayers" :key="i" class="pre-line" style="margin-top:4px;">
+            {{ layer.module_type }} · {{ layer.module }} · {{ layer.enabled ? layer.operator : '关' }}
+          </div>
+          <div class="pre-line" v-if="moduleFlows.length" style="margin-top:6px;">
+            流程：{{ moduleFlows.join('；') }}
+          </div>
         </div>
         <button
           class="upload-btn"
@@ -518,7 +534,9 @@
                 <span class="opt-tag" :class="{ off: !msg.optimizations.use_pre }">
                   检索前{{ msg.optimizations.use_pre ? '·' + strategyLabel(msg.optimizations.strategy) : '关' }}
                 </span>
-                <span class="opt-tag" :class="{ off: !msg.optimizations.use_hybrid }">混合检索{{ msg.optimizations.use_hybrid ? '' : '关' }}</span>
+                <span class="opt-tag" :class="{ off: !msg.optimizations.use_hybrid }">
+                  混合{{ msg.optimizations.use_hybrid ? '·' + (msg.optimizations.fusion_mode || '') : '关' }}
+                </span>
                 <span class="opt-tag" :class="{ off: !(msg.optimizations.num_queries > 1) }">
                   Multi-Query{{ msg.optimizations.num_queries > 1 ? '×' + msg.optimizations.num_queries : '关' }}
                 </span>
@@ -535,6 +553,7 @@
               <div class="pre-line" v-if="msg.preRetrieval.clean_query">清洗：{{ msg.preRetrieval.clean_query }}</div>
               <div class="pre-line" v-if="msg.preRetrieval.rewritten_query">重写：{{ msg.preRetrieval.rewritten_query }}</div>
               <div class="pre-line" v-if="msg.preRetrieval.hyde_doc">HyDE：{{ msg.preRetrieval.hyde_doc }}</div>
+              <div class="pre-line" v-if="msg.preRetrieval.step_back_query">Step-Back：{{ msg.preRetrieval.step_back_query }}</div>
               <div class="pre-line" v-if="msg.preRetrieval.retrieval_queries?.length">
                 检索句：{{ msg.preRetrieval.retrieval_queries.join(' ｜ ') }}
               </div>
@@ -687,6 +706,7 @@
           clean: '仅清洗',
           rewrite: '清洗+重写',
           hyde: '清洗+HyDE',
+          step_back: '清洗+Step-Back',
         };
 
         const suggestions = [
@@ -741,6 +761,12 @@
             fusion: 'reciprocal_rerank',
             use_rerank: true, use_compress: true, use_reorder: true,
             use_crag: true, use_self_rag: false, use_eval: false,
+          },
+          step_back: {
+            use_pre: true, strategy: 'step_back', use_hybrid: true, multi: false,
+            fusion: 'reciprocal_rerank',
+            use_rerank: true, use_compress: true, use_reorder: true,
+            use_crag: false, use_self_rag: false, use_eval: false,
           },
         };
 
@@ -984,9 +1010,19 @@
           }
         };
 
+        const moduleLayers = ref([]);
+        const moduleFlows = ref([]);
+
         onMounted(() => {
           refreshHealth();
           setInterval(refreshHealth, 15000);
+          fetch('/modules')
+            .then((r) => r.json())
+            .then((d) => {
+              moduleLayers.value = d.layers || [];
+              moduleFlows.value = d.flow_patterns || [];
+            })
+            .catch(() => {});
         });
 
         return {
@@ -998,6 +1034,8 @@
           askStrategy,
           askPreset,
           fusionMode,
+          moduleLayers,
+          moduleFlows,
           optUsePre,
           optUseHybrid,
           optUseMultiQuery,

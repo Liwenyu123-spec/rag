@@ -26,7 +26,7 @@ TREE = topic(
     note=(
         "根据飞书讲义整理：认知阶段、提示词、RAG整体认知、Embedding、向量数据库、"
         "Native RAG、Advanced RAG、检索前/中/后优化（Pre / Retrieval / Post-retrieval）、"
-        "Self-RAG、Corrective RAG（CRAG）、RAG 评估。"
+        "Self-RAG、Corrective RAG（CRAG）、RAG 评估、Modular RAG、知识图谱（Neo4j/GraphRAG）。"
     ),
     children=[
         topic(
@@ -2903,6 +2903,7 @@ TREE = topic(
                         topic("第 12 章：CRAG 专训（查错了怎么办 + 库内/外搜修正）"),
                         topic("第 13 章：chroma文档管理 全链路文件/API/开关对照"),
                         topic("第 14 章：RAG 评估（Hit/MRR + Faithfulness 等，量化优化）"),
+                        topic("第 15 章：Modular RAG（模块化编排 + 配置驱动，对齐飞书 01）"),
                     ],
                 ),
             ],
@@ -4414,6 +4415,8 @@ CHAPTER_COLORS = [
     ("#9333EA", "#F3E8FF"),  # 12 紫（CRAG）
     ("#0F766E", "#CCFBF1"),  # 13 深青（项目对照）
     ("#B45309", "#FEF3C7"),  # 14 棕金（RAG评估）
+    ("#1D4ED8", "#DBEAFE"),  # 15 靛蓝（Modular RAG）
+    ("#0F766E", "#99F6E4"),  # 16 深青（知识图谱）
 ]
 
 
@@ -4520,7 +4523,7 @@ def make_sheet(title: str, root: dict) -> dict:
 def main():
     import copy
 
-    # 追加 Self-RAG / CRAG / 项目对照 / RAG评估（飞书 + chroma文档管理）
+    # 追加 Self-RAG / CRAG / 项目对照 / RAG评估 / Modular RAG
     from _chapters_11_12 import chapters as _extra_chapters
 
     attached = TREE.setdefault("children", {}).setdefault("attached", [])
@@ -4530,6 +4533,14 @@ def main():
         from _chapters_14_eval import make_chapter as make_ch14
 
         attached.append(make_ch14(topic))
+    if not any(c.get("title", "").startswith("15 ") for c in attached):
+        from _chapters_15_modular import make_chapter as make_ch15
+
+        attached.append(make_ch15(topic))
+    if not any(c.get("title", "").startswith("16 ") for c in attached):
+        from _chapters_16_kg import make_chapter as make_ch16
+
+        attached.append(make_ch16(topic))
 
     chapters = copy.deepcopy(TREE.get("children", {}).get("attached", []))
     sheets = [make_sheet("00 总览", make_overview(chapters))]

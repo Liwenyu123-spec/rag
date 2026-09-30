@@ -1,5 +1,5 @@
 # RAG入门课
-根据飞书讲义整理：认知阶段、提示词、RAG整体认知、Embedding、向量数据库、Native RAG、Advanced RAG、检索前/中/后优化（Pre / Retrieval / Post-retrieval）、Self-RAG、Corrective RAG（CRAG）、RAG 评估。
+根据飞书讲义整理：认知阶段、提示词、RAG整体认知、Embedding、向量数据库、Native RAG、Advanced RAG、检索前/中/后优化（Pre / Retrieval / Post-retrieval）、Self-RAG、Corrective RAG（CRAG）、RAG 评估、Modular RAG、知识图谱（Neo4j/GraphRAG）。
 
 ## 01 认知阶段：大模型介绍、调用、RAG
 飞书文档：01-认知阶段（大模型介绍，调用，RAG）
@@ -2853,6 +2853,8 @@ AI 和 GAI 都是提出目标，GAI 的目标更具体
 
 #### 第 14 章：RAG 评估（Hit/MRR + Faithfulness 等，量化优化）
 
+#### 第 15 章：Modular RAG（模块化编排 + 配置驱动，对齐飞书 01）
+
 ## 08 检索前优化（Pre-retrieval）
 每种方法按：适用场景 → 输入 → 分步分解 → 输出 → 完整例子 → 翻车点。
 
@@ -5538,3 +5540,678 @@ https://ecnwvcdzorsp.feishu.cn/docx/EfLrdJBgvoneojxavWxctJKfngc
 ##### Relevancy 低 → 改写问句、提高精排、检查干扰文档
 
 ##### Correctness 低但检索好 → 换生成模型/加强「仅依据资料」
+
+## 15 Modular RAG（模块化）
+飞书：01_Modular RAG
+https://ecnwvcdzorsp.feishu.cn/docx/DpNhdZLgRoqBGZxwdQfch7DFnRe
+Gao 综述：把固定流水线变成可插拔、可编排的模块框架；课堂 demo01_modular_rag.py + 本仓库 presets / RagAskService。
+
+### 〇、总览
+
+#### 一句话：像搭积木一样组合查询改写、多路检索、融合、重排、压缩，用配置控制顺序与启停
+
+#### 论文：Gao et al. Retrieval-Augmented Generation for Large Language Models: A Survey（2023/2024）
+
+#### 从「一条固定流水线」走向「可编排框架」（orchestration）
+
+#### 作业落点：chroma文档管理 的预设 + 勾选 = 线性可插拔 Modular RAG
+
+### 术语定义（本章必背）
+
+#### Modular RAG：把 RAG 拆成独立、可插拔、可重配置模块的架构范式
+
+#### Orchestration（编排）：用流程控制模块的执行顺序、条件与分支
+
+#### Module Type（模块类型）：Pre-Retrieval / Retrieval / Post-Retrieval / Generation
+
+#### Module（模块）：类型下的功能单元，如 Hybrid Search、Rerank、Compress
+
+#### Operator（算子）：模块下可替换实现，如 DashScopeRerank vs 本地 bge
+
+#### Naive RAG：查询→向量检索→生成，无前后优化
+
+#### Advanced RAG：在固定线性上加检索前/后优化（改写、重排、压缩）
+
+#### QueryFusionRetriever：LlamaIndex 多路融合器，常用 RRF（reciprocal_rerank）
+
+#### Multi-Query：LLM 生成多个查询变体再检索融合（num_queries>1）
+
+#### HyDE：先写假想答案文档再检索；假想文不当事实引用
+
+#### PRESETS：basic / hybrid_search / advanced / full_optimization 一键组合
+
+### 第一部分：理论介绍
+
+#### 1.1 什么是 Modular RAG？
+
+##### 拆分：独立 + 可插拔 + 可重配置
+
+##### 对比传统「向量检索 + 生成」：可增删替换模块，不绑死顺序
+
+##### 三代对照（讲义示意图）
+
+###### Naive RAG：查询 → 向量检索 → 大模型 → 答案
+
+###### Advanced RAG：查询 →[检索前/改写]→ 向量检索 →[重排/压缩]→ 大模型 → 答案
+
+###### Modular RAG：查询 →[改写]→[多路检索]→[融合]→[重排]→[压缩]→[生成]；中间可按配置增删换序
+
+#### 1.2 RAG 的三个发展阶段
+
+##### 第一代 Naive RAG（朴素）
+
+###### 特征：检索 → 生成，一条直线流水线
+
+###### 局限：检索质量差、召回不准、上下文冗余、易幻觉
+
+##### 第二代 Advanced RAG（高级）
+
+###### 特征：检索前后加入优化——查询改写、分块、重排、压缩
+
+###### 局限：流程仍是固定线性，难以针对不同查询动态调整
+
+##### 第三代 Modular RAG（模块化）
+
+###### 特征：模块化 + 可编排；支持新模块、条件/分支/循环/自适应
+
+###### 代价：工程复杂度更高，需要编排框架支撑
+
+##### 两个关键突破
+
+###### 新模块 New Modules：Search / Memory / Routing / Predict / Task Adapter 等
+
+###### 新模式 New Patterns：条件、分支、循环、自适应（Rewrite-Retrieve-Read、Recursive、Self-RAG 等）
+
+#### 1.3 核心模块（讲义落地的那一组）
+
+##### Indexing：文档→切块→向量索引
+
+##### Query Transformation：HyDE / Multi-Query / 清洗重写
+
+##### Retrieval：稠密向量 + 稀疏 BM25（jieba）
+
+##### Fusion：RRF / relative_score / simple
+
+##### Reranking：Cross-Encoder 精排
+
+##### Compression：句子级上下文压缩
+
+##### Generation：RetrieverQueryEngine / synthesizer + LLM
+
+##### 综述里还可有：多源 Search、Memory、Routing、Predict、Task Adapter（本仓库未全做）
+
+#### 1.4 三层抽象：模块类型 → 模块 → 算子
+
+##### 模块类型：Pre-Retrieval / Retrieval / Post-Retrieval / Generation
+
+##### 模块：Query Transformation、Hybrid Search、Rerank、Compress …
+
+##### 算子：同一模块换实现——HyDE vs Multi-Query vs Step-Back；DashScopeRerank vs SentenceTransformerRerank
+
+##### 例子：Pre-Retrieval → Query Transformation → {HyDE, Multi-Query, Step-Back}
+
+##### 工程含义：换重排算法、加一路检索 = 插拔算子，不必重写整条流水线
+
+#### 1.5 编排：RAG Flow 的典型模式
+
+##### 线性 Linear：改写→检索→融合→重排→压缩→生成（demo /ask 主路径）
+
+##### 条件 Conditional：先路由——闲聊直接答、知识题才检索（本仓库 Self-RAG Retrieve）
+
+##### 分支 Branching：多路检索/多数据源并行再融合（向量+BM25）
+
+##### 循环 Loop：检索→生成→评估，不行就改写再检（CRAG、Self-RAG ISSUP）
+
+##### 讲义主类先落地「线性可插拔」：config 开关启停，不改主流程代码
+
+#### 1.6 模块化设计的优势
+
+##### 可组合性：混合+重排，或纯向量
+
+##### 可扩展性：新加一路检索器不影响其余模块
+
+##### 可替换性：换 embedding / rerank 算子
+
+##### 可测试性：模块可独立测、独立评估（接第 14 章）
+
+##### 可优化性：针对瓶颈模块专项优化
+
+### 第二部分：LlamaIndex 完整实现（= demo01_modular_rag.py）
+讲义用 DashScope；本仓库问答默认可 DeepSeek，向量可本地 bge / 千问 SafeDashScopeEmbedding。
+
+#### 能力清单（讲义打勾项）
+
+##### jieba 中文分词 BM25
+
+##### HyDE / Multi-Query
+
+##### 向量 + BM25 多路
+
+##### QueryFusionRetriever RRF
+
+##### 重排（讲义 DashScopeRerank；本仓库默认可本地 bge）
+
+##### SentenceEmbeddingOptimizer 压缩
+
+##### RetrieverQueryEngine + LLM 生成
+
+##### 配置驱动模块开关
+
+#### 2.1～2.2 环境与全局配置
+
+##### pip：llama-index-core、bm25、jieba；可选 dashscope embedding/llm/rerank
+
+##### Settings.embed_model + Settings.llm
+
+##### SafeDashScopeEmbedding：每批≤10，避开千问批量硬限制
+
+##### LLM temperature 宜偏低，便于改写/判断稳定
+
+#### 2.3 Indexing
+
+##### Document → SentenceSplitter → VectorStoreIndex
+
+##### nodes 要留给 BM25 复用，避免重复分块
+
+##### 本仓库：engine.py 切块写入 Chroma
+
+#### 2.4 Retrieval：向量 + BM25
+
+##### 路1：index.as_retriever 稠密语义
+
+##### 路2：BM25Retriever + jieba.cut 关键词
+
+##### 本仓库：retrieval_optimize.build_hybrid_retriever
+
+#### 2.5 Fusion + Multi-Query
+
+##### QueryFusionRetriever(retrievers, mode, num_queries)
+
+##### num_queries=1：只多路融合；>1：再生成查询变体
+
+##### mode：reciprocal_rerank（RRF）/ relative_score / simple
+
+##### 本仓库：AskRequest.num_queries + fusion_mode
+
+#### 2.6 HyDE
+
+##### 讲义：HyDEQueryTransform(include_original=True) 包一层 TransformQueryEngine
+
+##### 本仓库：strategy=hyde，清洗句+假想文档双路检索，假想文不进 sources
+
+#### 2.7～2.8 重排与压缩
+
+##### node_postprocessors 串行：先精排再压缩
+
+##### 讲义重排：DashScopeRerank(qwen3.7-text-rerank)
+
+##### 压缩：SentenceEmbeddingOptimizer + 中文分句；percentile_cutoff=0.5
+
+##### 本仓库另加 LongContextReorder（对抗 Lost in the Middle）
+
+#### 2.9 ModularRAG 主类 + PRESETS
+
+##### index_documents：Indexing → 两路检索 → Fusion → postprocessors → QueryEngine → 可选 HyDE 外包
+
+##### query()：query_engine.query，打印 source_nodes 与答案
+
+##### basic：simple 融合，关重排/压缩/HyDE
+
+##### hybrid_search：RRF，关后处理
+
+##### advanced：num_queries=3 + 重排 + 压缩
+
+##### full_optimization：再开 HyDE
+
+##### 本仓库 presets.py 同名四档，并映射 use_pre/CRAG 等作业开关
+
+#### 2.10 调用测试：preset=full_optimization，对示例库问 RAG/Python/ML/BM25
+
+### 第三部分：用配置驱动模块编排
+
+#### 3.1 代码字典控制逻辑
+
+##### 三个模块类：检索前 / 检索中 / 检索后，各自只干一类事
+
+##### 主类按 config 字典 if 开关组装，不写死流水线
+
+##### 调用文件只传配置 + 提问
+
+#### 3.2 完整案例目录（讲义 rag_tools）
+
+##### shared.py：共享 LLM/Embedding/工具
+
+##### before_refine.py：检索前
+
+##### middle_refine.py：检索中
+
+##### after_refine.py：检索后
+
+##### rag_main.py：主类编排
+
+##### main.py：入口
+
+##### 对照本仓库
+
+###### before ≈ pre_retrieval.py
+
+###### middle ≈ retrieval_optimize.build_hybrid_retriever
+
+###### after ≈ apply_postprocessors + crag/self_rag
+
+###### rag_main ≈ rag_service.RagAskService
+
+###### main ≈ app/main.py + static/index.html 勾选
+
+#### 3.3 YAML 读配置
+
+##### 讲义：YAML 描述开关，代码读取后交给主类
+
+##### 本仓库：.env（HYBRID/RERANK/…）+ 请求体 JSON 覆盖 + 前端预设
+
+#### 3.4 强类型配置类
+
+##### 讲义：dataclass / 类型化 Config，减少字典拼写错误
+
+##### 本仓库：Pydantic AskRequest / OptimizeFlags（OpenAPI 即文档）
+
+### 对照 chroma文档管理（交作业用）
+
+#### 线性可插拔：/ask 按勾选组装，对应讲义 ModularRAG
+
+#### 条件：Self-RAG Retrieve 闲聊不检索
+
+#### 分支：向量+BM25 融合
+
+#### 循环：CRAG 改写重检；ISSUP 不足则重写答案
+
+#### 预设四档名称与 demo01 对齐，full_optimization 本仓库还叠了 CRAG
+
+#### 未按讲义做：YAML 配置文件、Step-Back 算子、TransformQueryEngine 外包 HyDE
+
+#### 多出来：Chroma 持久化、Web 勾选、CRAG、Self-RAG、Hit/MRR 评估
+
+#### 演示：页面选 full_optimization 或 advanced，看「本次优化」标签讲模块插拔
+
+## 16 知识图谱（Neo4j / GraphRAG）
+飞书：01-知识图谱
+https://ecnwvcdzorsp.feishu.cn/docx/IYDbddFpSoRqwpxW8fJceOWjnBd
+密码：24V74&68
+环境：JDK + Neo4j Community + Python neo4j 驱动；与向量 RAG 并行的图谱通道。
+
+### 〇、总览
+
+#### 一句话：用图（实体-关系-属性）存结构化知识，支持多跳推理；无大模型也可独立使用
+
+#### 2012 谷歌提出 Knowledge Graph；与大数据、深度学习并称驱动 AI 的核心力量之一
+
+#### 本仓库落点：先装 Neo4j + JDK，再用 Cypher / Python neo4j 做 GraphRAG 双通道
+
+### 术语定义（本章必背）
+
+#### 知识图谱 KG：用图结构表示知识；节点=实体/概念，边=关系/属性
+
+#### 实体 Entity：具体事物（人、公司、产品）；概念 Concept：抽象类型
+
+#### 三元组 SPO：Subject-Predicate-Object，数据层基本单元
+
+#### 模式层 Schema / 本体 Ontology：类型、属性、关系、约束的「骨架」
+
+#### 数据层 Data Layer：具体实例与事实（「血肉」）
+
+#### GraphRAG：用图查询做全局聚合/多跳推理，而非只找相似文本
+
+#### 实体链接 Entity Linking：把查询里的提及对齐到图谱实体
+
+#### Cypher：Neo4j 声明式图查询语言（类比 SQL）
+
+#### Neo4j：Java 实现的开源图数据库；社区版免费单点，企业版收费高可用
+
+### 一、知识图谱介绍
+
+#### 1、没有大模型的知识图谱架构
+
+##### 用户查询（自然语言或结构化）
+
+##### 关键词/规则匹配 → 实体识别
+
+##### 或直接写 Cypher / SPARQL
+
+##### 图数据库执行（Neo4j / JanusGraph）→ 精确结果
+
+##### 模板化回答 / 直接展示图谱路径
+
+##### 要点：KG 比大模型早很多年，传统上可独立使用
+
+#### 2、大模型增强图谱 vs 传统方案
+
+##### 构建成本：传统高（人工 schema/规则）｜LLM 增强低（自动抽取）
+
+##### 灵活性：传统低（预定义问法）｜LLM 高（开放域问答）
+
+##### 准确率：传统极高（结构化查询）｜LLM 中等（有幻觉风险）
+
+##### 推理深度：传统受图遍历步数限制｜LLM 可增强复杂推理
+
+##### 维护成本：传统高｜LLM 增强相对低（可动态更新）
+
+##### 响应速度：传统毫秒级｜LLM 秒级（含模型调用）
+
+##### 可解释性：传统白盒可追溯路径｜LLM 灰盒
+
+#### 3、介绍与定义
+
+##### 3.1 什么是知识图谱
+
+###### 3.1.1 什么是知识
+
+###### 数据：226.1cm、229cm —— 无语境的客观数值
+
+###### 信息：「姚明臂展 226.1cm」「身高 229cm」—— 事实陈述
+
+###### 知识：把属性整合抽象，形成对姚明的认知（比普通人高）
+
+###### 3.1.2 什么是图谱
+
+###### Graph：图论中事物与事物相互连接的结构
+
+###### 由节点 Vertex + 边 Edge 构成；多关系图可有多类节点/边
+
+###### 3.1.3 知识图谱
+
+###### 本质：语义网络；节点=概念/实体，边=关系/属性
+
+###### 简化说法：实体 + 实体间关系
+
+###### 组成三件套：Entity / Relation / Attribute
+
+###### 3.1.4 示例（苹果/乔布斯）
+
+###### 文本：「苹果创始人是乔布斯，1976 成立，总部库比蒂诺」
+
+###### 图：乔布斯─创始人→苹果─成立于→1976；苹果─总部→库比蒂诺
+
+##### 3.2 知识图谱检索 vs 向量检索
+讲义表格多为插图；核心对比见下
+
+###### 向量：语义相似、模糊召回，弱于精确关系与多跳
+
+###### 图谱：精确路径、多跳遍历、全局聚合；弱于开放语义
+
+###### 实践：二者互补 → 混合双通道
+
+##### 3.3 在 RAG 中的三种应用模式
+
+###### 模式1 GraphRAG · 全局推理
+
+###### 例：公司所有产品的共同技术？
+
+###### 传统 RAG：需塞入大量产品文本，易漏、上下文爆炸
+
+###### GraphRAG：公司─produces→产品─uses→技术 X，直接聚合
+
+###### 升级：从「找相似文本」→「执行图查询」
+
+###### 模式2 实体链接增强 · 精准定位
+
+###### 例：乔布斯的创业伙伴？
+
+###### 向量：可能命中传记任意段落
+
+###### 图谱：识别实体→遍历联合创始人→沃兹尼亚克 + 文本
+
+###### 优势：消歧 + 精准召回关系型信息
+
+###### 模式3 混合架构 · 向量+图谱双通道
+
+###### 向量通道：语义相似检索
+
+###### 图谱通道：实体识别 → 1~2 跳子图 → 对应文本
+
+###### 结果融合后再交给 LLM
+
+##### 3.4 知识图谱构建流程
+
+###### 1 实体抽取 NER：人名/地名/组织/产品（spaCy、BERT-NER、GPT）
+
+###### 2 关系抽取：「乔布斯」─创立→「苹果」
+
+###### 3 图谱存储：Neo4j / NebulaGraph / RDF 三元组
+
+###### 4 与向量库关联：实体/关系链回原文，支持图谱↔文本双向导航
+
+##### 3.5 优势场景
+讲义多为表格/图；常见于多跳、关系查询、全局聚合
+
+###### 多跳关系问答、股权穿透、依赖链路
+
+###### 需精确实体对齐、可解释路径的场景
+
+###### 与向量检索互补，而非替代
+
+##### 3.6 典型应用
+
+###### 搜索引擎 / 智能助手问答
+
+###### 金融：风控、评级、反欺诈
+
+###### 医疗：知识库、辅助诊断、药物研发
+
+###### 教育：知识点图谱、智能答疑
+
+###### 电商推荐 / 社交关系挖掘 / 物联网
+
+###### 商业 KG：工商股权投资关系分析
+
+###### 教育 KG：教材笔记→知识点组织→问答底座
+
+##### 3.7 挑战
+讲义插图为主
+
+###### 构建与维护成本、schema 演进
+
+###### 抽取噪声、实体对齐与冲突消解
+
+###### 与向量结果的融合策略设计
+
+##### 3.8 与 Advanced / Modular RAG 对比
+
+###### 已有：Multi-Query→混合检索→RRF→Rerank→LLM
+
+###### 升级：并行加「实体识别→图谱查询→子图召回」再融合
+
+###### 策略建议：图谱结果优先处理关系/多跳，向量结果补充语义
+
+### 二、分层架构
+
+#### 总述：模式层=骨架；数据层=血肉；相互依存
+
+#### 1、模式层 Schema Layer
+
+##### 1.1 定义：概念模型与逻辑结构；类比数据库表结构设计
+
+##### 1.2 关键组成（本体 Ontology）
+
+###### 实体类型 Class：人 / 电影 / 公司
+
+###### 数据属性 Data Property：连实体→基本类型
+
+###### 对象属性 Object Property：连实体→实体（即关系）
+
+###### 关系类型 Relation Type：执导 / 就职于 / 位于
+
+###### 约束 Constraint：如一人一个出生日期、评分 1–10
+
+##### 1.3 核心作用
+
+###### 统一表示标准，减少歧义
+
+###### 支撑逻辑推理
+
+###### 简化查询；指导抽取与融合质量
+
+##### 1.4 常见表示语言
+
+###### RDFS：基础模式定义
+
+###### OWL：更强本体与推理
+
+###### SHACL：RDF 数据约束
+
+#### 2、数据层 Data Layer
+
+##### 2.1 定义：模式的实例化；大量 SPO 三元组
+
+##### 2.2 组成
+
+###### 实体实例：吴京、《流浪地球2》
+
+###### 属性值实例：出生日期=1974-04-03
+
+###### 关系实例：吴京参演《流浪地球2》
+
+##### 2.3 作用：承载内容、支撑问答/推荐/搜索、可持续扩实例
+
+#### 3、两层关系
+
+##### 模板与实例：数据必须符合模式定义
+
+##### 抽象与具体：模式是概括，数据是事实
+
+##### 相互促进：数据积累可反馈扩展模式（如新增「客串」关系）
+
+### 三、技术架构
+
+#### 1、数据获取
+
+##### 业务库表（结构化，半公开/内部）
+
+##### 网络公开网页（非结构化）
+
+##### 三种形态：结构化 / 半结构化 / 非结构化 → 不同处理法
+
+#### 2、信息抽取 IE【核心】
+
+##### 目标：从异构源自动抽候选知识单元
+
+##### 实体抽取 Entity Extraction
+
+###### NER：人/地/组织/日期/货币等
+
+###### 方法：规则、统计、深度学习
+
+##### 关系抽取 Relation Extraction
+
+###### 作者/工作/亲属等关系
+
+###### 方法：有监督统计或深度学习
+
+##### 属性抽取 Attribute Extraction
+
+###### 实体特征：职业、经纬度等
+
+###### 可把「实体-属性值」看作名词性关系 → 常转为关系抽取
+
+#### 3、知识融合 Knowledge Fusion
+
+##### 消除冗余、统一表达、解决冲突、知识扩展
+
+##### 关键技术：指代消解、实体消歧/链接、实体对齐、关系对齐
+
+#### 4、知识加工 Knowledge Processing
+
+##### 本体构建：定义层级与约束（人工或半自动）
+
+##### 知识推理：规则 / TransE·RotatE 嵌入 / 路径推理 → 知识补全
+
+##### 质量评估：可信度打分与人工甄别
+
+##### 结果：零散事实 → 结构化、网络化、可推理的知识体系
+
+### 四、Neo4j 数据库
+
+#### 1、介绍
+
+##### Java 实现的开源 NoSQL 图库；2003 研发，2007 首版
+
+##### 完整数据库特性：ACID、集群、备份与故障转移
+
+##### 企业版：付费，高可用/热备份；社区版：免费，单点
+
+#### 2、图数据概念
+
+##### 节点 Node：主数据元素；可有多属性、多标签（类比表/表名）
+
+##### 关系 Relationship：有向；可有属性
+
+##### 属性 Property：键值对；可索引与约束
+
+##### 标签 Label：分组节点；建索引加速查找
+
+#### 3、Windows 安装四步（讲义）
+
+##### 第一步：安装 JDK
+
+###### Oracle JDK 或 OpenJDK 17+
+
+###### 验证：java --version
+
+##### 第二步：下载 Neo4j Community
+
+###### https://neo4j.com/deployment-center/?community
+
+###### 解压路径不要含中文
+
+##### 第三步：环境变量
+
+###### 新建 NEO4J_HOME = 解压目录
+
+###### Path 追加 %NEO4J_HOME%\bin
+
+##### 第四步：启动
+
+###### cmd：neo4j console
+
+###### 浏览器：http://localhost:7474/
+
+###### 默认用户/密码均为 neo4j，首次登录须改密
+
+###### 若报错缺 Java → 先装好 JDK
+
+#### 4、Cypher 简介
+
+##### 声明式图查询语言；Neo4j 是标准制定者（openCypher）
+
+##### 4.1 基本符号
+
+###### () 节点；(n) 任意节点
+
+###### (:Label) 如 (p:Person)
+
+###### ({key:value}) 如 (p:Person {name:'乔布斯'})
+
+###### --> 有向关系；-[:TYPE]-> 带类型
+
+###### -[:TYPE {prop:val}]-> 带属性关系
+
+##### 4.2 CRUD 要点
+
+###### CREATE：创建节点/关系
+
+###### MERGE：不存在才创建（条件创建）
+
+###### MATCH … WHERE：查询与条件过滤
+
+###### 例：CREATE (a:Person {name:'张三疯', age:30})
+
+###### 例：先 MATCH 两节点再 CREATE 关系
+
+### 五、本机环境清单
+
+#### JDK 17+（JAVA_HOME）
+
+#### Neo4j Community（NEO4J_HOME + neo4j console）
+
+#### Python：pip install neo4j（官方驱动）
+
+#### 可选：llama-index 图谱相关包、spaCy NER（后续实验再加）

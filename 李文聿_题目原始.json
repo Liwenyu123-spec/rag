@@ -1,0 +1,362 @@
+[
+  {
+    "row": 365,
+    "personalNo": "1",
+    "globalNo": "19",
+    "module": "大模型原理",
+    "company": "其他企业",
+    "question": "简述一下pageattention和加速原理"
+  },
+  {
+    "row": 366,
+    "personalNo": "2",
+    "globalNo": "33",
+    "module": "模型微调",
+    "company": "长安汽车",
+    "question": "出于什么目的要微调模型?"
+  },
+  {
+    "row": 367,
+    "personalNo": "3",
+    "globalNo": "51",
+    "module": "模型微调",
+    "company": "鼎智云",
+    "question": "dpo微调优化，怎么准备训练数据"
+  },
+  {
+    "row": 368,
+    "personalNo": "4",
+    "globalNo": "75",
+    "module": "模型微调",
+    "company": "其他企业",
+    "question": "在之前的项目中，微调的一些背景、具体是怎么做的。"
+  },
+  {
+    "row": 369,
+    "personalNo": "5",
+    "globalNo": "88",
+    "module": "模型微调",
+    "company": "其他企业",
+    "question": "rag本身的核心点是什么 如何从一个普通的rag,达到高可用 高可靠的效果更好的rag rag对于普通生成还行,做一些推理,我的问题会比较复杂,rag可能比较吃力,使用什么办法去解决多跳推理,更好的解决 agent和workflow有什么不同 微调 和预训练到底在做什么事情 蒸馏是什么 rag和agent 什么时候决定时候微调 有一个基座模型,拿过来用的时候, 微调是更加准确吗 微调的这些预料 怎么处理更加适合微调呢 代码如何上线"
+  },
+  {
+    "row": 370,
+    "personalNo": "6",
+    "globalNo": "109",
+    "module": "模型微调",
+    "company": "其他企业",
+    "question": "数据并行是指的什么"
+  },
+  {
+    "row": 371,
+    "personalNo": "7",
+    "globalNo": "126",
+    "module": "RAG",
+    "company": "浩鲸科技",
+    "question": "Cross encoderrerankVs llmrerank,你是怎么做实验发现|llm rerank更好?"
+  },
+  {
+    "row": 372,
+    "personalNo": "8",
+    "globalNo": "133",
+    "module": "RAG",
+    "company": "长安汽车",
+    "question": "怎么判断走rag还是知识图谱"
+  },
+  {
+    "row": 373,
+    "personalNo": "9",
+    "globalNo": "153",
+    "module": "RAG",
+    "company": "叫叫互联网教育有限公司(甲方)",
+    "question": "RRF的生效原理"
+  },
+  {
+    "row": 374,
+    "personalNo": "10",
+    "globalNo": "182",
+    "module": "RAG",
+    "company": "恒创软件-江苏农商",
+    "question": "一般用什么去rerank"
+  },
+  {
+    "row": 375,
+    "personalNo": "11",
+    "globalNo": "228",
+    "module": "RAG",
+    "company": "其他企业",
+    "question": "文档超过模型上下文窗口时怎么做摘要"
+  },
+  {
+    "row": 376,
+    "personalNo": "12",
+    "globalNo": "238",
+    "module": "RAG",
+    "company": "其他企业",
+    "question": "Milvus的索引类型如何应用在知识点很多的知识库中"
+  },
+  {
+    "row": 377,
+    "personalNo": "13",
+    "globalNo": "269",
+    "module": "RAG",
+    "company": "其他企业",
+    "question": "chunk切分"
+  },
+  {
+    "row": 378,
+    "personalNo": "14",
+    "globalNo": "272",
+    "module": "RAG",
+    "company": "其他企业",
+    "question": "简单介绍一下bm25和语义检索，这两者的区别"
+  },
+  {
+    "row": 379,
+    "personalNo": "15",
+    "globalNo": "279",
+    "module": "RAG",
+    "company": "其他企业",
+    "question": "milvus里面索引"
+  },
+  {
+    "row": 380,
+    "personalNo": "16",
+    "globalNo": "322",
+    "module": "Agent智能体",
+    "company": "信华信",
+    "question": "第一个项目的多agent框架怎么搭建的"
+  },
+  {
+    "row": 381,
+    "personalNo": "17",
+    "globalNo": "329",
+    "module": "Agent智能体",
+    "company": "信华信",
+    "question": "调用mcp和做CLI有什么区别"
+  },
+  {
+    "row": 382,
+    "personalNo": "18",
+    "globalNo": "350",
+    "module": "Agent智能体",
+    "company": "阿里云项目 电商侧重多模态场景",
+    "question": "图像类的Agent介绍下？"
+  },
+  {
+    "row": 383,
+    "personalNo": "19",
+    "globalNo": "366",
+    "module": "Agent智能体",
+    "company": "法本信息",
+    "question": "langchain和llamaindex问什么可以一起使用，怎么用的"
+  },
+  {
+    "row": 384,
+    "personalNo": "20",
+    "globalNo": "394",
+    "module": "Agent智能体",
+    "company": "其他企业",
+    "question": "订单审核的agent从开始到结束的一个流程是怎么样的？"
+  },
+  {
+    "row": 385,
+    "personalNo": "21",
+    "globalNo": "409",
+    "module": "Agent智能体",
+    "company": "其他企业",
+    "question": "智能体主要做了哪些事情"
+  },
+  {
+    "row": 386,
+    "personalNo": "22",
+    "globalNo": "436",
+    "module": "Agent智能体",
+    "company": "其他企业",
+    "question": "能详细说一说这四个agent的完整协作运行的流程吗"
+  },
+  {
+    "row": 387,
+    "personalNo": "23",
+    "globalNo": "447",
+    "module": "Agent智能体",
+    "company": "其他企业",
+    "question": "行业情报智能研析引擎 Deep Research multi-Agent 项目中扩张建议怎么做的？"
+  },
+  {
+    "row": 388,
+    "personalNo": "24",
+    "globalNo": "459",
+    "module": "Agent智能体",
+    "company": "其他企业",
+    "question": "介绍一下新型agent自带的markdown"
+  },
+  {
+    "row": 389,
+    "personalNo": "25",
+    "globalNo": "481",
+    "module": "Agent智能体",
+    "company": "其他企业",
+    "question": "agent里状态爆炸是什么 怎么处理"
+  },
+  {
+    "row": 390,
+    "personalNo": "26",
+    "globalNo": "490",
+    "module": "Python",
+    "company": "浩鲸科技",
+    "question": "魔术方法有哪些？"
+  },
+  {
+    "row": 391,
+    "personalNo": "27",
+    "globalNo": "492",
+    "module": "Python",
+    "company": "软通动力",
+    "question": "从0到1设计一个可拓展高可用的python项目,会从哪几个方面去做 什么是装饰器 装饰器在应用过程中有哪些坑 静态部署和动态部署 is 和 == 的区别 lock和rlock区别 python2和python3的区别 python垃圾回收机制 python语言特点 多线程和多进程的通信方式"
+  },
+  {
+    "row": 392,
+    "personalNo": "28",
+    "globalNo": "537",
+    "module": "算法与数据结构",
+    "company": "其他企业",
+    "question": "如果对一个概率密度函数求积分，结果是多少"
+  },
+  {
+    "row": 393,
+    "personalNo": "29",
+    "globalNo": "540",
+    "module": "部署与工程化",
+    "company": "阿贝斯",
+    "question": "模型部署在一个什么样的环境上，什么显卡资源"
+  },
+  {
+    "row": 394,
+    "personalNo": "30",
+    "globalNo": "570",
+    "module": "部署与工程化",
+    "company": "其他企业",
+    "question": "你部署模型用的是哪个框架"
+  },
+  {
+    "row": 395,
+    "personalNo": "31",
+    "globalNo": "590",
+    "module": "AI编程",
+    "company": "其他企业",
+    "question": "用过openclaw？"
+  },
+  {
+    "row": 396,
+    "personalNo": "32",
+    "globalNo": "594",
+    "module": "AI编程",
+    "company": "其他企业",
+    "question": "使用claude code过程中遇到过哪些困难"
+  },
+  {
+    "row": 397,
+    "personalNo": "33",
+    "globalNo": "614",
+    "module": "项目经验与综合",
+    "company": "长安汽车",
+    "question": "Smartjira项目是怎么样的?"
+  },
+  {
+    "row": 398,
+    "personalNo": "34",
+    "globalNo": "622",
+    "module": "项目经验与综合",
+    "company": "长安汽车",
+    "question": "上下午管理怎么做的"
+  },
+  {
+    "row": 399,
+    "personalNo": "35",
+    "globalNo": "650",
+    "module": "项目经验与综合",
+    "company": "先石科技",
+    "question": "你的日志量有多大"
+  },
+  {
+    "row": 400,
+    "personalNo": "36",
+    "globalNo": "659",
+    "module": "项目经验与综合",
+    "company": "信华信",
+    "question": "这些工具的接入方式是什么"
+  },
+  {
+    "row": 401,
+    "personalNo": "37",
+    "globalNo": "677",
+    "module": "项目经验与综合",
+    "company": "阿贝斯",
+    "question": "你是如何看待加班问题的"
+  },
+  {
+    "row": 402,
+    "personalNo": "38",
+    "globalNo": "692",
+    "module": "项目经验与综合",
+    "company": "初面(纯业务)",
+    "question": "中医药项目里，实体，关系怎么保证安全抽取(比如有些药材会有冲突)"
+  },
+  {
+    "row": 403,
+    "personalNo": "39",
+    "globalNo": "693",
+    "module": "项目经验与综合",
+    "company": "初面(纯业务)",
+    "question": "古籍溯源的准确率怎么提升保证的?"
+  },
+  {
+    "row": 404,
+    "personalNo": "40",
+    "globalNo": "734",
+    "module": "项目经验与综合",
+    "company": "其他企业",
+    "question": "简历里投入时间最多的是哪个项目"
+  },
+  {
+    "row": 405,
+    "personalNo": "41",
+    "globalNo": "819",
+    "module": "项目经验与综合",
+    "company": "其他企业",
+    "question": "简单介绍一下这个项目是做什么的，你在这里担任了什么角色"
+  },
+  {
+    "row": 406,
+    "personalNo": "42",
+    "globalNo": "822",
+    "module": "项目经验与综合",
+    "company": "其他企业",
+    "question": "正则或规则识别说明书中可能存在的隐式结构"
+  },
+  {
+    "row": 407,
+    "personalNo": "43",
+    "globalNo": "829",
+    "module": "项目经验与综合",
+    "company": "其他企业",
+    "question": "你们会匹配语义吗，比如人名也可能是动物的名称"
+  },
+  {
+    "row": 408,
+    "personalNo": "44",
+    "globalNo": "833",
+    "module": "项目经验与综合",
+    "company": "其他企业",
+    "question": "海量图文可以吗"
+  },
+  {
+    "row": 409,
+    "personalNo": "45",
+    "globalNo": "840",
+    "module": "项目经验与综合",
+    "company": "其他企业",
+    "question": "为什么要选用postgre？"
+  }
+]
