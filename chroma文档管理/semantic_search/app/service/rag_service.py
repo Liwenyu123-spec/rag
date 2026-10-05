@@ -200,6 +200,78 @@ class RagAskService:  # RAG 问答编排服务
             reorder_enabled=use_reorder,  # 重排序开关
         )  # 返回后处理后的节点
 
+    def retrieve_for_eval(  # 与 /ask 同一条检索链，不生成答案
+        self,
+        question: str,
+        k: int,
+        *,
+        use_pre: bool,
+        strategy: str,
+        use_hybrid: bool,
+        fusion_mode: str | None,
+        num_queries: int,
+        use_rerank: bool,
+        use_compress: bool,
+        use_reorder: bool,
+        use_crag: bool,
+    ) -> list[NodeWithScore]:
+        """检索评估用：Pre → 混合/Multi-Query → 后处理 → 可选 CRAG。"""
+        question = (question or "").strip()
+        if not question:
+            return []
+        total = self.engine.collection.count()
+        if total == 0:
+            return []
+        k = max(1, min(k, total))
+        effective = (strategy or "none").strip().lower()
+        if not use_pre:
+            effective = "none"
+        if effective not in {"none", "clean", "rewrite", "hyde", "step_back"}:
+            effective = "rewrite" if use_pre else "none"
+        prep = prepare_retrieval_queries(question, effective, llm=Settings.llm)
+        queries = prep["retrieval_queries"] or [question]
+        ranked_lists: list[list[NodeWithScore]] = []
+        retriever = self.engine._build_retriever(
+            k,
+            hybrid_enabled=use_hybrid,
+            num_queries=max(1, int(num_queries or 1)),
+            fusion_mode=fusion_mode,
+        )
+        for q in queries:
+            ranked_lists.append(list(retriever.retrieve(q)))
+        fuse_k = max(k, min(total, k * 2))
+        fused = (
+            merge_nodes_rrf(ranked_lists, k=fuse_k)
+            if len(ranked_lists) > 1
+            else (ranked_lists[0][:fuse_k] if ranked_lists else [])
+        )
+        fused = apply_postprocessors(
+            fused,
+            question,
+            k,
+            rerank_enabled=use_rerank,
+            compress_enabled=use_compress,
+            reorder_enabled=use_reorder,
+        )
+        if use_crag:
+            fused, _ = apply_crag(
+                question,
+                fused,
+                retrieve_fn=lambda q: self._retrieve_pipeline(
+                    q,
+                    k,
+                    use_hybrid=use_hybrid,
+                    use_rerank=use_rerank,
+                    use_compress=use_compress,
+                    use_reorder=use_reorder,
+                    num_queries=max(1, int(num_queries or 1)),
+                    fusion_mode=fusion_mode,
+                ),
+                llm=Settings.llm,
+                enabled=True,
+            )
+        return fused
+
     def ask(  # 对外主入口：按开关跑整条 RAG 并返回答案
         self,  # 实例
         question: str,  # 用户问题
@@ -288,6 +360,8 @@ class RagAskService:  # RAG 问答编排服务
             "hybrid_search",  # 混合检索
             "advanced",  # 进阶
             "full_optimization",  # 全开优化
+            "step_back",
+            "custom",
         }:  # 合法预设集合
             preset_name = None  # 非法则清空
 

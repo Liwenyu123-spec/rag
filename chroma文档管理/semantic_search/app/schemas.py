@@ -178,14 +178,23 @@ class AskResponse(BaseModel):  # /ask 的响应体
 class RetrievalEvalCase(BaseModel):  # 单条检索评测样例
     query: str = Field(..., min_length=1)  # 评测查询，至少 1 字
     keywords: List[str] = Field(default_factory=list, description="命中判定关键词")  # 命中判定用关键词
+    reference: str | None = Field(None, description="标准答案片段；无 expected_texts 时作召回标注")
+    expected_texts: List[str] = Field(default_factory=list, description="应出现在召回中的黄金片段")
+    expected_ids: List[str] = Field(default_factory=list, description="相关节点 ID（优先于关键词）")
 
 
 class RetrievalEvalRequest(BaseModel):  # POST /eval/retrieval 请求体
     k: int = Field(5, ge=1, le=100)  # 检索 Top-K
+    compare: bool = Field(True, description="是否同时跑基础 RAG 做 A/B")
+    use_pre: bool | None = Field(None, description="当前配置：检索前优化")
+    strategy: str | None = Field(None, description="当前配置：none / clean / rewrite / hyde / step_back")
     use_hybrid: bool | None = Field(True, description="是否混合检索")  # 混合检索开关
+    fusion_mode: str | None = Field(None, description="融合策略")
+    num_queries: int | None = Field(None, ge=1, le=8, description="Multi-Query 变体数")
     use_rerank: bool | None = Field(False, description="是否重排")  # 重排开关
     use_compress: bool | None = Field(False)  # 压缩开关，默认关
     use_reorder: bool | None = Field(False)  # 长上下文重排开关，默认关
+    use_crag: bool | None = Field(False, description="是否走 CRAG（评估会变慢）")
     cases: List[RetrievalEvalCase] | None = Field(  # 自定义评测集
         None,  # 为空则用默认集
         description="自定义评测集；为空则用 company_info 默认集",  # OpenAPI 字段说明
@@ -196,15 +205,56 @@ class RetrievalEvalItem(BaseModel):  # 单条检索评测结果
     query: str  # 本条查询
     hit: bool  # 是否命中（关键词出现在检索结果中）
     mrr: float  # 本条 Mean Reciprocal Rank
+    precision: float = 0.0  # 本条 Precision@K
+    recall: float = 0.0  # 本条 Recall@K
+    first_hit_rank: int | None = None  # 第一个相关文档排名
+    relevant_in_k: int = 0  # Top-K 中相关篇数
     retrieved_preview: List[str] = Field(default_factory=list)  # 检索结果预览片段
     error: str | None = None  # 本条评测出错信息
 
 
+class RetrievalEvalFlags(BaseModel):
+    use_pre: bool = False
+    strategy: str = "none"
+    use_hybrid: bool = True
+    fusion_mode: str = "simple"
+    num_queries: int = 1
+    use_rerank: bool = False
+    use_compress: bool = False
+    use_reorder: bool = False
+    use_crag: bool = False
+
+
+class RetrievalEvalBundle(BaseModel):
+    label: str = "current"
+    hit_rate: float
+    mrr: float
+    precision_at_k: float = 0.0
+    recall_at_k: float = 0.0
+    total: int
+    results: List[RetrievalEvalItem] = Field(default_factory=list)
+    diagnosis: str | None = None
+    flags: RetrievalEvalFlags | None = None
+
+
+class RetrievalEvalDelta(BaseModel):
+    hit_rate: float = 0.0
+    mrr: float = 0.0
+    precision_at_k: float = 0.0
+    recall_at_k: float = 0.0
+
+
 class RetrievalEvalResponse(BaseModel):  # /eval/retrieval 响应体
-    hit_rate: float  # 整体命中率
-    mrr: float  # 整体 MRR
+    hit_rate: float  # 当前配置整体命中率（兼容旧前端）
+    mrr: float  # 当前配置整体 MRR
+    precision_at_k: float = 0.0
+    recall_at_k: float = 0.0
     total: int  # 评测样例总数
-    results: List[RetrievalEvalItem] = Field(default_factory=list)  # 逐条明细
+    results: List[RetrievalEvalItem] = Field(default_factory=list)  # 当前配置逐条明细
     message: str = "ok"  # 状态文案
     diagnosis: str | None = None  # 简短诊断（检索瓶颈提示）
-    note: str = "Hit Rate / MRR；答案差时先看本结果定位检索瓶颈"  # 使用说明
+    note: str = "当前配置 vs 基础 RAG；Hit / MRR / Precision@K / Recall@K"
+    compared: bool = False
+    current: RetrievalEvalBundle | None = None
+    baseline: RetrievalEvalBundle | None = None
+    delta: RetrievalEvalDelta | None = None

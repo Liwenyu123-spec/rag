@@ -1,7 +1,7 @@
 """RAG 评估：对齐飞书「01-RAG评估」LlamaIndex 内置评估器。
 
 生成质量：Faithfulness / Relevancy / Correctness（LLM-as-judge）
-检索质量：Hit Rate / MRR（关键词或 expected_texts 近似标注）
+检索质量：Hit Rate / MRR / Precision@K / Recall@K（关键词、reference、expected_ids）
 诊断：答案差先看检索 → 定位检索锅还是生成锅。
 """  # 模块说明：生成与检索两侧评估入口
 
@@ -191,16 +191,130 @@ def _node_text(node: Any) -> str:  # 从多种节点形态抽出纯文本
     return str(node or "")  # 最后兜底转字符串
 
 
-def _is_relevant_hit(texts: list[str], keywords: list[str]) -> tuple[bool, float]:  # 关键词近似标注
-    """关键词命中：Hit + 第一个相关文档的 MRR 分量。"""  # Hit Rate / MRR 的单题计算
-    kws = [k.lower() for k in keywords if k]  # 非空关键词统一小写
-    if not kws:  # 没有可用关键词
-        return False, 0.0  # 记未命中、MRR=0
-    for rank, text in enumerate(texts, 1):  # 从第 1 名开始扫召回列表
-        low = (text or "").lower()  # 文档文本小写
-        if any(k in low for k in kws):  # 任一关键词出现即视为相关
-            return True, 1.0 / rank  # Hit=True；MRR=1/排名
-    return False, 0.0  # 全程未命中
+def _node_id(node: Any) -> str | None:
+    """抽出节点 id，供 expected_ids 标注。"""
+    if isinstance(node, dict):
+        nid = node.get("node_id") or node.get("id") or node.get("id_")
+        return str(nid) if nid else None
+    inner = getattr(node, "node", node)
+    nid = getattr(inner, "node_id", None) or getattr(inner, "id_", None)
+    return str(nid) if nid else None
+
+
+def _gold_from_case(item: dict) -> tuple[list[str], list[str], list[str]]:
+    """从评测样例抽出 keywords / expected_texts / expected_ids。"""
+    keywords = [str(k).strip() for k in (item.get("keywords") or []) if str(k).strip()]
+    texts = [str(t).strip() for t in (item.get("expected_texts") or []) if str(t).strip()]
+    ref = str(item.get("reference") or "").strip()
+    if ref and not texts:
+        texts.append(ref)
+    ids = [str(i).strip() for i in (item.get("expected_ids") or []) if str(i).strip()]
+    return keywords, texts, ids
+
+
+def _doc_is_relevant(
+    text: str,
+    nid: str | None,
+    keywords: list[str],
+    expected_texts: list[str],
+    expected_ids: list[str],
+) -> bool:
+    """单篇是否相关：节点 ID 命中，或正文包含关键词 / 标准片段。"""
+    if expected_ids and nid and nid in expected_ids:
+        return True
+    low = (text or "").lower()
+    if any(k.lower() in low for k in keywords):
+        return True
+    if any(t.lower() in low for t in expected_texts):
+        return True
+    return False
+
+
+def _label_recall(texts: list[str], keywords: list[str], expected_texts: list[str]) -> float | None:
+    """标签级 Recall：关键词 + 标准片段有多少出现在 Top-K 正文里。"""
+    labels = [x for x in (keywords + expected_texts) if x]
+    if not labels:
+        return None
+    blob = "\n".join(texts).lower()
+    hit = sum(1 for lab in labels if lab.lower() in blob)
+    return hit / len(labels)
+
+
+def _id_recall(retrieved_ids: list[str | None], expected_ids: list[str]) -> float | None:
+    """节点 ID 级 Recall：黄金节点有多少出现在 Top-K。"""
+    if not expected_ids:
+        return None
+    got = {i for i in retrieved_ids if i}
+    return sum(1 for i in expected_ids if i in got) / len(expected_ids)
+
+
+def score_retrieved(
+    texts: list[str],
+    retrieved_ids: list[str | None],
+    keywords: list[str],
+    expected_texts: list[str],
+    expected_ids: list[str],
+) -> dict:
+    """单题：Hit / MRR / Precision@K / Recall@K。"""
+    n = len(texts)
+    relevant_flags = [
+        _doc_is_relevant(
+            texts[i],
+            retrieved_ids[i] if i < len(retrieved_ids) else None,
+            keywords,
+            expected_texts,
+            expected_ids,
+        )
+        for i in range(n)
+    ]
+    first_rank = next((i + 1 for i, ok in enumerate(relevant_flags) if ok), None)
+    hit = first_rank is not None
+    mrr = (1.0 / first_rank) if first_rank else 0.0
+    rel_n = sum(1 for ok in relevant_flags if ok)
+    precision = (rel_n / n) if n else 0.0
+    id_r = _id_recall(retrieved_ids, expected_ids)
+    lab_r = _label_recall(texts, keywords, expected_texts)
+    if id_r is not None:
+        recall = id_r
+    elif lab_r is not None:
+        recall = lab_r
+    else:
+        recall = 1.0 if hit else 0.0
+    return {
+        "hit": hit,
+        "mrr": round(mrr, 4),
+        "precision": round(precision, 4),
+        "recall": round(recall, 4),
+        "first_hit_rank": first_rank,
+        "relevant_in_k": rel_n,
+    }
+
+
+def diagnose_retrieval(
+    hit_rate: float,
+    mrr: float,
+    precision_at_k: float,
+    recall_at_k: float,
+) -> str:
+    """按检索指标给优化建议。"""
+    if hit_rate < 0.7:
+        return "检索 Hit Rate 偏低：优先调分块、Embedding、混合检索、重排、Top-K、检索前改写"
+    if recall_at_k < 0.5:
+        return "能命中但 Recall@K 偏低：相关信息没捞全，可增大 Top-K / 开混合检索 / Multi-Query"
+    if precision_at_k < 0.4:
+        return "Precision@K 偏低：噪声多，可开重排、压缩或 CRAG 过滤"
+    if mrr < 0.5:
+        return "能命中但相关文档偏后：优先开重排 / RRF 融合"
+    return "检索侧整体可用；若答案仍差，重点查生成 Faithfulness/Relevancy"
+
+
+def compare_retrieval_runs(baseline: dict, current: dict) -> dict:
+    """当前配置相对基础 RAG 的指标差（正数=提升）。"""
+    keys = ("hit_rate", "mrr", "precision_at_k", "recall_at_k")
+    return {
+        key: round(float(current.get(key) or 0) - float(baseline.get(key) or 0), 4)
+        for key in keys
+    }
 
 
 def evaluate_retrieval_cases(  # 批量检索评估入口
@@ -208,78 +322,99 @@ def evaluate_retrieval_cases(  # 批量检索评估入口
     retrieve_fn,  # 检索回调：query -> 节点列表
     *,  # 之后仅关键字参数
     verbose: Optional[bool] = None,  # 是否打印每题 HIT/MISS
-) -> dict:  # 返回 Hit Rate / MRR 与明细
-    """批量检索评估：Hit Rate + MRR。
+    flags: dict | None = None,  # 本轮实际检索开关（回显）
+) -> dict:  # 返回 Hit Rate / MRR / Precision / Recall 与明细
+    """批量检索评估：Hit Rate + MRR + Precision@K + Recall@K。
 
-    cases 项：{"query": str, "keywords": [str, ...]}
+    cases 项：query、keywords，可选 reference / expected_texts / expected_ids。
     retrieve_fn(query) -> list[NodeWithScore] 或 list[dict]
-    """  # 用关键词近似标注，不必人工标 expected_ids
-    verb = EVAL_VERBOSE if verbose is None else bool(verbose)  # 解析是否打日志
-    if not cases:  # 空评测集
-        return {  # 返回空结果结构
-            "hit_rate": 0.0,  # 命中率为 0
-            "mrr": 0.0,  # MRR 为 0
-            "total": 0,  # 题目数为 0
-            "results": [],  # 无明细
-            "message": "empty_cases",  # 状态：空用例
-            "diagnosis": "请提供评测问题与 keywords",  # 提示补数据
-        }  # 字典/集合结束
+    """
+    verb = EVAL_VERBOSE if verbose is None else bool(verbose)
+    empty = {
+        "hit_rate": 0.0,
+        "mrr": 0.0,
+        "precision_at_k": 0.0,
+        "recall_at_k": 0.0,
+        "total": 0,
+        "results": [],
+        "message": "empty_cases",
+        "diagnosis": "请提供评测问题与 keywords / expected_ids",
+        "flags": flags or {},
+    }
+    if not cases:
+        return empty
 
-    results: list[dict] = []  # 逐题结果列表
-    for item in cases:  # 遍历每道评测题
-        query = (item.get("query") or "").strip()  # 取问题并去空白
-        keywords = list(item.get("keywords") or [])  # 取关键词列表
-        if not query:  # 空问题跳过
-            continue  # 不计入统计
-        try:  # 调用外部检索函数
-            raw = list(retrieve_fn(query) or [])  # 保证得到列表
-        except Exception as exc:  # noqa: BLE001  # 单题检索失败不中断整批
-            results.append(  # 记录失败明细
-                {  # 执行本行逻辑
-                    "query": query,  # 原问题
-                    "hit": False,  # 记未命中
-                    "mrr": 0.0,  # MRR 记 0
-                    "retrieved_preview": [],  # 无预览
-                    "error": str(exc),  # 错误信息
-                }  # 字典/集合结束
-            )  # 括号结束
-            continue  # 继续下一题
+    results: list[dict] = []
+    for item in cases:
+        query = (item.get("query") or "").strip()
+        if not query:
+            continue
+        keywords, expected_texts, expected_ids = _gold_from_case(item)
+        try:
+            raw = list(retrieve_fn(query) or [])
+        except Exception as exc:  # noqa: BLE001
+            results.append(
+                {
+                    "query": query,
+                    "hit": False,
+                    "mrr": 0.0,
+                    "precision": 0.0,
+                    "recall": 0.0,
+                    "first_hit_rank": None,
+                    "relevant_in_k": 0,
+                    "retrieved_preview": [],
+                    "error": str(exc),
+                }
+            )
+            continue
 
-        texts: list[str] = []  # 全文列表（供命中判定）
-        previews: list[str] = []  # 短预览（供展示）
-        for n in raw:  # 遍历召回项
-            if isinstance(n, dict):  # dict 来源格式
-                t = n.get("document") or n.get("text") or ""  # 取正文
-            else:  # 节点对象
-                t = _node_text(n)  # 统一抽文本
-            texts.append(t)  # 加入全文列表
-            previews.append((t or "")[:80])  # 截前 80 字作预览
+        texts: list[str] = []
+        ids: list[str | None] = []
+        previews: list[str] = []
+        for n in raw:
+            if isinstance(n, dict):
+                t = n.get("document") or n.get("text") or ""
+            else:
+                t = _node_text(n)
+            texts.append(t)
+            ids.append(_node_id(n))
+            previews.append((t or "")[:80])
 
-        hit, mrr = _is_relevant_hit(texts, keywords)  # 关键词判定 Hit/MRR
-        results.append(  # 写入本题结果
-            {  # 执行本行逻辑
-                "query": query,  # 原问题
-                "hit": hit,  # 是否命中
-                "mrr": round(mrr, 4),  # MRR 保留四位
-                "retrieved_preview": previews[:5],  # 最多展示 5 条预览
-            }  # 字典/集合结束
-        )  # 括号结束
-        if verb:  # 需要日志时
-            print(f"[Eval] {'HIT' if hit else 'MISS'} MRR={mrr:.3f} | {query[:40]}")  # 打印单题摘要
+        scored = score_retrieved(texts, ids, keywords, expected_texts, expected_ids)
+        results.append(
+            {
+                "query": query,
+                "hit": scored["hit"],
+                "mrr": scored["mrr"],
+                "precision": scored["precision"],
+                "recall": scored["recall"],
+                "first_hit_rank": scored["first_hit_rank"],
+                "relevant_in_k": scored["relevant_in_k"],
+                "retrieved_preview": previews[:5],
+            }
+        )
+        if verb:
+            print(
+                f"[Eval] {'HIT' if scored['hit'] else 'MISS'} "
+                f"MRR={scored['mrr']:.3f} P={scored['precision']:.3f} "
+                f"R={scored['recall']:.3f} | {query[:40]}"
+            )
 
-    n = len(results) or 1  # 分母至少为 1，避免除零
-    hit_rate = sum(1 for r in results if r.get("hit")) / n  # Hit Rate = 命中题数 / 总题数
-    avg_mrr = sum(float(r.get("mrr") or 0) for r in results) / n  # 平均 MRR
-    diagnosis = (  # 按 Hit Rate 给诊断
-        "检索 Hit Rate 偏低：优先调分块大小、Embedding、混合检索、重排、Top-K"  # 偏低时查检索侧
-        if hit_rate < 0.7  # 阈值 0.7
-        else "检索侧整体可用；若答案仍差，重点查生成 Faithfulness/Relevancy"  # 可用则转查生成
-    )  # 括号结束
-    return {  # 汇总返回
-        "hit_rate": round(hit_rate, 4),  # Hit Rate 四位小数
-        "mrr": round(avg_mrr, 4),  # 平均 MRR 四位小数
-        "total": len(results),  # 有效题数
-        "results": results,  # 逐题明细
-        "message": "ok",  # 正常完成
-        "diagnosis": diagnosis,  # 诊断建议
-    }  # 字典/集合结束
+    n = len(results)
+    if not n:
+        return empty
+    hit_rate = sum(1 for r in results if r.get("hit")) / n
+    avg_mrr = sum(float(r.get("mrr") or 0) for r in results) / n
+    avg_p = sum(float(r.get("precision") or 0) for r in results) / n
+    avg_r = sum(float(r.get("recall") or 0) for r in results) / n
+    return {
+        "hit_rate": round(hit_rate, 4),
+        "mrr": round(avg_mrr, 4),
+        "precision_at_k": round(avg_p, 4),
+        "recall_at_k": round(avg_r, 4),
+        "total": n,
+        "results": results,
+        "message": "ok",
+        "diagnosis": diagnose_retrieval(hit_rate, avg_mrr, avg_p, avg_r),
+        "flags": flags or {},
+    }

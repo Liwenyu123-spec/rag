@@ -38,6 +38,9 @@ from semantic_search.app.schemas import (  # Pydantic 请求/响应模型，给�
     IngestRequest,  # 从本地文件/目录导入的请求体
     OptimizeFlags,  # 本次实际生效的优化开关
     PreRetrievalInfo,  # 检索前优化中间信息
+    RetrievalEvalBundle,  # 单套检索配置的评估汇总
+    RetrievalEvalDelta,  # 基础 vs 当前的指标差
+    RetrievalEvalFlags,  # 评估时实际检索开关
     RetrievalEvalItem,  # 单条检索评测结果
     RetrievalEvalRequest,  # 检索评测请求体
     RetrievalEvalResponse,  # 检索评测响应体
@@ -49,8 +52,12 @@ from semantic_search.app.schemas import (  # Pydantic 请求/响应模型，给�
 )  # 括号结束
 from semantic_search.app.modular_config import describe_module_graph, yaml_as_ask_defaults
 from semantic_search.app.service import RagAskService  # 业务编排：pre-retrieval → 检索 → 生成
-from semantic_search.app.service.rag_eval import DEFAULT_RETRIEVAL_CASES, evaluate_retrieval_cases  # 检索评测默认集与评估函数
-from semantic_search.app.service.retrieval_optimize import apply_postprocessors  # 检索后：重排/压缩/重排版
+from semantic_search.app.service.presets import PRESETS
+from semantic_search.app.service.rag_eval import (
+    DEFAULT_RETRIEVAL_CASES,
+    compare_retrieval_runs,
+    evaluate_retrieval_cases,
+)
 
 STATIC_DIR = Path(__file__).resolve().parent.parent / "static"  # static 目录：放前端页面
 INDEX_HTML = STATIC_DIR / "index.html"  # 前端入口 HTML 的完整路径
