@@ -453,9 +453,9 @@
           style="margin-top:2px"
           :disabled="evalLoading"
           @click="runRetrievalEval"
-        >{{ evalLoading ? '检索评估中...' : '跑 Hit Rate / MRR' }}</button>
+        >{{ evalLoading ? '检索评估中...' : '跑检索评估（基础 vs 当前）' }}</button>
         <div class="upload-msg" v-if="evalRetrievalMsg">{{ evalRetrievalMsg }}</div>
-        <div class="upload-msg">评估会多调裁判模型；Hit/MRR 用 company_info 默认题</div>
+        <div class="upload-msg">同一套 company_info 题：基础 RAG 对照当前勾选；含 Hit/MRR/P@K/R@K。开 CRAG 会较慢。</div>
       </div>
 
       <div class="side-label">导入文档</div>
@@ -586,11 +586,29 @@
               <div class="pre-line" v-if="msg.generationEval.diagnosis">诊断：{{ msg.generationEval.diagnosis }}</div>
             </div>
             <div class="pre-box" v-if="msg.retrievalEval">
-              <strong>检索质量评估 · Hit Rate / MRR</strong>
-              <div class="pre-line">Hit Rate：{{ msg.retrievalEval.hit_rate }} · MRR：{{ msg.retrievalEval.mrr }} · 共 {{ msg.retrievalEval.total }} 题</div>
-              <div class="pre-line" v-if="msg.retrievalEval.diagnosis">诊断：{{ msg.retrievalEval.diagnosis }}</div>
-              <div class="pre-line" v-for="(r, i) in (msg.retrievalEval.results || [])" :key="i">
-                {{ r.hit ? '✓' : '✗' }} MRR={{ r.mrr }} · {{ r.query }}
+              <strong>检索质量评估 · 基础 RAG vs 当前优化</strong>
+              <div class="pre-line">
+                当前：Hit={{ msg.retrievalEval.hit_rate }} · MRR={{ msg.retrievalEval.mrr }}
+                · P@K={{ msg.retrievalEval.precision_at_k }} · R@K={{ msg.retrievalEval.recall_at_k }}
+                · {{ msg.retrievalEval.total }} 题
+              </div>
+              <div class="pre-line" v-if="msg.retrievalEval.baseline">
+                基础：Hit={{ msg.retrievalEval.baseline.hit_rate }} · MRR={{ msg.retrievalEval.baseline.mrr }}
+                · P@K={{ msg.retrievalEval.baseline.precision_at_k }} · R@K={{ msg.retrievalEval.baseline.recall_at_k }}
+              </div>
+              <div class="pre-line" v-if="msg.retrievalEval.delta">
+                差值 Δ：Hit={{ fmtDelta(msg.retrievalEval.delta.hit_rate) }}
+                · MRR={{ fmtDelta(msg.retrievalEval.delta.mrr) }}
+                · P@K={{ fmtDelta(msg.retrievalEval.delta.precision_at_k) }}
+                · R@K={{ fmtDelta(msg.retrievalEval.delta.recall_at_k) }}
+              </div>
+              <div class="pre-line" v-if="msg.retrievalEval.diagnosis">当前诊断：{{ msg.retrievalEval.diagnosis }}</div>
+              <div class="pre-line" v-if="msg.retrievalEval.baseline?.diagnosis">基础诊断：{{ msg.retrievalEval.baseline.diagnosis }}</div>
+              <div class="pre-line" v-for="(r, i) in (msg.retrievalEval.results || [])" :key="'c'+i">
+                当前 {{ r.hit ? '✓' : '✗' }} MRR={{ r.mrr }} P={{ r.precision }} R={{ r.recall }} · {{ r.query }}
+              </div>
+              <div class="pre-line" v-for="(r, i) in (msg.retrievalEval.baseline?.results || [])" :key="'b'+i">
+                基础 {{ r.hit ? '✓' : '✗' }} MRR={{ r.mrr }} · {{ r.query }}
               </div>
             </div>
             <div class="sources" v-if="msg.sources && msg.sources.length">
@@ -736,6 +754,12 @@
           if (m.score != null) return `${pass}（score=${m.score}）`;
           return pass;
         };
+        const fmtDelta = (v) => {
+          if (v == null || Number.isNaN(Number(v))) return '-';
+          const n = Number(v);
+          const sign = n > 0 ? '+' : '';
+          return sign + n.toFixed(4);
+        };
 
         const PRESET_MAP = {
           basic: {
@@ -877,7 +901,7 @@
         const runRetrievalEval = async () => {
           if (evalLoading.value) return;
           evalLoading.value = true;
-          evalRetrievalMsg.value = '正在计算 Hit Rate / MRR...';
+          evalRetrievalMsg.value = '正在对比基础 RAG 与当前优化…';
           messages.value.push({
             role: 'bot',
             content: '检索质量评估进行中…',
@@ -892,10 +916,16 @@
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
                 k: topK.value,
+                compare: true,
+                use_pre: optUsePre.value,
+                strategy: askStrategy.value,
                 use_hybrid: optUseHybrid.value,
+                fusion_mode: fusionMode.value || 'reciprocal_rerank',
+                num_queries: optUseMultiQuery.value ? 3 : 1,
                 use_rerank: optUseRerank.value,
                 use_compress: optUseCompress.value,
                 use_reorder: optUseReorder.value,
+                use_crag: optUseCrag.value,
               }),
             });
             const data = await res.json().catch(() => ({}));
@@ -903,7 +933,9 @@
               botMsg.content = data.detail || ('评估失败：HTTP ' + res.status);
               evalRetrievalMsg.value = botMsg.content;
             } else {
-              botMsg.content = `检索评估完成：Hit Rate=${data.hit_rate}，MRR=${data.mrr}（${data.total} 题）`;
+              botMsg.content = `检索评估完成：当前 Hit=${data.hit_rate} MRR=${data.mrr} P@K=${data.precision_at_k} R@K=${data.recall_at_k}`
+                + (data.delta ? `；相对基础 ΔHit=${fmtDelta(data.delta.hit_rate)} ΔMRR=${fmtDelta(data.delta.mrr)}` : '')
+                + `（${data.total} 题）`;
               botMsg.retrievalEval = data;
               evalRetrievalMsg.value = botMsg.content;
             }
@@ -1059,6 +1091,7 @@
           shortModel,
           strategyLabel,
           metricLabel,
+          fmtDelta,
           applyPreset,
           autoResize,
           formatScore,

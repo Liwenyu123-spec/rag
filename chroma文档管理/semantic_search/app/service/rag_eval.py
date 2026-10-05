@@ -219,9 +219,9 @@ def _doc_is_relevant(
     expected_texts: list[str],
     expected_ids: list[str],
 ) -> bool:
-    """单篇是否相关：节点 ID 命中，或正文包含关键词 / 标准片段。"""
-    if expected_ids and nid and nid in expected_ids:
-        return True
+    """单篇是否相关：有 expected_ids 时只看节点 ID，否则看关键词 / 标准片段。"""
+    if expected_ids:
+        return bool(nid and nid in expected_ids)
     low = (text or "").lower()
     if any(k.lower() in low for k in keywords):
         return True

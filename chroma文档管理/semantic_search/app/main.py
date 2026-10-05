@@ -208,44 +208,93 @@ async def ask(request: AskRequest):  # 请求体含 question / k / 各优化开�
 
 @app.post("/eval/retrieval", response_model=RetrievalEvalResponse)  # 检索质量评估接口
 async def eval_retrieval(request: RetrievalEvalRequest):  # 请求体含 k / 开关 / cases
-    """检索质量评估：Hit Rate + MRR（飞书 01-RAG评估）。
+    """检索质量评估：Hit Rate / MRR / Precision@K / Recall@K。
 
-    默认使用 company_info 配套评测集；也可传入自定义 cases（query + keywords）。
-    答案差时先看本接口：检索差 → 调分块/Embedding/混合/重排；检索好 → 查生成侧。
-    """  # OpenAPI 多行说明：评测用途与诊断建议
-    engine = _require_engine(app)  # 确保引擎已初始化
-    cases = (  # 评测样例列表
-        [c.model_dump() for c in request.cases]  # 自定义 cases 转 dict
-        if request.cases  # 传了自定义集
-        else list(DEFAULT_RETRIEVAL_CASES)  # 否则用默认 company_info 集
-    )  # cases 赋值结束
-    use_hybrid = True if request.use_hybrid is None else bool(request.use_hybrid)  # None 默认开混合
-    use_rerank = False if request.use_rerank is None else bool(request.use_rerank)  # None 默认关重排
-    use_compress = False if request.use_compress is None else bool(request.use_compress)  # None 默认关压缩
-    use_reorder = False if request.use_reorder is None else bool(request.use_reorder)  # None 默认关重排版
-    k = max(1, min(request.k, max(engine.collection.count(), 1)))  # Top-K 夹在 1 与库容量之间
+    默认走与 /ask 相同的检索链（检索前、混合、后处理、可选 CRAG）。
+    compare=true 时同时跑 basic 预设做 A/B。
+    """
+    engine = _require_engine(app)
+    service = RagAskService(engine)
+    cases = (
+        [c.model_dump() for c in request.cases]
+        if request.cases
+        else list(DEFAULT_RETRIEVAL_CASES)
+    )
+    k = max(1, min(request.k, max(engine.collection.count(), 1)))
+    strategy = (request.strategy or "none").strip().lower()
+    if strategy and strategy not in {"none", "clean", "rewrite", "hyde", "step_back"}:
+        raise HTTPException(status_code=400, detail="strategy 只能是 none / clean / rewrite / hyde / step_back")
 
-    def _retrieve(q: str):  # 评测回调：按当前开关检索并后处理
-        retriever = engine._build_retriever(k, hybrid_enabled=use_hybrid)  # 构建检索器
-        nodes = list(retriever.retrieve(q))  # 粗排召回
-        return apply_postprocessors(  # 检索后三件套
-            nodes,  # 召回节点
-            q,  # 查询文本
-            k,  # 最终条数
-            rerank_enabled=use_rerank,  # 是否重排
-            compress_enabled=use_compress,  # 是否压缩
-            reorder_enabled=use_reorder,  # 是否长上下文重排
-        )  # apply_postprocessors 结束
+    current_flags = {
+        "use_pre": bool(request.use_pre) if request.use_pre is not None else False,
+        "strategy": strategy if request.use_pre else "none",
+        "use_hybrid": True if request.use_hybrid is None else bool(request.use_hybrid),
+        "fusion_mode": (request.fusion_mode or "reciprocal_rerank").strip(),
+        "num_queries": max(1, int(request.num_queries or 1)),
+        "use_rerank": False if request.use_rerank is None else bool(request.use_rerank),
+        "use_compress": False if request.use_compress is None else bool(request.use_compress),
+        "use_reorder": False if request.use_reorder is None else bool(request.use_reorder),
+        "use_crag": False if request.use_crag is None else bool(request.use_crag),
+    }
+    basic = PRESETS["basic"]
+    baseline_flags = {
+        "use_pre": bool(basic.get("use_pre", False)),
+        "strategy": str(basic.get("strategy") or "none"),
+        "use_hybrid": bool(basic.get("use_hybrid", True)),
+        "fusion_mode": str(basic.get("fusion_mode") or "simple"),
+        "num_queries": max(1, int(basic.get("num_queries") or 1)),
+        "use_rerank": bool(basic.get("use_rerank", False)),
+        "use_compress": bool(basic.get("use_compress", False)),
+        "use_reorder": bool(basic.get("use_reorder", False)),
+        "use_crag": bool(basic.get("use_crag", False)),
+    }
 
-    payload = evaluate_retrieval_cases(cases, _retrieve)  # 跑 Hit Rate / MRR
-    return RetrievalEvalResponse(  # 组装评测响应
-        hit_rate=payload["hit_rate"],  # 整体命中率
-        mrr=payload["mrr"],  # 整体 MRR
-        total=payload["total"],  # 样例总数
-        results=[RetrievalEvalItem(**r) for r in payload["results"]],  # 逐条明细
-        message=payload.get("message") or "ok",  # 状态文案
-        diagnosis=payload.get("diagnosis"),  # 诊断提示
-    )  # RetrievalEvalResponse 结束
+    def _make_retrieve(flags: dict):
+        def _retrieve(q: str):
+            return service.retrieve_for_eval(q, k, **flags)
+
+        return _retrieve
+
+    def _bundle(label: str, payload: dict, flags: dict) -> RetrievalEvalBundle:
+        return RetrievalEvalBundle(
+            label=label,
+            hit_rate=payload["hit_rate"],
+            mrr=payload["mrr"],
+            precision_at_k=payload.get("precision_at_k") or 0.0,
+            recall_at_k=payload.get("recall_at_k") or 0.0,
+            total=payload["total"],
+            results=[RetrievalEvalItem(**r) for r in payload["results"]],
+            diagnosis=payload.get("diagnosis"),
+            flags=RetrievalEvalFlags(**flags),
+        )
+
+    current_payload = evaluate_retrieval_cases(
+        cases, _make_retrieve(current_flags), flags=current_flags
+    )
+    current = _bundle("current", current_payload, current_flags)
+    baseline = None
+    delta = None
+    if request.compare:
+        baseline_payload = evaluate_retrieval_cases(
+            cases, _make_retrieve(baseline_flags), flags=baseline_flags
+        )
+        baseline = _bundle("baseline", baseline_payload, baseline_flags)
+        delta = RetrievalEvalDelta(**compare_retrieval_runs(baseline_payload, current_payload))
+
+    return RetrievalEvalResponse(
+        hit_rate=current.hit_rate,
+        mrr=current.mrr,
+        precision_at_k=current.precision_at_k,
+        recall_at_k=current.recall_at_k,
+        total=current.total,
+        results=current.results,
+        message=current_payload.get("message") or "ok",
+        diagnosis=current.diagnosis,
+        compared=bool(request.compare),
+        current=current,
+        baseline=baseline,
+        delta=delta,
+    )
 
 
 @app.get("/search", response_model=SearchResponse)  # GET 语义搜索，响应按 SearchResponse 校验
