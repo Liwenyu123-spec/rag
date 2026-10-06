@@ -538,6 +538,16 @@ async def ingest_documents(request: IngestRequest, backend: str = Depends(vector
     return {"message": "文档加载并索引完成", **result}  # 合并 loaded_documents、nodes 等统计
 
 
+def _safe_upload_rel(filename: str | None) -> Path | None:
+    raw = (filename or "").replace("\\", "/").strip().lstrip("/")
+    if not raw:
+        return None
+    parts = [p for p in raw.split("/") if p and p not in {".", ".."}]
+    if not parts:
+        return None
+    return Path(*parts)
+
+
 @app.post("/upload")  # 前端上传文件：保存到 data 目录后写入向量库和/或 Neo4j
 async def upload_documents(  # multipart：files + splitter + target
     files: list[UploadFile] = File(..., description="要导入的文件，可多选"),
@@ -563,17 +573,26 @@ async def upload_documents(  # multipart：files + splitter + target
     skipped: list[str] = []
     allowed = set(SUPPORTED_EXTS) | set(IMAGE_EXTS)
     for item in files:
-        name = Path(item.filename or "upload.bin").name
-        suffix = Path(name).suffix.lower()
-        if suffix not in allowed:
-            skipped.append(name)
+        rel = _safe_upload_rel(item.filename)
+        if rel is None:
+            skipped.append(item.filename or "unnamed")
             continue
-        dest_dir = upload_dir / "images" if is_image_path(name) else upload_dir
-        dest_dir.mkdir(parents=True, exist_ok=True)
-        target_path = dest_dir / name
+        suffix = rel.suffix.lower()
+        if suffix not in allowed:
+            skipped.append(str(rel))
+            continue
+        dest_root = (upload_dir / "images") if is_image_path(rel.name) else upload_dir
+        dest_root.mkdir(parents=True, exist_ok=True)
+        target_path = (dest_root / rel).resolve()
+        try:
+            target_path.relative_to(dest_root.resolve())
+        except ValueError:
+            skipped.append(str(rel))
+            continue
+        target_path.parent.mkdir(parents=True, exist_ok=True)
         content = await item.read()
         target_path.write_bytes(content)
-        if is_image_path(name):
+        if is_image_path(rel.name):
             image_paths.append(str(target_path.resolve()))
         else:
             saved_paths.append(str(target_path.resolve()))

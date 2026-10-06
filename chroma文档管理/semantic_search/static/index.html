@@ -170,11 +170,26 @@
       background: rgba(0,0,0,.2); padding: 8px 10px;
     }
     .upload-card input[type="file"] { padding: 7px; }
+    .upload-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
     .upload-btn {
       height: 36px; border: 0; border-radius: 10px; cursor: pointer;
       color: #fff; font-size: 13px; font-weight: 600;
       background: var(--blue); box-shadow: 0 6px 14px rgba(36,107,253,.25);
     }
+    .upload-btn.ghost {
+      background: rgba(255,255,255,.08); color: #dce3ef; box-shadow: none;
+      border: 1px solid rgba(255,255,255,.12);
+    }
+    .upload-drop {
+      border: 1px dashed rgba(255,255,255,.18);
+      border-radius: 10px;
+      padding: 10px 8px;
+      text-align: center;
+      color: #9aa3b5;
+      font-size: 11px;
+      line-height: 1.5;
+    }
+    .upload-drop.on { border-color: #4d8dff; color: #c9dcff; background: rgba(36,107,253,.12); }
     .upload-btn:disabled { opacity: .45; cursor: not-allowed; box-shadow: none; }
     .upload-msg { color: #9bb8ff; font-size: 11px; line-height: 1.55; min-height: 16px; }
     .upload-msg.err { color: #ff9aa6; }
@@ -609,6 +624,11 @@
     .upload-btn {
       background: #4d6bfe; box-shadow: none; border-radius: 12px;
     }
+    .upload-btn.ghost {
+      background: #f3f3f3; color: #333; border: 1px solid #e6e6e6;
+    }
+    .upload-drop { color: #8b8b8b; border-color: #e0e0e0; }
+    .upload-drop.on { background: #ecefff; color: #1a1a1a; border-color: #4d6bfe; }
     .side-tip { background: transparent; color: #8b8b8b; }
     .side-tip strong { color: #4f4f4f; }
     .side-tip a { color: #4d6bfe; }
@@ -1132,14 +1152,35 @@
         <div class="upload-msg">{{ health?.vl_ready ? ('DeepSeek 可看图：' + (health.vl_model || 'deepseek-flash')) : '未配 DEEPSEEK_API_KEY 时无法看图' }}</div>
       </div>
 
-      <div class="side-label">导入文档</div>
-      <div class="upload-card">
+      <div class="side-label">导入文档 / 图片</div>
+      <div
+        class="upload-card"
+        @dragover.prevent="onUploadDragOver"
+        @dragleave.prevent="uploadDropOn = false"
+        @drop.prevent="onUploadDrop"
+      >
         <input
+          ref="filePicker"
           type="file"
           multiple
-          accept=".pdf,.txt,.md,.csv,.docx,.pptx,.html,.htm,.ipynb,.jpg,.jpeg,.png,.webp,.bmp,.gif"
+          accept=".pdf,.txt,.md,.csv,.docx,.pptx,.html,.htm,.ipynb,.jpg,.jpeg,.png,.webp,.bmp,.gif,image/*"
+          style="display:none"
           @change="onPickFiles"
         />
+        <input
+          ref="folderPicker"
+          type="file"
+          webkitdirectory
+          directory
+          multiple
+          style="display:none"
+          @change="onPickFiles"
+        />
+        <div class="upload-row">
+          <button type="button" class="upload-btn ghost" @click="openFilePicker">选择文件</button>
+          <button type="button" class="upload-btn ghost" @click="openFolderPicker">选择文件夹</button>
+        </div>
+        <div class="upload-drop" :class="{ on: uploadDropOn }">把文件或整个文件夹拖到这里<br>图片会进图库，文档会分块入库</div>
         <select v-model="uploadSplitter">
           <option value="sentence">分块：按句子 Sentence</option>
           <option value="token">分块：按 Token</option>
@@ -1161,7 +1202,7 @@
       <div class="side-tip">
         <strong>快捷提示</strong>
         Enter 发送 · Shift+Enter 换行<br>
-        支持 pdf / txt / md / docx / pptx / csv / html / ipynb / 图片
+        支持选整个文件夹；pdf / txt / md / docx / pptx / csv / html / ipynb / jpg / png 等
         <a href="/docs" target="_blank">打开 API 文档</a>
       </div>
     </aside>
@@ -1520,7 +1561,7 @@
         const uploadSplitter = ref('sentence');
         const uploadTarget = ref('chroma');
         const uploading = ref(false);
-        const uploadMessage = ref('可选多个文件，上传后自动分块入库；内容或文件名已存在则跳过');
+        const uploadMessage = ref('可选文件、整个文件夹，或直接拖入。图片进图库，文档会分块入库');
         const uploadError = ref(false);
         const graphStatus = ref(null);
         const graphExtractor = ref('simple');
@@ -2199,6 +2240,85 @@
           }
         };
 
+        const filePicker = ref(null);
+        const folderPicker = ref(null);
+        const uploadDropOn = ref(false);
+        const ALLOWED_UPLOAD = new Set([
+          '.pdf', '.txt', '.md', '.csv', '.docx', '.pptx', '.html', '.htm', '.ipynb',
+          '.jpg', '.jpeg', '.png', '.webp', '.bmp', '.gif',
+        ]);
+        const fileExt = (name) => {
+          const n = String(name || '').toLowerCase();
+          const i = n.lastIndexOf('.');
+          return i >= 0 ? n.slice(i) : '';
+        };
+        const withRelPath = (file, rel) => {
+          const path = (rel || file.webkitRelativePath || file.name || '').replace(/\\/g, '/');
+          try {
+            const wrapped = new File([file], file.name, { type: file.type, lastModified: file.lastModified });
+            wrapped.relPath = path;
+            return wrapped;
+          } catch (_) {
+            file.relPath = path;
+            return file;
+          }
+        };
+        const filterUploadFiles = (list) => Array.from(list || [])
+          .filter((f) => ALLOWED_UPLOAD.has(fileExt(f.name)))
+          .map((f) => withRelPath(f, f.relPath || f.webkitRelativePath || f.name));
+        const setPickedFiles = (list) => {
+          pickedFiles.value = filterUploadFiles(list);
+          uploadError.value = false;
+          const n = pickedFiles.value.length;
+          const imgs = pickedFiles.value.filter((f) => ['.jpg', '.jpeg', '.png', '.webp', '.bmp', '.gif'].includes(fileExt(f.name))).length;
+          uploadMessage.value = n
+            ? `已选择 ${n} 个文件` + (imgs ? `（其中图片 ${imgs}）` : '')
+            : '没有可导入的文件（支持文档和 jpg/png 等图片）';
+        };
+        const openFilePicker = () => filePicker.value && filePicker.value.click();
+        const openFolderPicker = () => folderPicker.value && folderPicker.value.click();
+        const onPickFiles = (e) => {
+          setPickedFiles(e.target.files || []);
+          e.target.value = '';
+        };
+        const onUploadDragOver = () => { uploadDropOn.value = true; };
+        const readAllEntries = (reader) => new Promise((resolve) => {
+          const out = [];
+          const step = () => {
+            reader.readEntries((batch) => {
+              if (!batch.length) return resolve(out);
+              out.push(...batch);
+              step();
+            }, () => resolve(out));
+          };
+          step();
+        });
+        const filesFromEntry = async (entry, prefix) => {
+          if (!entry) return [];
+          if (entry.isFile) {
+            const file = await new Promise((resolve, reject) => entry.file(resolve, reject));
+            return [withRelPath(file, (prefix ? prefix + '/' : '') + file.name)];
+          }
+          if (!entry.isDirectory) return [];
+          const nextPrefix = prefix ? prefix + '/' + entry.name : entry.name;
+          const children = await readAllEntries(entry.createReader());
+          const nested = await Promise.all(children.map((child) => filesFromEntry(child, nextPrefix)));
+          return nested.flat();
+        };
+        const onUploadDrop = async (e) => {
+          uploadDropOn.value = false;
+          const items = Array.from(e.dataTransfer?.items || []);
+          if (items.some((it) => it.webkitGetAsEntry && it.webkitGetAsEntry())) {
+            const groups = await Promise.all(items.map(async (it) => {
+              const entry = it.webkitGetAsEntry && it.webkitGetAsEntry();
+              return entry ? filesFromEntry(entry, '') : [];
+            }));
+            setPickedFiles(groups.flat());
+            return;
+          }
+          setPickedFiles(e.dataTransfer?.files || []);
+        };
+
         const uploadButtonText = computed(() => {
           if (uploading.value) {
             return uploadTarget.value === 'chroma' ? '上传分块中...' : '抽取写入图谱中（较慢）...';
@@ -2208,14 +2328,6 @@
           return '上传并写入向量库';
         });
 
-        const onPickFiles = (e) => {
-          pickedFiles.value = Array.from(e.target.files || []);
-          uploadError.value = false;
-          uploadMessage.value = pickedFiles.value.length
-            ? `已选择 ${pickedFiles.value.length} 个文件`
-            : '可选多个文件，上传后自动分块入库';
-        };
-
         const uploadFiles = async () => {
           if (!pickedFiles.value.length || uploading.value) return;
           uploading.value = true;
@@ -2223,7 +2335,7 @@
           uploadMessage.value = '正在上传并分块索引...';
 
           const form = new FormData();
-          pickedFiles.value.forEach((f) => form.append('files', f));
+          pickedFiles.value.forEach((f) => form.append('files', f, f.relPath || f.webkitRelativePath || f.name));
           form.append('splitter', uploadSplitter.value);
           form.append('target', uploadTarget.value);
           form.append('extractor', graphExtractor.value);
@@ -2695,6 +2807,13 @@
           uploading,
           uploadMessage,
           uploadError,
+          filePicker,
+          folderPicker,
+          uploadDropOn,
+          openFilePicker,
+          openFolderPicker,
+          onUploadDragOver,
+          onUploadDrop,
           onPickFiles,
           uploadFiles,
           graphStatus,
