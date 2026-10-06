@@ -131,6 +131,40 @@ def _require_graph_rag(app: FastAPI):
     return service
 
 
+def _try_init_mm_rag(app: FastAPI):
+    existing = getattr(app.state, "mm_rag", None)
+    if existing is not None:
+        return existing
+    engine = getattr(app.state, "search_engine", None)
+    if engine is None:
+        return None
+    try:
+        from semantic_search.app.service.mm_rag import MultimodalRagService
+
+        app.state.mm_rag = MultimodalRagService(engine)
+        app.state.mm_rag_error = None
+        seeded = app.state.mm_rag.ingest_data_dir()
+        print(f"多模态 RAG 已就绪，图库 {seeded.get('total_images', 0)} 张")
+        return app.state.mm_rag
+    except Exception as exc:  # noqa: BLE001
+        app.state.mm_rag = None
+        app.state.mm_rag_error = str(exc)
+        print(f"警告: 多模态 RAG 初始化失败: {exc}")
+        return None
+
+
+def _require_mm_rag(app: FastAPI):
+    service = _try_init_mm_rag(app)
+    if service is None:
+        extra = getattr(app.state, "mm_rag_error", None)
+        raise HTTPException(
+            status_code=503,
+            detail="多模态 RAG 未就绪，需要本地 Chinese-CLIP 权重。"
+            + (f" 原因: {extra}" if extra else ""),
+        )
+    return service
+
+
 @asynccontextmanager  # 把下面函数变成「启动时进入 / 关闭时退出」的生命周期钩子
 async def lifespan(app: FastAPI):  # FastAPI 启动和关闭时都会走到这里
     print("=" * 50)  # 打印分隔线，方便在终端里辨认启动日志
@@ -155,6 +189,9 @@ async def lifespan(app: FastAPI):  # FastAPI 启动和关闭时都会走到这�
     app.state.graph_rag = None
     app.state.graph_rag_error = None
     _try_init_graph_rag(app)
+    app.state.mm_rag = None
+    app.state.mm_rag_error = None
+    _try_init_mm_rag(app)
 
     print("=" * 50)  # 启动阶段结束分隔线
     yield  # 这里之后应用正式对外提供请求；yield 返回后进入关闭阶段
@@ -212,6 +249,9 @@ async def api_info():  # 方便程序或调试查看有哪些入口
         "graph_load": "POST /graph/load",
         "graph_query": "POST /graph/query",
         "graph_retrieve": "POST /graph/retrieve",
+        "mm_status": "GET /mm/status",
+        "mm_search": "POST /mm/search",
+        "mm_ask": "POST /mm/ask",
     }  # 字典/集合结束
 
 
@@ -499,39 +539,55 @@ async def upload_documents(  # multipart：files + splitter + target
     upload_dir.mkdir(parents=True, exist_ok=True)
 
     saved_paths: list[str] = []
+    image_paths: list[str] = []
     skipped: list[str] = []
+    allowed = set(SUPPORTED_EXTS) | set(IMAGE_EXTS)
     for item in files:
         name = Path(item.filename or "upload.bin").name
         suffix = Path(name).suffix.lower()
-        if suffix not in SUPPORTED_EXTS:
+        if suffix not in allowed:
             skipped.append(name)
             continue
-        target_path = upload_dir / name
+        dest_dir = upload_dir / "images" if is_image_path(name) else upload_dir
+        dest_dir.mkdir(parents=True, exist_ok=True)
+        target_path = dest_dir / name
         content = await item.read()
         target_path.write_bytes(content)
-        saved_paths.append(str(target_path.resolve()))
+        if is_image_path(name):
+            image_paths.append(str(target_path.resolve()))
+        else:
+            saved_paths.append(str(target_path.resolve()))
 
-    if not saved_paths:
+    if not saved_paths and not image_paths:
         raise HTTPException(
             status_code=400,
-            detail=f"没有可导入的文件。支持扩展名: {', '.join(SUPPORTED_EXTS)}；已跳过: {skipped}",
+            detail=(
+                f"没有可导入的文件。支持: {', '.join(SUPPORTED_EXTS + list(IMAGE_EXTS))}；"
+                f"已跳过: {skipped}"
+            ),
         )
 
     payload: dict = {
         "saved_files": [Path(p).name for p in saved_paths],
+        "saved_images": [Path(p).name for p in image_paths],
         "skipped_files": skipped,
         "splitter": splitter,
         "target": target,
     }
     parts: list[str] = []
 
-    if target in {"chroma", "both"}:
+    if image_paths:
+        mm = _require_mm_rag(app)
+        payload["multimodal"] = mm.ingest_paths(image_paths)
+        parts.append(f"已写入图库 {payload['multimodal'].get('indexed', 0)} 张")
+
+    if target in {"chroma", "both"} and saved_paths:
         engine = _require_engine(app)
         chroma_result = engine.ingest_files(input_files=saved_paths, splitter=splitter)
         payload.update(chroma_result)
         parts.append("已写入向量库")
 
-    if target in {"neo4j", "both"}:
+    if target in {"neo4j", "both"} and saved_paths:
         graph = _require_graph_rag(app)
         graph_result = graph.build_from_files(saved_paths, extractor=extractor)
         payload["graph"] = graph_result
@@ -578,6 +634,9 @@ async def graph_add_triple(request: GraphManualTripleRequest):
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except Exception as exc:  # noqa: BLE001
         raise HTTPException(status_code=503, detail=f"写入三元组失败: {exc}") from exc
+
+
+@app.post("/graph/build")
 async def graph_build(request: GraphBuildRequest):
     """从文本抽取三元组写入 Neo4j（Simple / Schema 抽取器）。"""
     try:
@@ -617,20 +676,100 @@ async def graph_retrieve(request: GraphRetrieveRequest):
         raise HTTPException(status_code=503, detail=f"图谱检索失败: {exc}") from exc
 
 
+@app.get("/mm/status")
+async def mm_status():
+    """多模态图库与视觉模型是否可用。"""
+    service = _try_init_mm_rag(app)
+    if service is None:
+        return {
+            "ready": False,
+            "message": getattr(app.state, "mm_rag_error", None) or "多模态未初始化",
+            "dashscope_configured": bool(DASHSCOPE_API_KEY),
+        }
+    return service.status()
+
+
+@app.get("/mm/files/{name}")
+async def mm_file(name: str):
+    """预览图库中的图片。"""
+    try:
+        path = _require_mm_rag(app).resolve_image(name)
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail="图片不存在") from exc
+    return FileResponse(path)
+
+
+@app.post("/mm/search")
+async def mm_search(
+    query: str = Form(""),
+    k: int = Form(5),
+    image: UploadFile | None = File(None),
+):
+    """以文搜图或以上传图搜图（可选同时以图搜文）。"""
+    mm = _require_mm_rag(app)
+    query_image_path = None
+    if image is not None and image.filename:
+        content = await image.read()
+        if content:
+            query_image_path = str(mm.save_query_image(image.filename, content))
+    if query_image_path:
+        images = mm.search_images_by_image(query_image_path, k=k)
+        texts = mm.search_texts_by_image(query_image_path, k=k)
+        task = "image2image"
+    elif (query or "").strip():
+        images = mm.search_images_by_text(query.strip(), k=k)
+        texts = []
+        task = "text2image"
+    else:
+        raise HTTPException(status_code=400, detail="请输入查询文本或上传一张图片")
+    return {
+        "task": task,
+        "query": query,
+        "images": images,
+        "texts": texts,
+        "total": len(images),
+        "sources": images + texts,
+    }
+
+
+@app.post("/mm/ask")
+async def mm_ask(
+    question: str = Form(""),
+    k: int = Form(5),
+    image: UploadFile | None = File(None),
+):
+    """多模态问答：CLIP 召回图片后，有千问 Key 则用 VL 看图作答。"""
+    mm = _require_mm_rag(app)
+    query_image_path = None
+    if image is not None and image.filename:
+        content = await image.read()
+        if content:
+            query_image_path = str(mm.save_query_image(image.filename, content))
+    if not (question or "").strip() and not query_image_path:
+        raise HTTPException(status_code=400, detail="请输入问题或上传图片")
+    try:
+        return mm.ask(question, query_image_path=query_image_path, k=k)
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+
 @app.get("/health")  # 健康检查：前端侧栏会轮询这个接口
 async def health_check():  # 健康检查接口
     """健康检查，用于确认服务与配置是否可用。"""  # 接口说明
     engine = getattr(app.state, "search_engine", None)  # 不强制抛错，方便前端显示状态
     graph = getattr(app.state, "graph_rag", None)  # 健康检查不重连 Neo4j，避免未启动时驱动重试刷屏
+    mm = getattr(app.state, "mm_rag", None)
     if engine is None:  # 引擎没起来
         return {  # 返回 error 状态而不是抛异常
             "status": "error",  # 前端侧栏显示红点
             "message": "搜索引擎未初始化，请在 Windows 用户环境变量中配置 DEEPSEEK_API_KEY",
             "graph_rag_ready": graph is not None,
+            "mm_ready": mm is not None,
             "modules": ["basic", "secure", "content", "rag"],
         }
 
     stats = engine.get_stats()  # 读取运行时统计
+    mm_status_data = mm.status() if mm is not None else {"ready": False, "image_count": 0}
     return {  # 精简字段给前端展示
         "status": "ok",  # 一切正常
         "service": "rag-quad-platform",
@@ -641,6 +780,9 @@ async def health_check():  # 健康检查接口
         "total_documents": stats["total_documents"],  # 向量库文档数
         "index_type": stats["index_type"],  # 索引类型说明
         "graph_rag_ready": graph is not None,
+        "mm_ready": bool(mm_status_data.get("ready")),
+        "image_count": mm_status_data.get("image_count", 0),
+        "vl_ready": bool(mm_status_data.get("vl_ready")),
     }  # 字典/集合结束
 
 

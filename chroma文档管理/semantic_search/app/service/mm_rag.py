@@ -100,7 +100,7 @@ class MultimodalRagService:
         skipped: list[str] = []
         for raw in paths:
             src = Path(raw)
-            if not src.is_file() or not is_image_path(src):
+            if not src.is_file() or not is_image_path(src) or src.name.startswith("_query"):
                 skipped.append(src.name)
                 continue
             dest = self.image_dir / src.name
@@ -121,7 +121,11 @@ class MultimodalRagService:
         base = Path(root or DATA_DIR)
         if not base.is_dir():
             return {"indexed": 0, "total_images": self.collection.count()}
-        files = [str(p) for p in base.rglob("*") if p.is_file() and is_image_path(p)]
+        files = [
+            str(p)
+            for p in base.rglob("*")
+            if p.is_file() and is_image_path(p) and not p.name.startswith("_query")
+        ]
         if not files:
             return {"indexed": 0, "total_images": self.collection.count()}
         return self.ingest_paths(files)
