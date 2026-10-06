@@ -362,6 +362,7 @@ class SemanticSearchEngine:  # Native RAG 引擎主体
         input_files: List[str] | None = None,  # 指定文件列表
         input_dir: str | None = None,  # 或指定目录
         splitter: str = "sentence",  # 分块模式
+        replace_names: set[str] | None = None,
     ) -> dict:  # 返回统计字典
         """用 SimpleDirectoryReader 加载本地文件或目录后建索引；内容或文件名已存在则跳过。"""  # 方法说明
         candidates: list[Path] = []
@@ -382,7 +383,7 @@ class SemanticSearchEngine:  # Native RAG 引擎主体
         for path in candidates:
             if not path.is_file():
                 continue
-            if self._is_duplicate_file(path, seen):
+            if self._is_duplicate_file(path, seen) and path.name not in (replace_names or set()):
                 skipped_duplicates.append(path.name)
                 print(f"跳过重复文档: {path.name}")
                 continue
@@ -569,6 +570,57 @@ class SemanticSearchEngine:  # Native RAG 引擎主体
             "chunk_count": sum(item["chunks"] for item in files),
             "files": files,
         }
+
+    def list_file_chunks(self, file_name: str, limit: int = 40) -> dict:
+        want = Path(file_name).name
+        chunks: list[dict] = []
+        try:
+            data = self.collection.get(include=["metadatas", "documents"])
+        except Exception:
+            data = {}
+        metas = data.get("metadatas") or []
+        docs = data.get("documents") or []
+        for i, raw_meta in enumerate(metas):
+            meta = raw_meta if isinstance(raw_meta, dict) else {}
+            name = (
+                str(meta.get("file_name") or meta.get("filename") or "").strip()
+                or Path(str(meta.get("file_path") or "")).name
+            )
+            if name != want:
+                continue
+            text = " ".join(((docs[i] if i < len(docs) else "") or "").split())
+            page = meta.get("page_label") or meta.get("page") or meta.get("page_number")
+            location = f"第 {page} 页" if page not in (None, "") else ""
+            chunks.append({"text": text[:1200], "location": location, "page": None if page in (None, "") else str(page)})
+            if len(chunks) >= limit:
+                break
+        return {"file_name": want, "chunks": chunks, "total": len(chunks)}
+
+    def find_source_file(self, file_name: str) -> Path | None:
+        want = Path(file_name).name
+        if not want or want in {".", ".."}:
+            return None
+        root = Path(DATA_DIR).resolve()
+        if not root.is_dir():
+            return None
+        for path in root.rglob(want):
+            try:
+                path.resolve().relative_to(root)
+            except ValueError:
+                continue
+            if path.is_file():
+                return path
+        return None
+
+    def delete_by_file_name(self, file_name: str) -> dict:
+        want = Path(file_name).name
+        if not want:
+            return {"file_name": want, "deleted_chunks": 0}
+        ids = self.collection.collect_ids_by_file_name(want)
+        n = self.collection.delete_ids(ids) if ids else 0
+        if n:
+            self._invalidate_retrieval_cache()
+        return {"file_name": want, "deleted_chunks": n, "backend": self.backend_name}
 
     def get_stats(self) -> dict:  # 供 /stats、/health 使用
         """返回文档数量、模型名称和持久化路径等状态。"""  # 方法说明

@@ -137,6 +137,21 @@ class MultimodalRagService:
             items.append({"file_name": name, "kind": "image"})
         return items
 
+    def delete_by_file_name(self, name: str, backend: str | None = None) -> dict:
+        want = Path(name).name
+        slot = self._img(backend)
+        ids = slot.collect_ids_by_file_name(want)
+        removed = slot.delete_ids(ids) if ids else 0
+        try:
+            self.resolve_image(want).unlink(missing_ok=True)
+        except FileNotFoundError:
+            pass
+        except TypeError:
+            path = self.image_dir / want
+            if path.is_file():
+                path.unlink()
+        return {"file_name": want, "deleted_images": removed}
+
     def resolve_image(self, name: str) -> Path:
         safe = Path(name).name
         path = (self.image_dir / safe).resolve()

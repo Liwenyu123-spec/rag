@@ -554,6 +554,7 @@ async def upload_documents(  # multipart：files + splitter + target
     splitter: str = Form("sentence", description="切分方式: sentence / token / semantic"),
     target: str = Form("chroma", description="chroma / neo4j / both"),
     extractor: str = Form("simple", description="图谱抽取器：simple / schema"),
+    replace_existing: bool = Form(True, description="同名文件先删旧再写入"),
     backend: str = Depends(vector_backend_dep),
 ):
     """浏览器上传文件 → 落盘 → 写入 Chroma 和/或 Neo4j 图谱。"""
@@ -616,6 +617,21 @@ async def upload_documents(  # multipart：files + splitter + target
     parts: list[str] = []
 
     skipped_duplicates: list[str] = []
+    replaced: list[str] = []
+    replace_names = {Path(p).name for p in saved_paths + image_paths}
+
+    if replace_existing and replace_names:
+        engine = _bound_engine(app, backend)
+        mm = getattr(app.state, "mm_rag", None)
+        for name in replace_names:
+            info = engine.delete_by_file_name(name)
+            if info.get("deleted_chunks"):
+                replaced.append(name)
+            if mm is not None:
+                try:
+                    mm.delete_by_file_name(name, backend=backend)
+                except Exception:
+                    pass
 
     if image_paths:
         mm = _require_mm_rag(app)
@@ -628,7 +644,11 @@ async def upload_documents(  # multipart：files + splitter + target
     graph_files = saved_paths
     if target in {"chroma", "both"} and saved_paths:
         engine = _bound_engine(app, backend)
-        chroma_result = engine.ingest_files(input_files=saved_paths, splitter=splitter)
+        chroma_result = engine.ingest_files(
+            input_files=saved_paths,
+            splitter=splitter,
+            replace_names=replace_names,
+        )
         payload.update(chroma_result)
         skipped_duplicates.extend(chroma_result.get("skipped_duplicates") or [])
         dup_names = set(chroma_result.get("skipped_duplicates") or [])
@@ -644,6 +664,9 @@ async def upload_documents(  # multipart：files + splitter + target
         parts.append("已写入 Neo4j 图谱")
 
     payload["skipped_duplicates"] = skipped_duplicates
+    payload["replaced"] = replaced
+    if replaced:
+        parts.append(f"已覆盖 {len(replaced)} 个同名文件")
     if skipped_duplicates and not parts:
         parts.append("所选文件均已在知识库中，已跳过")
     elif skipped_duplicates:

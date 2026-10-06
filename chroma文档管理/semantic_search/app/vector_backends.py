@@ -57,6 +57,25 @@ class VectorSlot:
     def delete_ids(self, ids: list[str]) -> int:
         return 0
 
+    def collect_ids_by_file_name(self, file_name: str) -> list[str]:
+        want = Path(file_name).name.lower()
+        try:
+            data = self.get(include=["metadatas"])
+        except Exception:
+            return []
+        ids = data.get("ids") or []
+        metadatas = data.get("metadatas") or []
+        hit: list[str] = []
+        for i, doc_id in enumerate(ids):
+            meta = metadatas[i] if i < len(metadatas) and isinstance(metadatas[i], dict) else {}
+            name = (
+                str(meta.get("file_name") or meta.get("filename") or "").strip()
+                or Path(str(meta.get("file_path") or "")).name
+            )
+            if name.lower() == want:
+                hit.append(str(doc_id))
+        return hit
+
     def collect_course_note_ids(self) -> list[str]:
         from semantic_search.app.knowledge_scope import is_course_note
 

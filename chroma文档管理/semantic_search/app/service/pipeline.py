@@ -90,21 +90,41 @@ def source_file_name(node: Any) -> str:
     return name or "未知文档"
 
 
-def node_key(node: NodeWithScore) -> str:
-    nid = getattr(node.node, "node_id", None) or getattr(node.node, "id_", None)
-    if nid:
-        return str(nid)
-    return node_plain_text(node)[:200]
+def source_page(node: Any) -> str | None:
+    n = getattr(node, "node", node)
+    meta = getattr(n, "metadata", None) or {}
+    for key in ("page_label", "page", "page_number", "page_num"):
+        value = meta.get(key)
+        if value is None or value == "":
+            continue
+        text = str(value).strip()
+        if text.endswith(".0") and text[:-2].isdigit():
+            text = text[:-2]
+        return text
+    return None
+
+
+def source_node_id(node: Any) -> str:
+    n = getattr(node, "node", node)
+    nid = getattr(n, "node_id", None) or getattr(n, "id_", None)
+    return str(nid or "")
 
 
 def format_source(rank: int, item: NodeWithScore) -> dict:
     score = float(item.score or 0.0)
     name = source_file_name(item)
+    page = source_page(item)
+    snippet = " ".join(node_plain_text(item).split())
+    location = f"第 {page} 页" if page else ""
     return {
         "rank": rank,
         "index": rank - 1,
         "file_name": name,
         "document": name,
+        "snippet": snippet[:800],
+        "page": page,
+        "location": location,
+        "node_id": source_node_id(item),
         "similarity": round(score, 4),
         "distance": (
             round(max(1.0 - score, 0.0), 4)
@@ -112,6 +132,13 @@ def format_source(rank: int, item: NodeWithScore) -> dict:
             else round(1 / (1 + score), 4)
         ),
     }
+
+
+def node_key(node: NodeWithScore) -> str:
+    nid = getattr(node.node, "node_id", None) or getattr(node.node, "id_", None)
+    if nid:
+        return str(nid)
+    return node_plain_text(node)[:200]
 
 
 def merge_nodes_rrf(
