@@ -130,13 +130,13 @@ class RagAskService:
         queries = prep["retrieval_queries"] or [question]
         ranked_lists: list[list[NodeWithScore]] = []
         retriever = self.engine._build_retriever(
-            k,
+            max(k * 4, 20),
             hybrid_enabled=use_hybrid,
             num_queries=max(1, int(num_queries or 1)),
             fusion_mode=fusion_mode,
         )
         for q in queries:
-            ranked_lists.append(list(retriever.retrieve(q)))
+            ranked_lists.append(drop_course_note_nodes(list(retriever.retrieve(q))))
         fuse_k = max(k, min(total, k * 2))
         fused = (
             merge_nodes_rrf(ranked_lists, k=fuse_k)
