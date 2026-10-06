@@ -1,5 +1,6 @@
-"""业务服务层：检索前优化 + RAG 问答编排。"""  # 包说明：对外暴露编排服务类
+"""业务服务层：检索前优化 + RAG 问答编排 + GraphRAG。"""
 
-from semantic_search.app.service.rag_service import RagAskService  # 导入问答编排服务
+from semantic_search.app.service.rag_service import RagAskService
+from semantic_search.app.service.graph_rag import GraphRagService
 
-__all__ = ["RagAskService"]  # 限制 from ...service import * 时仅导出该类
+__all__ = ["RagAskService", "GraphRagService"]

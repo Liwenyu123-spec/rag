@@ -20,9 +20,11 @@ from semantic_search.app.config import (  # 从配置模块导入密钥、模型
     DEEPSEEK_API_KEY,  # DeepSeek API Key（优先读 Windows 环境变量）
     EMBEDDING_MODEL,  # 向量化模型名，如 BAAI/bge-small-zh-v1.5
     EMBEDDING_PROVIDER,  # 向量化提供方：huggingface 或 dashscope
+    GRAPH_RAG_ENABLED,  # GraphRAG 总开关
     HOST,  # 服务监听地址，默认 127.0.0.1
     LLM_MODEL,  # 大模型名称，如 deepseek-v4-flash
     LLM_PROVIDER,  # 大模型提供方：deepseek 或 dashscope
+    NEO4J_PASSWORD,  # Neo4j 密码
     PORT,  # 服务端口，默认 8003
 )  # 括号结束
 from semantic_search.app.engine import SUPPORTED_EXTS, SemanticSearchEngine  # 引擎 + 允许的文件扩展名
@@ -35,6 +37,9 @@ from semantic_search.app.schemas import (  # Pydantic 请求/响应模型，给�
     CragInfo,  # Corrective RAG 过程信息
     DocumentResponse,  # 单条检索结果（文档片段 + 相似度）
     GenerationEvalInfo,  # 生成质量评估
+    GraphBuildRequest,  # GraphRAG 构建请求
+    GraphQueryRequest,  # GraphRAG 问答请求
+    GraphRetrieveRequest,  # GraphRAG 仅检索请求
     IngestRequest,  # 从本地文件/目录导入的请求体
     OptimizeFlags,  # 本次实际生效的优化开关
     PreRetrievalInfo,  # 检索前优化中间信息
@@ -51,7 +56,7 @@ from semantic_search.app.schemas import (  # Pydantic 请求/响应模型，给�
     SearchResponse,  # 语义搜索响应体
 )  # 括号结束
 from semantic_search.app.modular_config import describe_module_graph, yaml_as_ask_defaults
-from semantic_search.app.service import RagAskService  # 业务编排：pre-retrieval → 检索 → 生成
+from semantic_search.app.service import GraphRagService, RagAskService
 from semantic_search.app.service.presets import PRESETS
 from semantic_search.app.service.rag_eval import (
     DEFAULT_RETRIEVAL_CASES,
@@ -73,6 +78,19 @@ def _require_engine(app: FastAPI) -> SemanticSearchEngine:  # 从 app 取出已�
     return engine  # 引擎可用，返回给路由函数继续用
 
 
+def _require_graph_rag(app: FastAPI) -> GraphRagService:
+    service = getattr(app.state, "graph_rag", None)
+    if service is None:
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                "GraphRAG 未初始化。请配置 DASHSCOPE_API_KEY、NEO4J_PASSWORD，"
+                "并启动 Neo4j（bolt://localhost:7687，需 APOC）。"
+            ),
+        )
+    return service
+
+
 @asynccontextmanager  # 把下面函数变成「启动时进入 / 关闭时退出」的生命周期钩子
 async def lifespan(app: FastAPI):  # FastAPI 启动和关闭时都会走到这里
     print("=" * 50)  # 打印分隔线，方便在终端里辨认启动日志
@@ -92,6 +110,22 @@ async def lifespan(app: FastAPI):  # FastAPI 启动和关闭时都会走到这�
             print("错误: 未找到 DEEPSEEK_API_KEY（进程 / .env / Windows 用户环境变量）")  # DeepSeek 缺 Key
         else:  # 当前是 dashscope 提供方
             print("错误: 未找到 DASHSCOPE_API_KEY")  # 千问密钥缺失提示
+
+    # GraphRAG：需要千问 Key + Neo4j 密码；缺配时接口返回 503，不影响向量 RAG
+    app.state.graph_rag = None
+    if GRAPH_RAG_ENABLED and DASHSCOPE_API_KEY and NEO4J_PASSWORD:
+        try:
+            app.state.graph_rag = GraphRagService()
+            print("GraphRAG 已就绪（Neo4jPropertyGraphStore + 千问）")
+        except Exception as exc:  # noqa: BLE001
+            print(f"警告: GraphRAG 初始化失败: {exc}")
+    elif GRAPH_RAG_ENABLED:
+        missing = []
+        if not DASHSCOPE_API_KEY:
+            missing.append("DASHSCOPE_API_KEY")
+        if not NEO4J_PASSWORD:
+            missing.append("NEO4J_PASSWORD")
+        print(f"提示: GraphRAG 未启用，缺少 {', '.join(missing)}")
 
     print("=" * 50)  # 启动阶段结束分隔线
     yield  # 这里之后应用正式对外提供请求；yield 返回后进入关闭阶段
@@ -135,6 +169,11 @@ async def api_info():  # 方便程序或调试查看有哪些入口
         "eval_retrieval": "POST /eval/retrieval",  # Hit Rate / MRR
         "chat": "POST /chat",  # 多轮对话接口
         "ingest": "POST /ingest",  # 本地文件导入接口
+        "graph_status": "GET /graph/status",
+        "graph_build": "POST /graph/build",
+        "graph_load": "POST /graph/load",
+        "graph_query": "POST /graph/query",
+        "graph_retrieve": "POST /graph/retrieve",
     }  # 字典/集合结束
 
 
@@ -440,14 +479,70 @@ async def get_stats():  # 统计接口
     return _require_engine(app).get_stats()  # 直接返回引擎统计字典
 
 
+@app.get("/graph/status")
+async def graph_status():
+    """GraphRAG / Neo4j 连通性与配置摘要。"""
+    service = getattr(app.state, "graph_rag", None)
+    if service is None:
+        return {
+            "ready": False,
+            "message": "GraphRAG 未初始化（需 DASHSCOPE_API_KEY + NEO4J_PASSWORD + Neo4j）",
+            "dashscope_configured": bool(DASHSCOPE_API_KEY),
+            "neo4j_password_configured": bool(NEO4J_PASSWORD),
+        }
+    return service.status()
+
+
+@app.post("/graph/build")
+async def graph_build(request: GraphBuildRequest):
+    """从文本抽取三元组写入 Neo4j（Simple / Schema 抽取器）。"""
+    try:
+        return _require_graph_rag(app).build_from_texts(
+            request.texts, extractor=request.extractor
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=503, detail=f"图谱构建失败: {exc}") from exc
+
+
+@app.post("/graph/load")
+async def graph_load():
+    """从已有 Neo4j 图谱加载 PropertyGraphIndex。"""
+    try:
+        return _require_graph_rag(app).load_existing()
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=503, detail=f"加载图谱失败: {exc}") from exc
+
+
+@app.post("/graph/query")
+async def graph_query(request: GraphQueryRequest):
+    """GraphRAG 自然语言问答。"""
+    try:
+        return _require_graph_rag(app).query(request.question, k=request.k)
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=503, detail=f"GraphRAG 问答失败: {exc}") from exc
+
+
+@app.post("/graph/retrieve")
+async def graph_retrieve(request: GraphRetrieveRequest):
+    """只检索图谱子图/节点，不生成答案。"""
+    try:
+        return _require_graph_rag(app).retrieve(request.question, k=request.k)
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=503, detail=f"图谱检索失败: {exc}") from exc
+
+
 @app.get("/health")  # 健康检查：前端侧栏会轮询这个接口
 async def health_check():  # 健康检查接口
     """健康检查，用于确认服务与配置是否可用。"""  # 接口说明
     engine = getattr(app.state, "search_engine", None)  # 不强制抛错，方便前端显示状态
+    graph = getattr(app.state, "graph_rag", None)
     if engine is None:  # 引擎没起来
         return {  # 返回 error 状态而不是抛异常
             "status": "error",  # 前端侧栏显示红点
             "message": "搜索引擎未初始化，请在 Windows 用户环境变量中配置 DEEPSEEK_API_KEY",  # 缺 Key 提示
+            "graph_rag_ready": graph is not None,
         }  # 字典/集合结束
 
     stats = engine.get_stats()  # 读取运行时统计
@@ -459,6 +554,7 @@ async def health_check():  # 健康检查接口
         "llm_model": stats["llm_model"],  # LLM 模型名
         "total_documents": stats["total_documents"],  # 向量库文档数
         "index_type": stats["index_type"],  # 索引类型说明
+        "graph_rag_ready": graph is not None,
     }  # 字典/集合结束
 
 

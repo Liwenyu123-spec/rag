@@ -258,3 +258,25 @@ class RetrievalEvalResponse(BaseModel):  # /eval/retrieval 响应体
     current: RetrievalEvalBundle | None = None
     baseline: RetrievalEvalBundle | None = None
     delta: RetrievalEvalDelta | None = None
+
+
+# ----- GraphRAG（Neo4j PropertyGraphIndex）-----
+class GraphBuildRequest(BaseModel):
+    texts: List[str] | None = Field(
+        None,
+        description="待抽取文本；为空则用讲义苹果/乔布斯示例",
+    )
+    extractor: str = Field(
+        "simple",
+        description="simple=SimpleLLMPathExtractor；schema=SchemaLLMPathExtractor",
+    )
+
+
+class GraphQueryRequest(BaseModel):
+    question: str = Field(..., min_length=1, description="自然语言问题")
+    k: int = Field(5, ge=1, le=50, description="similarity_top_k")
+
+
+class GraphRetrieveRequest(BaseModel):
+    question: str = Field(..., min_length=1, description="自然语言问题")
+    k: int = Field(5, ge=1, le=50, description="similarity_top_k")

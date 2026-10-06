@@ -142,3 +142,14 @@ EVAL_VERBOSE = _env_bool("EVAL_VERBOSE", True)  # 评估过程日志
 
 HOST = os.getenv("SEARCH_HOST", "127.0.0.1")  # Web 服务监听地址
 PORT = int(os.getenv("SEARCH_PORT", "8003"))  # 默认 8003，避免和「带安全校验的聊天机器人」8001 冲突
+
+# ----- GraphRAG（飞书 02_GraphRag的使用：PropertyGraphIndex + Neo4j + 千问）-----
+NEO4J_URI = os.getenv("NEO4J_URI", "bolt://localhost:7687").strip()  # Bolt，不是 7474
+NEO4J_USERNAME = (
+    os.getenv("NEO4J_USERNAME") or os.getenv("NEO4J_USER") or "neo4j"
+).strip()  # 默认 neo4j
+NEO4J_PASSWORD = os.getenv("NEO4J_PASSWORD", "").strip()  # 必填：首次改密后的密码
+GRAPH_LLM_MODEL = os.getenv("GRAPH_LLM_MODEL", "qwen-plus").strip()  # 抽取/生成建议 qwen-plus
+GRAPH_EMBED_MODEL = os.getenv("GRAPH_EMBED_MODEL", "text-embedding-v4").strip()  # 实体向量
+GRAPH_EXTRACTOR = os.getenv("GRAPH_EXTRACTOR", "simple").strip().lower()  # simple | schema
+GRAPH_RAG_ENABLED = _env_bool("GRAPH_RAG_ENABLED", True)  # 总开关：缺依赖时可关
