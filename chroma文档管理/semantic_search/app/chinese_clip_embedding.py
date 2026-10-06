@@ -91,7 +91,12 @@ class ChineseCLIPEmbedding(BaseEmbedding):
                     return_tensors="pt",
                 )
             inputs = {k: v.to(device) for k, v in inputs.items() if torch.is_tensor(v)}
-            feats = model.get_text_features(**inputs)
+            # transformers≥5：get_text_features 返回 BaseModelOutputWithPooling，
+            # 投影后的文本向量在 pooler_output（512 维）
+            text_out = model.get_text_features(**inputs)
+            feats = getattr(text_out, "pooler_output", text_out)
+            if not torch.is_tensor(feats):
+                raise RuntimeError(f"Chinese-CLIP 文本向量类型异常: {type(text_out)}")
             if self.normalize:
                 feats = feats / feats.norm(p=2, dim=-1, keepdim=True)
             return feats.detach().cpu().tolist()
