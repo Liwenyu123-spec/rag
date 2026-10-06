@@ -79,7 +79,7 @@ class ChromaSlot(VectorSlot):
         if not value:
             return False
         try:
-            data = self.collection.get(where={key: str(value)}, limit=1, include=[])
+            data = self.collection.get(where={key: str(value)}, limit=1)
             return bool(data.get("ids"))
         except Exception:
             return False
@@ -149,10 +149,14 @@ class QdrantSlot(VectorSlot):
         try:
             from qdrant_client.http.models import FieldCondition, Filter, MatchValue
 
+            target = str(value)
             records, _ = self.client.scroll(
                 collection_name=self.collection_name,
                 scroll_filter=Filter(
-                    must=[FieldCondition(key=key, match=MatchValue(value=str(value)))]
+                    should=[
+                        FieldCondition(key=key, match=MatchValue(value=target)),
+                        FieldCondition(key=f"metadata.{key}", match=MatchValue(value=target)),
+                    ]
                 ),
                 limit=1,
                 with_payload=False,
