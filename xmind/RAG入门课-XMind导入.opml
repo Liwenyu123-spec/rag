@@ -1775,6 +1775,9 @@
           <outline text="第 13 章：chroma文档管理 全链路文件/API/开关对照"/>
           <outline text="第 14 章：RAG 评估（Hit/MRR + Faithfulness 等，量化优化）"/>
           <outline text="第 15 章：Modular RAG（模块化编排 + 配置驱动，对齐飞书 01）"/>
+          <outline text="第 16 章：知识图谱理论 + Neo4j/Cypher"/>
+          <outline text="第 17 章：GraphRAG 使用（PropertyGraphIndex + 抽取器）"/>
+          <outline text="第 18 章：多模态 RAG（Chinese-CLIP / 图文检索）"/>
         </outline>
       </outline>
       <outline text="08 检索前优化（Pre-retrieval）">
@@ -3895,6 +3898,191 @@
           <outline text="Neo4j Community（NEO4J_HOME + neo4j console）"/>
           <outline text="Python：pip install neo4j（官方驱动）"/>
           <outline text="可选：llama-index 图谱相关包、spaCy NER（后续实验再加）"/>
+        </outline>
+      </outline>
+      <outline text="17 GraphRAG 的使用（LlamaIndex + Neo4j）">
+        <outline text="〇、总览：和上一章怎么接">
+          <outline text="上一章：知识图谱理论、构建流程（NER→关系抽取→入库）、手写 Cypher 操作 Neo4j"/>
+          <outline text="本章：用 LlamaIndex PropertyGraphIndex 自动从非结构化文本抽三元组并问答"/>
+          <outline text="讲义默认千问 DashScope；本仓库可用 DeepSeek 抽取/生成 + 本地 Chinese-CLIP 向量"/>
+          <outline text="核心工作流">
+            <outline text="Documents → kg_extractors（LLM 抽三元组）"/>
+            <outline text="实体-关系-实体 + 文本块 → Neo4jPropertyGraphStore（+ 实体节点向量）"/>
+            <outline text="as_query_engine / as_retriever → 实体检索 + 图遍历 → LLM 生成"/>
+          </outline>
+        </outline>
+        <outline text="术语定义（本章必背）">
+          <outline text="PropertyGraphIndex：LlamaIndex 属性图索引，管抽取、落库、问答"/>
+          <outline text="Neo4jPropertyGraphStore：把属性图接到 Neo4j Bolt"/>
+          <outline text="SimpleLLMPathExtractor：开放式抽路径，不限类型，噪声大"/>
+          <outline text="SchemaLLMPathExtractor：限定实体/关系/合法三元组，生产更稳"/>
+          <outline text="embed_kg_nodes：给图谱节点做向量，才能语义召回实体"/>
+          <outline text="from_existing：从已有 Neo4j 加载索引，不再重新扫文档"/>
+          <outline text="LLMSynonymRetriever：用 LLM 把问句关键词扩成同义词去匹配实体"/>
+          <outline text="VectorContextRetriever：用向量语义召回相关实体，再沿图走邻居"/>
+        </outline>
+        <outline text="1、环境准备">
+          <outline text="pip：llama-index-core / llms-dashscope / embeddings-dashscope / graph-stores-neo4j"/>
+          <outline text="本仓库还可能用 llama-index-llms-deepseek + 本地 Chinese-CLIP"/>
+          <outline text="Neo4j 已启动：bolt://localhost:7687，用户名密码配好"/>
+          <outline text="需 APOC 插件（部分图存储操作依赖）"/>
+          <outline text="讲义：DASHSCOPE_API_KEY；本仓库：DEEPSEEK_API_KEY + NEO4J_PASSWORD"/>
+        </outline>
+        <outline text="2、全局配置：LLM + Embedding">
+          <outline text="讲义：Settings.llm = DashScope(qwen-plus)；Settings.embed_model = DashScopeEmbedding(text-embedding-v4)"/>
+          <outline text="抽取对指令遵循要求高，不要用过小的模型"/>
+          <outline text="Embedding 给每个实体节点做向量，用于语义召回"/>
+          <outline text="本仓库注意：不要用全局 Settings 冲掉向量引擎的模型；GraphRagService 用自己的 llm/embed_model"/>
+          <outline text="DeepSeek 无 Embedding API → 图谱向量用 Chinese-CLIP / HuggingFace / 千问"/>
+        </outline>
+        <outline text="3、连接 Neo4j 图存储">
+          <outline text="Neo4jPropertyGraphStore(username, password, url=bolt://localhost:7687)"/>
+          <outline text="Bolt 是 7687，浏览器是 7474，不要填错"/>
+          <outline text="密码必须是首次改密后的密码，空密码连不上"/>
+        </outline>
+        <outline text="4、自动构建知识图谱">
+          <outline text="方式一 SimpleLLMPathExtractor（开放式）">
+            <outline text="不限定实体/关系类型，LLM 自由抽路径"/>
+            <outline text="适合探索、demo、schema 未定"/>
+            <outline text="风险：类型乱、关系名不统一、噪声三元组多"/>
+            <outline text="参数例：max_paths_per_chunk、num_workers"/>
+          </outline>
+          <outline text="方式二 SchemaLLMPathExtractor（生产推荐）">
+            <outline text="possible_entities：如 PERSON / COMPANY / SCHOOL / LOCATION"/>
+            <outline text="possible_relations：如 CO_FOUNDED / STUDIED_AT / LOCATED_AT"/>
+            <outline text="kg_validation_schema：合法三元组，如 PERSON-CO_FOUNDED-COMPANY"/>
+            <outline text="strict=True：不符合 schema 的丢掉"/>
+            <outline text="max_triplets_per_chunk：每块最多抽几条"/>
+          </outline>
+          <outline text="from_documents 要点">
+            <outline text="kg_extractors=[抽取器]"/>
+            <outline text="property_graph_store=graph_store"/>
+            <outline text="embed_kg_nodes=True：节点可语义检索"/>
+            <outline text="show_progress=True"/>
+            <outline text="示例文本：乔布斯/沃兹/苹果/库比蒂诺"/>
+          </outline>
+          <outline text="空库不要 from_existing；先 build 再问答"/>
+          <outline text="前端也可手工写入三元组（不走 LLM 抽取）"/>
+        </outline>
+        <outline text="5、自然语言问答">
+          <outline text="加载：PropertyGraphIndex.from_existing(property_graph_store, embed_kg_nodes=True)"/>
+          <outline text="Embedding 必须与构建时一致，否则向量对不上"/>
+          <outline text="as_query_engine">
+            <outline text="include_text=True：答案带来源文本"/>
+            <outline text="similarity_top_k：召回实体/子图条数"/>
+            <outline text="内部：同义词实体匹配 + 向量召回实体 + 图遍历邻居 + LLM 生成"/>
+            <outline text="例：沃兹尼亚克的母校？和谁一起创立苹果？"/>
+          </outline>
+          <outline text="as_retriever">
+            <outline text="只拿子图/节点，自己后续处理或与向量通道融合"/>
+            <outline text="本仓库 /ask 双通道：图谱片段标 [图谱] 拼在向量结果前"/>
+          </outline>
+          <outline text="只走图：前端「图谱问答」→ POST /graph/query"/>
+        </outline>
+        <outline text="6、LlamaIndex 方案 vs 手写 Cypher">
+          <outline text="Cypher：精确路径、毫秒级、白盒可解释；要会写 MATCH，问法受 schema 限制"/>
+          <outline text="LlamaIndex GraphRAG：自然语言、自动抽取、开放问法；抽取可能幻觉、速度秒级"/>
+          <outline text="实践：schema 约束抽取 + 必要时手工三元组/Cypher 补洞 + 向量通道补语义"/>
+          <outline text="不要用 GraphRAG 替代所有向量检索：多跳/关系题走图，模糊语义走向量"/>
+        </outline>
+        <outline text="和本仓库的对应">
+          <outline text="graph_rag.py：build_from_texts / files / add_manual_triple / query / retrieve"/>
+          <outline text="路由：/graph/build /triple /load /query /retrieve"/>
+          <outline text="AskPipeline 的 graph_retrieve 模块；预设 graph_hybrid"/>
+          <outline text="Neo4j 未开：向量 RAG 照常用，图谱跳过"/>
+        </outline>
+      </outline>
+      <outline text="18 多模态 RAG（LlamaIndex + Chinese-CLIP）">
+        <outline text="第一部分：课程概述与预备知识">
+          <outline text="1、什么是多模态 RAG（MRAG）">
+            <outline text="传统 RAG 主要处理纯文本；PDF/手册里的图、表、扫描件常被丢掉或变成无意义占位"/>
+            <outline text="MRAG：同时处理文本、图像、音频、视频等，跨模态对齐到统一/可比较空间"/>
+            <outline text="核心能力：以文搜图、以图搜图、图文混合问答"/>
+            <outline text="严格「以图搜文」需要图和文在同一向量空间；实践常是以图搜图再带描述，或先 LMM 看图成文再检索"/>
+          </outline>
+          <outline text="2、为什么需要">
+            <outline text="企业文档约 50%~80% 关键信息在图表/流程/截图里"/>
+            <outline text="用户会问「架构图里网关在哪一层」「第 12 页红按钮做什么」——离开图像答不了"/>
+            <outline text="电商以图搜商品、医疗以影像找相似病例"/>
+            <outline text="LMM 能看图说话，比只靠 OCR 二手文字更靠谱"/>
+            <outline text="一句话：检索和生成都建立在文档的全部信息上，不只文字"/>
+          </outline>
+          <outline text="3、技术架构三大件">
+            <outline text="多模态编码器：把文本/图像编到统一或可比较向量空间"/>
+            <outline text="向量库：常分文本集合 + 图像集合，做跨模态近邻检索"/>
+            <outline text="多模态大模型 LMM：吃图文混合上下文再生成"/>
+            <outline text="数据流：解析→图文分块→向量化→入库→跨模态检索→重排/融合→图文 Prompt→LMM→输出"/>
+          </outline>
+        </outline>
+        <outline text="第二部分：关键流程模块">
+          <outline text="1 文档解析与分块：PDF 抽图+抽文；图块保留视觉，文本块保留段落；元数据绑页码/图号"/>
+          <outline text="2 Embedding：文本塔 + 图像塔（CLIP 类）；维数必须一致才能比"/>
+          <outline text="3 存储：向量 + 元数据（路径、caption、bbox）；图文可分 collection"/>
+          <outline text="4 语义检索：文查文、文查图、图查图；以图搜文要同一空间或走转换路径"/>
+          <outline text="5 融合：多路召回（文/图）再 RRF 或加权"/>
+          <outline text="6 构建多模态 Prompt：文本片段 + 图像一起塞给 LMM"/>
+          <outline text="7 LMM 生成：看图+读文作答，要求引用图号/页码"/>
+          <outline text="8 输出：答案 + 引用图/文来源"/>
+        </outline>
+        <outline text="第三部分：核心技术原理">
+          <outline text="1、统一向量空间（基石）">
+            <outline text="对比学习：图文配对拉近、非配对推远（CLIP）"/>
+            <outline text="同一空间才能「文字描述」命中「图片」"/>
+            <outline text="中文要用中文 CLIP（Chinese-CLIP），英文 CLIP 对中文对齐差"/>
+          </outline>
+          <outline text="2、两种检索策略">
+            <outline text="策略 A：双塔 CLIP——查询编一次，和库里向量做 ANN"/>
+            <outline text="策略 B：先把图变成文字（caption/OCR）再走纯文本 RAG，实现简单但损失视觉细节"/>
+            <outline text="选择：要精细看图选 A+LMM；只要图意大意选 B 更快"/>
+          </outline>
+          <outline text="3、多模态大模型 LMM：GPT-4o、Qwen-VL、Gemini 等，负责看图作答而不是只做检索"/>
+          <outline text="4、进阶 ColPali / late-interaction">
+            <outline text="把整页当图像，用视觉 token 与查询 late interaction"/>
+            <outline text="适合扫描件、复杂版式，少依赖 OCR"/>
+            <outline text="代价：算力和存储高于双塔 CLIP"/>
+          </outline>
+        </outline>
+        <outline text="第四部分：LlamaIndex 实现——图文双向检索">
+          <outline text="1、为什么不用内置 ClipEmbedding">
+            <outline text="官方 CLIP 以英文为主，中文 query/文档对齐差"/>
+            <outline text="课程用自定义 Chinese-CLIP 接到 LlamaIndex BaseEmbedding"/>
+          </outline>
+          <outline text="2、环境准备">
+            <outline text="transformers + torch；本地权重如 chinese-clip-vit-base-patch16"/>
+            <outline text="LlamaIndex MultiModalVectorStoreIndex / 图像加载器"/>
+            <outline text="本仓库：H:\二阶段\chinese-clip-vit-base-patch16；chinese_clip_embedding.py"/>
+          </outline>
+          <outline text="3、自定义 Chinese-CLIP">
+            <outline text="文本：get_text_features → pooler_output（注意不要把 BaseModelOutput 当 tensor）"/>
+            <outline text="图像：get_image_features；两边 L2 归一化后才能余弦比较"/>
+            <outline text="维数：ViT-Base Patch16 常见 512 维，和纯文本 bge 维数不同，勿混进同一 Chroma 集合"/>
+          </outline>
+          <outline text="4、构建多模态索引：文本节点 + 图像节点分存或同空间双集合"/>
+          <outline text="5、图文双向检索：以文搜图 / 以图搜图；元数据带回原图路径"/>
+          <outline text="6、接入 LMM 看图作答：把召回图+文组成多模态消息"/>
+        </outline>
+        <outline text="第五部分：进阶优化与实践">
+          <outline text="1 文档解析：高分辨率渲染、表格单独抽、图注当 caption"/>
+          <outline text="2 检索策略">
+            <outline text="2.1 嵌入空间对齐：同一套 CLIP，不要文用 bge、图用 CLIP 却硬比"/>
+            <outline text="2.2 索引结构：文集合 / 图集合 / 可选多表示"/>
+            <outline text="2.3 查询理解：图问句可先改写或生成 caption"/>
+            <outline text="2.4 跨模态重排：用 LMM 或跨模态 reranker 打分"/>
+            <outline text="2.5 融合：RRF / 加权；图文证据都保留"/>
+            <outline text="2.6 场景：手册看图问答、以图搜商品、扫描试卷"/>
+          </outline>
+          <outline text="3、常见问题">
+            <outline text="中文差：换 Chinese-CLIP，不要用英文 CLIP"/>
+            <outline text="维数冲突：CLIP 512 与 bge 384/768 不能塞同一 collection"/>
+            <outline text="只开了文本塔：本仓库当前默认用 CLIP 做文本 embedding，完整看图检索需再接图像塔+LMM"/>
+            <outline text="解析把图丢掉：检查 PDF loader 是否 extract 图像"/>
+          </outline>
+        </outline>
+        <outline text="和前面章节 / 本仓库">
+          <outline text="第 04 章 Embedding、第 05 章向量库：MRAG 是它们的跨模态扩展"/>
+          <outline text="第 06 章 Native RAG 仍是文本主链路；MRAG 不替代文字 RAG"/>
+          <outline text="第 16/17 章图谱：关系走图，版式/截图走多模态"/>
+          <outline text="落点：chinese_clip_embedding.py；图谱通道也可配 GRAPH_EMBED_PROVIDER=chinese_clip"/>
         </outline>
       </outline>
     </outline>

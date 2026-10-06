@@ -1,5 +1,5 @@
 # RAG入门课
-根据飞书讲义整理：认知阶段、提示词、RAG整体认知、Embedding、向量数据库、Native RAG、Advanced RAG、检索前/中/后优化（Pre / Retrieval / Post-retrieval）、Self-RAG、Corrective RAG（CRAG）、RAG 评估、Modular RAG、知识图谱（Neo4j/GraphRAG）。
+根据飞书讲义整理：认知阶段、提示词、RAG整体认知、Embedding、向量数据库、Native RAG、Advanced RAG、检索前/中/后优化（Pre / Retrieval / Post-retrieval）、Self-RAG、Corrective RAG（CRAG）、RAG 评估、Modular RAG、知识图谱（Neo4j）、GraphRAG 使用（PropertyGraphIndex）、多模态 RAG（Chinese-CLIP）。
 
 ## 01 认知阶段：大模型介绍、调用、RAG
 飞书文档：01-认知阶段（大模型介绍，调用，RAG）
@@ -2854,6 +2854,12 @@ AI 和 GAI 都是提出目标，GAI 的目标更具体
 #### 第 14 章：RAG 评估（Hit/MRR + Faithfulness 等，量化优化）
 
 #### 第 15 章：Modular RAG（模块化编排 + 配置驱动，对齐飞书 01）
+
+#### 第 16 章：知识图谱理论 + Neo4j/Cypher
+
+#### 第 17 章：GraphRAG 使用（PropertyGraphIndex + 抽取器）
+
+#### 第 18 章：多模态 RAG（Chinese-CLIP / 图文检索）
 
 ## 08 检索前优化（Pre-retrieval）
 每种方法按：适用场景 → 输入 → 分步分解 → 输出 → 完整例子 → 翻车点。
@@ -6215,3 +6221,314 @@ https://ecnwvcdzorsp.feishu.cn/docx/IYDbddFpSoRqwpxW8fJceOWjnBd
 #### Python：pip install neo4j（官方驱动）
 
 #### 可选：llama-index 图谱相关包、spaCy NER（后续实验再加）
+
+## 17 GraphRAG 的使用（LlamaIndex + Neo4j）
+飞书：02_GraphRag的使用
+https://ecnwvcdzorsp.feishu.cn/docx/N1g7d1g9GodJ5wxvjKicYDJrnVc
+密码：2763X6#3
+第 16 章是理论+Cypher；本章把文档→抽三元组→Neo4j→自然语言问答打通。
+本仓库：graph_rag.py；LLM 默认 DeepSeek，Embedding 默认 Chinese-CLIP（DeepSeek 无向量接口）。
+
+### 〇、总览：和上一章怎么接
+
+#### 上一章：知识图谱理论、构建流程（NER→关系抽取→入库）、手写 Cypher 操作 Neo4j
+
+#### 本章：用 LlamaIndex PropertyGraphIndex 自动从非结构化文本抽三元组并问答
+
+#### 讲义默认千问 DashScope；本仓库可用 DeepSeek 抽取/生成 + 本地 Chinese-CLIP 向量
+
+#### 核心工作流
+
+##### Documents → kg_extractors（LLM 抽三元组）
+
+##### 实体-关系-实体 + 文本块 → Neo4jPropertyGraphStore（+ 实体节点向量）
+
+##### as_query_engine / as_retriever → 实体检索 + 图遍历 → LLM 生成
+
+### 术语定义（本章必背）
+
+#### PropertyGraphIndex：LlamaIndex 属性图索引，管抽取、落库、问答
+
+#### Neo4jPropertyGraphStore：把属性图接到 Neo4j Bolt
+
+#### SimpleLLMPathExtractor：开放式抽路径，不限类型，噪声大
+
+#### SchemaLLMPathExtractor：限定实体/关系/合法三元组，生产更稳
+
+#### embed_kg_nodes：给图谱节点做向量，才能语义召回实体
+
+#### from_existing：从已有 Neo4j 加载索引，不再重新扫文档
+
+#### LLMSynonymRetriever：用 LLM 把问句关键词扩成同义词去匹配实体
+
+#### VectorContextRetriever：用向量语义召回相关实体，再沿图走邻居
+
+### 1、环境准备
+
+#### pip：llama-index-core / llms-dashscope / embeddings-dashscope / graph-stores-neo4j
+
+#### 本仓库还可能用 llama-index-llms-deepseek + 本地 Chinese-CLIP
+
+#### Neo4j 已启动：bolt://localhost:7687，用户名密码配好
+
+#### 需 APOC 插件（部分图存储操作依赖）
+
+#### 讲义：DASHSCOPE_API_KEY；本仓库：DEEPSEEK_API_KEY + NEO4J_PASSWORD
+
+### 2、全局配置：LLM + Embedding
+
+#### 讲义：Settings.llm = DashScope(qwen-plus)；Settings.embed_model = DashScopeEmbedding(text-embedding-v4)
+
+#### 抽取对指令遵循要求高，不要用过小的模型
+
+#### Embedding 给每个实体节点做向量，用于语义召回
+
+#### 本仓库注意：不要用全局 Settings 冲掉向量引擎的模型；GraphRagService 用自己的 llm/embed_model
+
+#### DeepSeek 无 Embedding API → 图谱向量用 Chinese-CLIP / HuggingFace / 千问
+
+### 3、连接 Neo4j 图存储
+
+#### Neo4jPropertyGraphStore(username, password, url=bolt://localhost:7687)
+
+#### Bolt 是 7687，浏览器是 7474，不要填错
+
+#### 密码必须是首次改密后的密码，空密码连不上
+
+### 4、自动构建知识图谱
+
+#### 方式一 SimpleLLMPathExtractor（开放式）
+
+##### 不限定实体/关系类型，LLM 自由抽路径
+
+##### 适合探索、demo、schema 未定
+
+##### 风险：类型乱、关系名不统一、噪声三元组多
+
+##### 参数例：max_paths_per_chunk、num_workers
+
+#### 方式二 SchemaLLMPathExtractor（生产推荐）
+
+##### possible_entities：如 PERSON / COMPANY / SCHOOL / LOCATION
+
+##### possible_relations：如 CO_FOUNDED / STUDIED_AT / LOCATED_AT
+
+##### kg_validation_schema：合法三元组，如 PERSON-CO_FOUNDED-COMPANY
+
+##### strict=True：不符合 schema 的丢掉
+
+##### max_triplets_per_chunk：每块最多抽几条
+
+#### from_documents 要点
+
+##### kg_extractors=[抽取器]
+
+##### property_graph_store=graph_store
+
+##### embed_kg_nodes=True：节点可语义检索
+
+##### show_progress=True
+
+##### 示例文本：乔布斯/沃兹/苹果/库比蒂诺
+
+#### 空库不要 from_existing；先 build 再问答
+
+#### 前端也可手工写入三元组（不走 LLM 抽取）
+
+### 5、自然语言问答
+
+#### 加载：PropertyGraphIndex.from_existing(property_graph_store, embed_kg_nodes=True)
+
+#### Embedding 必须与构建时一致，否则向量对不上
+
+#### as_query_engine
+
+##### include_text=True：答案带来源文本
+
+##### similarity_top_k：召回实体/子图条数
+
+##### 内部：同义词实体匹配 + 向量召回实体 + 图遍历邻居 + LLM 生成
+
+##### 例：沃兹尼亚克的母校？和谁一起创立苹果？
+
+#### as_retriever
+
+##### 只拿子图/节点，自己后续处理或与向量通道融合
+
+##### 本仓库 /ask 双通道：图谱片段标 [图谱] 拼在向量结果前
+
+#### 只走图：前端「图谱问答」→ POST /graph/query
+
+### 6、LlamaIndex 方案 vs 手写 Cypher
+
+#### Cypher：精确路径、毫秒级、白盒可解释；要会写 MATCH，问法受 schema 限制
+
+#### LlamaIndex GraphRAG：自然语言、自动抽取、开放问法；抽取可能幻觉、速度秒级
+
+#### 实践：schema 约束抽取 + 必要时手工三元组/Cypher 补洞 + 向量通道补语义
+
+#### 不要用 GraphRAG 替代所有向量检索：多跳/关系题走图，模糊语义走向量
+
+### 和本仓库的对应
+
+#### graph_rag.py：build_from_texts / files / add_manual_triple / query / retrieve
+
+#### 路由：/graph/build /triple /load /query /retrieve
+
+#### AskPipeline 的 graph_retrieve 模块；预设 graph_hybrid
+
+#### Neo4j 未开：向量 RAG 照常用，图谱跳过
+
+## 18 多模态 RAG（LlamaIndex + Chinese-CLIP）
+飞书：01_多模态RAG(llamaxIndex)
+https://ecnwvcdzorsp.feishu.cn/docx/FlQQdIjlpo5o3IxjyTtcZiXgnNy
+密码：8&2L3413
+本仓库已有 ChineseCLIPEmbedding（文本塔），用于向量/图谱 embedding；完整图文索引与看图作答是本课进阶，可继续接到 LlamaIndex MultiModal。
+
+### 第一部分：课程概述与预备知识
+
+#### 1、什么是多模态 RAG（MRAG）
+
+##### 传统 RAG 主要处理纯文本；PDF/手册里的图、表、扫描件常被丢掉或变成无意义占位
+
+##### MRAG：同时处理文本、图像、音频、视频等，跨模态对齐到统一/可比较空间
+
+##### 核心能力：以文搜图、以图搜图、图文混合问答
+
+##### 严格「以图搜文」需要图和文在同一向量空间；实践常是以图搜图再带描述，或先 LMM 看图成文再检索
+
+#### 2、为什么需要
+
+##### 企业文档约 50%~80% 关键信息在图表/流程/截图里
+
+##### 用户会问「架构图里网关在哪一层」「第 12 页红按钮做什么」——离开图像答不了
+
+##### 电商以图搜商品、医疗以影像找相似病例
+
+##### LMM 能看图说话，比只靠 OCR 二手文字更靠谱
+
+##### 一句话：检索和生成都建立在文档的全部信息上，不只文字
+
+#### 3、技术架构三大件
+
+##### 多模态编码器：把文本/图像编到统一或可比较向量空间
+
+##### 向量库：常分文本集合 + 图像集合，做跨模态近邻检索
+
+##### 多模态大模型 LMM：吃图文混合上下文再生成
+
+##### 数据流：解析→图文分块→向量化→入库→跨模态检索→重排/融合→图文 Prompt→LMM→输出
+
+### 第二部分：关键流程模块
+
+#### 1 文档解析与分块：PDF 抽图+抽文；图块保留视觉，文本块保留段落；元数据绑页码/图号
+
+#### 2 Embedding：文本塔 + 图像塔（CLIP 类）；维数必须一致才能比
+
+#### 3 存储：向量 + 元数据（路径、caption、bbox）；图文可分 collection
+
+#### 4 语义检索：文查文、文查图、图查图；以图搜文要同一空间或走转换路径
+
+#### 5 融合：多路召回（文/图）再 RRF 或加权
+
+#### 6 构建多模态 Prompt：文本片段 + 图像一起塞给 LMM
+
+#### 7 LMM 生成：看图+读文作答，要求引用图号/页码
+
+#### 8 输出：答案 + 引用图/文来源
+
+### 第三部分：核心技术原理
+
+#### 1、统一向量空间（基石）
+
+##### 对比学习：图文配对拉近、非配对推远（CLIP）
+
+##### 同一空间才能「文字描述」命中「图片」
+
+##### 中文要用中文 CLIP（Chinese-CLIP），英文 CLIP 对中文对齐差
+
+#### 2、两种检索策略
+
+##### 策略 A：双塔 CLIP——查询编一次，和库里向量做 ANN
+
+##### 策略 B：先把图变成文字（caption/OCR）再走纯文本 RAG，实现简单但损失视觉细节
+
+##### 选择：要精细看图选 A+LMM；只要图意大意选 B 更快
+
+#### 3、多模态大模型 LMM：GPT-4o、Qwen-VL、Gemini 等，负责看图作答而不是只做检索
+
+#### 4、进阶 ColPali / late-interaction
+
+##### 把整页当图像，用视觉 token 与查询 late interaction
+
+##### 适合扫描件、复杂版式，少依赖 OCR
+
+##### 代价：算力和存储高于双塔 CLIP
+
+### 第四部分：LlamaIndex 实现——图文双向检索
+
+#### 1、为什么不用内置 ClipEmbedding
+
+##### 官方 CLIP 以英文为主，中文 query/文档对齐差
+
+##### 课程用自定义 Chinese-CLIP 接到 LlamaIndex BaseEmbedding
+
+#### 2、环境准备
+
+##### transformers + torch；本地权重如 chinese-clip-vit-base-patch16
+
+##### LlamaIndex MultiModalVectorStoreIndex / 图像加载器
+
+##### 本仓库：H:\二阶段\chinese-clip-vit-base-patch16；chinese_clip_embedding.py
+
+#### 3、自定义 Chinese-CLIP
+
+##### 文本：get_text_features → pooler_output（注意不要把 BaseModelOutput 当 tensor）
+
+##### 图像：get_image_features；两边 L2 归一化后才能余弦比较
+
+##### 维数：ViT-Base Patch16 常见 512 维，和纯文本 bge 维数不同，勿混进同一 Chroma 集合
+
+#### 4、构建多模态索引：文本节点 + 图像节点分存或同空间双集合
+
+#### 5、图文双向检索：以文搜图 / 以图搜图；元数据带回原图路径
+
+#### 6、接入 LMM 看图作答：把召回图+文组成多模态消息
+
+### 第五部分：进阶优化与实践
+
+#### 1 文档解析：高分辨率渲染、表格单独抽、图注当 caption
+
+#### 2 检索策略
+
+##### 2.1 嵌入空间对齐：同一套 CLIP，不要文用 bge、图用 CLIP 却硬比
+
+##### 2.2 索引结构：文集合 / 图集合 / 可选多表示
+
+##### 2.3 查询理解：图问句可先改写或生成 caption
+
+##### 2.4 跨模态重排：用 LMM 或跨模态 reranker 打分
+
+##### 2.5 融合：RRF / 加权；图文证据都保留
+
+##### 2.6 场景：手册看图问答、以图搜商品、扫描试卷
+
+#### 3、常见问题
+
+##### 中文差：换 Chinese-CLIP，不要用英文 CLIP
+
+##### 维数冲突：CLIP 512 与 bge 384/768 不能塞同一 collection
+
+##### 只开了文本塔：本仓库当前默认用 CLIP 做文本 embedding，完整看图检索需再接图像塔+LMM
+
+##### 解析把图丢掉：检查 PDF loader 是否 extract 图像
+
+### 和前面章节 / 本仓库
+
+#### 第 04 章 Embedding、第 05 章向量库：MRAG 是它们的跨模态扩展
+
+#### 第 06 章 Native RAG 仍是文本主链路；MRAG 不替代文字 RAG
+
+#### 第 16/17 章图谱：关系走图，版式/截图走多模态
+
+#### 落点：chinese_clip_embedding.py；图谱通道也可配 GRAPH_EMBED_PROVIDER=chinese_clip
