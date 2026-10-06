@@ -17,7 +17,12 @@ from semantic_search.app.config import (
     SELF_RAG_ENABLED,
     SIMILARITY_TOP_K,
 )
-from semantic_search.app.knowledge_scope import DEFAULT_SCOPE, filter_nodes_by_scope, normalize_scope
+from semantic_search.app.knowledge_scope import (
+    DEFAULT_SCOPE,
+    filter_nodes_by_scope,
+    normalize_scope,
+    resolve_query_scope,
+)
 from semantic_search.app.service.ask_modules import default_ask_modules
 from semantic_search.app.service.crag import apply_crag
 from semantic_search.app.modular_config import yaml_as_ask_defaults
@@ -232,6 +237,8 @@ class RagAskService:
         if preset_name and preset_name not in LEGAL_PRESETS:
             preset_name = None
 
+        requested_scope = normalize_scope(doc_scope or resolved.get("doc_scope"))
+        effective_scope, scope_note = resolve_query_scope(question, requested_scope)
         return {
             "preset": preset_name,
             "use_pre": flag_pre,
@@ -251,7 +258,8 @@ class RagAskService:
             "use_self_rag": _resolve_flag(resolved.get("use_self_rag", use_self_rag), SELF_RAG_ENABLED),
             "use_graph": _resolve_flag(resolved.get("use_graph", use_graph), False),
             "use_eval": bool(resolved.get("use_eval", use_eval) or False),
-            "doc_scope": normalize_scope(doc_scope or resolved.get("doc_scope")),
+            "doc_scope": effective_scope,
+            "scope_note": scope_note,
         }
 
     def ask(

@@ -27,7 +27,9 @@ from semantic_search.app.service.self_rag import (
 )
 
 ASK_QA_PROMPT = PromptTemplate(
-    f"{RAG_SYSTEM_PROMPT}。只依据给定上下文回答；上下文没有的信息请明确说不知道。\n\n"
+    f"{RAG_SYSTEM_PROMPT}。"
+    "只依据给定上下文回答。请把上下文中与问题相关的要点尽量归纳完整；"
+    "仅当上下文完全没有相关信息时才说不知道，不要因为只命中部分片段就断言知识库没有。\n\n"
     "上下文：\n"
     "---------------------\n"
     "{context_str}\n"
@@ -116,6 +118,19 @@ class VectorRetrieveModule(AskModule):
             if len(ranked) > 1
             else (ranked[0][:fuse_k] if ranked else [])
         )
+        if ctx.nodes or normalize_scope(flags.get("doc_scope")) == "all":
+            return
+        wide = ctx.engine._build_retriever(
+            max(ctx.k * 4, 20),
+            hybrid_enabled=bool(flags.get("use_hybrid")),
+            num_queries=max(1, int(flags.get("num_queries") or 1)),
+            fusion_mode=flags.get("fusion_mode"),
+            doc_scope="all",
+        )
+        ctx.nodes = filter_nodes_by_scope(list(wide.retrieve(queries[0])), "all")[:fuse_k]
+        if ctx.nodes:
+            flags["doc_scope"] = "all"
+            flags["scope_note"] = ((flags.get("scope_note") or "") + "；当前范围无命中，已扩大到全部文档").strip("；")
 
 
 class PostRetrieveModule(AskModule):

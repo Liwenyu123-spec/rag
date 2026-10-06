@@ -172,6 +172,7 @@ class OptimizeFlags(BaseModel):  # 本次实际生效的优化开关（回显给
     use_graph: bool = False  # 是否向量+图谱双通道
     use_eval: bool = False  # 是否做了生成评估
     doc_scope: str = "business"
+    scope_note: str = ""
     ran_modules: List[str] = Field(default_factory=list)  # 本次实际跑过的管线模块名
 
 

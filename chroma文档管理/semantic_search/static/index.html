@@ -1208,7 +1208,9 @@
                 <span class="opt-tag" :class="{ off: !msg.optimizations.use_self_rag }">Self-RAG{{ msg.optimizations.use_self_rag ? '' : '关' }}</span>
                 <span class="opt-tag" :class="{ off: !msg.optimizations.use_graph }">图谱{{ msg.optimizations.use_graph ? '' : '关' }}</span>
                 <span class="opt-tag" :class="{ off: !msg.optimizations.use_eval }">生成评估{{ msg.optimizations.use_eval ? '' : '关' }}</span>
+                <span class="opt-tag">范围·{{ scopeLabel(msg.optimizations.doc_scope) }}</span>
               </div>
+              <div class="pre-line" v-if="msg.optimizations.scope_note">{{ msg.optimizations.scope_note }}</div>
             </div>
             <div class="pre-box" v-if="msg.comparison">
               <strong>优化前 vs 优化后</strong>
@@ -1840,6 +1842,12 @@
           if (kind === 'business') return '制度与业务';
           return kind || '未分类';
         };
+        const scopeLabel = (s) => {
+          if (s === 'course') return '讲义课件';
+          if (s === 'business') return '制度与业务';
+          if (s === 'all') return '全部';
+          return s || '';
+        };
 
         const filteredLibrary = computed(() => {
           const q = libraryQuery.value.trim().toLowerCase();
@@ -2461,6 +2469,7 @@
           filteredImages,
           openLibrary,
           classLabel,
+          scopeLabel,
           historyList,
           historyHint,
           sessionId,

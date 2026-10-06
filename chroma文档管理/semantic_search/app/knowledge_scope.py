@@ -47,6 +47,21 @@ SCOPE_OPTIONS = [
 
 DEFAULT_SCOPE = "business"
 
+_COURSE_QUERY_RE = re.compile(
+    r"机器学习|深度学习|神经网络|支持向量机|决策树|随机森林|"
+    r"KNN|k近邻|朴素贝叶斯|聚类|K-?Means|DBSCAN|PCA|"
+    r"PyTorch|TensorFlow|BERT|Transformer|大模型|\bLLM\b|"
+    r"\bRAG\b|检索增强|向量数据库|Embedding|嵌入向量|"
+    r"Prompt|提示词|HyDE|GraphRAG|Self-RAG|CRAG|Modular|"
+    r"课件|讲义|复习笔记",
+    re.I,
+)
+_POLICY_QUERY_RE = re.compile(
+    r"请假|扣钱|考勤|迟到|早退|加班|工资|打卡|入职|离职|"
+    r"总部|贝壳|制度|社保|报销|出差",
+    re.I,
+)
+
 
 def _source_blob(path: str | Path | None = None, metadata: dict | None = None) -> str:
     parts: list[str] = []
@@ -142,6 +157,19 @@ def normalize_scope(scope: str | None) -> str:
     if raw not in {"business", "course", "all"} and not raw.startswith("."):
         raw = "." + raw
     return raw
+
+
+def resolve_query_scope(question: str, requested: str | None = None) -> tuple[str, str]:
+    """默认「制度与业务」时，课件类问题自动改走讲义，避免库里有却检不到。"""
+    want = normalize_scope(requested)
+    text = question or ""
+    if want != DEFAULT_SCOPE:
+        return want, ""
+    if _POLICY_QUERY_RE.search(text):
+        return "business", ""
+    if _COURSE_QUERY_RE.search(text):
+        return "course", "问题更像课件内容，已自动检索「讲义课件」"
+    return want, ""
 
 
 def node_matches_scope(

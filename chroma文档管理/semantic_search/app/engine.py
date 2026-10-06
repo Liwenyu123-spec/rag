@@ -15,6 +15,7 @@ from semantic_search.app.knowledge_scope import (
     classify_file,
     filter_nodes_by_scope,
     normalize_scope,
+    resolve_query_scope,
 )
 from llama_index.core import Document, Settings  # 文档、全局设置
 from llama_index.core.memory import ChatMemoryBuffer  # 多轮对话记忆缓冲区
@@ -468,7 +469,7 @@ class SemanticSearchEngine:  # Native RAG 引擎主体
         if k == 0:  # 极端兜底
             return []  # 无结果
 
-        scope = normalize_scope(doc_scope)
+        scope, _ = resolve_query_scope(query, doc_scope)
         retriever = self._build_retriever(candidate_top_k(k), doc_scope=scope)
         results = filter_nodes_by_scope(list(retriever.retrieve(query)), scope)
         results = apply_postprocessors(results, query, k)  # 检索后：重排/压缩/排版
