@@ -410,7 +410,13 @@
       border: 1px dashed #c5d4f5; background: #f3f7ff;
       color: #445062; font-size: 12px; line-height: 1.65;
     }
-    .pre-box strong { color: var(--blue); }
+    .cmp-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 8px; }
+    .cmp-col {
+      padding: 8px; border-radius: 10px; background: #f6f8fc; border: 1px solid var(--line);
+    }
+    .cmp-col h4 { font-size: 12px; margin-bottom: 6px; color: var(--blue); }
+    .cmp-col p { font-size: 12px; line-height: 1.55; color: #334155; white-space: pre-wrap; }
+    @media (max-width: 720px) { .cmp-grid { grid-template-columns: 1fr; } }
     .pre-box .pre-line { margin-top: 4px; word-break: break-word; }
     .input-area {
       padding: 16px 28px 22px; border-top: 1px solid var(--line); background: #fff;
@@ -739,9 +745,9 @@
             <input type="checkbox" v-model="optUseGraph" @change="askPreset='custom'" />
             <span>知识图谱双通道<small>Neo4j 子图 + 向量库拼接生成</small></span>
           </label>
-          <label class="opt-item" :class="{ on: optUseEval }">
-            <input type="checkbox" v-model="optUseEval" @change="askPreset='custom'" />
-            <span>生成质量评估<small>Faithfulness / Relevancy / Correctness</small></span>
+          <label class="opt-item" :class="{ on: optCompareBaseline }">
+            <input type="checkbox" v-model="optCompareBaseline" />
+            <span>对照基础 RAG<small>同时跑未优化版本，对比查询/召回/答案</small></span>
           </label>
           <textarea
             v-if="optUseEval"
@@ -896,6 +902,33 @@
                 <span class="opt-tag" :class="{ off: !msg.optimizations.use_self_rag }">Self-RAG{{ msg.optimizations.use_self_rag ? '' : '关' }}</span>
                 <span class="opt-tag" :class="{ off: !msg.optimizations.use_graph }">图谱{{ msg.optimizations.use_graph ? '' : '关' }}</span>
                 <span class="opt-tag" :class="{ off: !msg.optimizations.use_eval }">生成评估{{ msg.optimizations.use_eval ? '' : '关' }}</span>
+              </div>
+            </div>
+            <div class="pre-box" v-if="msg.comparison">
+              <strong>优化前 vs 优化后</strong>
+              <div class="pre-line">{{ msg.comparison.message }}</div>
+              <div class="pre-line" v-for="(c, ci) in (msg.comparison.changes || [])" :key="'d'+ci">· {{ c }}</div>
+              <div class="pre-line" v-if="msg.comparison.enabled">
+                召回重叠 {{ msg.comparison.source_overlap }}/{{ msg.comparison.source_union }}
+                · 答案{{ msg.comparison.answer_changed ? '已改变' : '相同' }}
+              </div>
+              <div class="cmp-grid" v-if="msg.comparison.enabled">
+                <div class="cmp-col">
+                  <h4>优化前（基础 RAG）</h4>
+                  <p>{{ msg.comparison.baseline_answer || '（无）' }}</p>
+                  <div class="pre-line" v-if="msg.comparison.baseline_queries?.length">查询：{{ msg.comparison.baseline_queries.join(' ｜ ') }}</div>
+                  <div class="pre-line" v-for="(s, si) in (msg.comparison.baseline_sources || [])" :key="'bs'+si">
+                    #{{ s.rank }} {{ s.preview }}
+                  </div>
+                </div>
+                <div class="cmp-col">
+                  <h4>优化后（当前勾选）</h4>
+                  <p>{{ msg.content }}</p>
+                  <div class="pre-line" v-if="msg.comparison.current_queries?.length">查询：{{ msg.comparison.current_queries.join(' ｜ ') }}</div>
+                  <div class="pre-line" v-for="(s, si) in (msg.comparison.current_sources || [])" :key="'cs'+si">
+                    #{{ s.rank }} {{ s.preview }}
+                  </div>
+                </div>
               </div>
             </div>
             <div class="pre-box" v-if="msg.preRetrieval && msg.optimizations?.use_pre">
@@ -1077,6 +1110,7 @@
         const optUseSelfRag = ref(false);
         const optUseGraph = ref(false);
         const optUseEval = ref(false);
+        const optCompareBaseline = ref(true);
         const evalReference = ref('');
         const evalLoading = ref(false);
         const evalRetrievalMsg = ref('');
@@ -1868,6 +1902,7 @@
                   use_self_rag: optUseSelfRag.value,
                   use_graph: optUseGraph.value,
                   use_eval: optUseEval.value,
+                  compare_baseline: optCompareBaseline.value,
                   reference: optUseEval.value && evalReference.value.trim()
                     ? evalReference.value.trim()
                     : null,
@@ -1916,6 +1951,7 @@
               botMsg.generationEval = data.generation_eval || null;
               botMsg.optimizations = data.optimizations || null;
               botMsg.graph = data.graph || null;
+              botMsg.comparison = data.comparison || null;
             }
           } catch (err) {
             botMsg.content = '请求失败：' + (err.message || String(err));
@@ -1976,6 +2012,7 @@
           optUseSelfRag,
           optUseGraph,
           optUseEval,
+          optCompareBaseline,
           evalReference,
           evalLoading,
           evalRetrievalMsg,

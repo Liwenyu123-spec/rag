@@ -404,3 +404,76 @@ class RagAskService:
             compare_baseline=False,
         )
         return _diff_ask_runs(baseline, current, flags)
+
+
+def _snip(text: str, n: int = 180) -> str:
+    raw = " ".join((text or "").split())
+    return raw if len(raw) <= n else raw[:n] + "…"
+
+
+def _src_key(src: dict) -> str:
+    return _snip(str(src.get("document") or ""), 96)
+
+
+def _diff_ask_runs(baseline: dict, current: dict, flags: dict) -> dict:
+    b_ans = str(baseline.get("answer") or "").strip()
+    c_ans = str(current.get("answer") or "").strip()
+    b_pre = baseline.get("pre_retrieval") or {}
+    c_pre = current.get("pre_retrieval") or {}
+    b_q = b_pre.get("retrieval_queries") or [b_pre.get("original_query") or ""]
+    c_q = c_pre.get("retrieval_queries") or [c_pre.get("original_query") or ""]
+    b_src = baseline.get("sources") or []
+    c_src = current.get("sources") or []
+    b_keys = [_src_key(s) for s in b_src]
+    c_keys = [_src_key(s) for s in c_src]
+    b_set, c_set = set(b_keys), set(c_keys)
+    overlap = len(b_set & c_set)
+    union = len(b_set | c_set) or 1
+    changes: list[str] = []
+    if flags.get("use_pre") and flags.get("strategy") not in {None, "", "none"}:
+        rewritten = c_pre.get("rewritten_query") or c_pre.get("step_back_query") or c_pre.get("hyde_doc")
+        if rewritten:
+            changes.append(
+                f"检索前（{flags.get('strategy')}）：「{_snip(b_pre.get('original_query') or '', 40)}」→「{_snip(str(rewritten), 60)}」"
+            )
+        elif c_q and b_q and c_q[0] != b_q[0]:
+            changes.append(f"检索查询变化：{_snip(b_q[0], 40)} → {_snip(c_q[0], 40)}")
+        else:
+            changes.append("已开检索前优化，查询句可能已清洗/重写")
+    if int(flags.get("num_queries") or 1) > 1:
+        changes.append(f"Multi-Query：{len(c_q)} 路查询再融合")
+    if flags.get("use_hybrid"):
+        changes.append(f"混合检索：{flags.get('fusion_mode') or 'reciprocal_rerank'}")
+    if flags.get("use_rerank"):
+        changes.append("检索后重排序已改变片段顺序/去留")
+    if flags.get("use_compress"):
+        changes.append("上下文压缩：可能删掉低相关句子")
+    if flags.get("use_crag"):
+        crag = current.get("crag") or {}
+        changes.append(f"CRAG：{crag.get('before_count', '?')} → {crag.get('after_count', '?')} 篇（{crag.get('message') or ''}）")
+    only_opt = [k for k in c_keys if k not in b_set]
+    only_base = [k for k in b_keys if k not in c_set]
+    if only_opt:
+        changes.append(f"优化后新召回 {len(only_opt)} 条")
+    if only_base:
+        changes.append(f"优化后不再召回 {len(only_base)} 条")
+    if b_ans != c_ans:
+        changes.append("最终答案已改变")
+    else:
+        changes.append("答案文本与基础 RAG 相同（召回或查询仍可能不同）")
+    return {
+        "enabled": True,
+        "message": "已对照基础 RAG（关闭检索前/后优化）",
+        "answer_changed": b_ans != c_ans,
+        "query_changed": list(b_q) != list(c_q),
+        "source_overlap": overlap,
+        "source_union": union,
+        "changes": changes,
+        "baseline_answer": b_ans,
+        "baseline_queries": [str(q) for q in b_q if q],
+        "current_queries": [str(q) for q in c_q if q],
+        "baseline_sources": [{"rank": s.get("rank"), "preview": _snip(s.get("document") or "")} for s in b_src],
+        "current_sources": [{"rank": s.get("rank"), "preview": _snip(s.get("document") or "")} for s in c_src],
+        "only_in_optimized": only_opt[:5],
+        "only_in_baseline": only_base[:5],
+    }
