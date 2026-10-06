@@ -1419,6 +1419,12 @@
             <div class="composer-bar">
             <button type="button" class="chip" :class="{ on: optUseThink }" @click="optUseThink = !optUseThink">深度思考</button>
             <button type="button" class="chip" :class="{ on: !!composerImages.length }" @click="openComposerImages">图片</button>
+            <button
+              type="button"
+              class="chip on"
+              v-if="composerImages.length"
+              @click="analyzeComposerImage"
+            >分析这张图</button>
             <input
               ref="composerImageInput"
               type="file"
@@ -2085,12 +2091,18 @@
             const n = (data.multimodal && data.multimodal.indexed) || (data.saved_images || []).length || files.length;
             const skip = (data.skipped_duplicates || (data.multimodal && data.multimodal.skipped_duplicates) || []).join(', ');
             composerUploadHint.value = skip
-              ? `已处理 ${n} 张，重复跳过 ${skip}`
-              : `已写入图库 ${n} 张，可直接提问这张图`;
+              ? `已写入图库，重复跳过 ${skip}。点「分析这张图」或发送即可看图内容`
+              : `已写入图库 ${n} 张。点「分析这张图」或直接发送，会描述这张图里有什么`;
             refreshHealth();
           } catch (err) {
             composerUploadHint.value = '图片上传失败：' + (err.message || String(err));
           }
+        };
+
+        const analyzeComposerImage = () => {
+          if (!composerImages.value.length) return;
+          if (!inputText.value.trim()) inputText.value = '请详细分析这张图片里有什么';
+          sendMessage();
         };
 
         const useSuggestion = (text) => {
@@ -2466,12 +2478,9 @@
             if (askAboutImage && mode.value !== 'search' && mode.value !== 'graph') {
               const form = new FormData();
               form.append('k', String(topK.value));
-              const task = mode.value === 'mmrag' ? mmTask.value : 'qa';
-              if (question) form.append(task === 'qa' ? 'question' : 'query', question);
-              else form.append('question', '这张图里有什么？');
-              if (queryImage) form.append('image', queryImage);
-              const path = task === 'qa' || mode.value !== 'mmrag' ? '/mm/ask' : '/mm/search';
-              res = await ragFetch(path, { method: 'POST', body: form });
+              form.append('question', question || '请详细分析这张图片里有什么');
+              form.append('image', queryImage);
+              res = await ragFetch('/mm/describe', { method: 'POST', body: form });
               clearComposerImages();
               composerUploadHint.value = '';
             } else if (mode.value === 'mmrag') {
@@ -2612,6 +2621,7 @@
           onDropImages,
           onPasteImages,
           removeComposerImage,
+          analyzeComposerImage,
           messages,
           showHistory,
           showLibrary,

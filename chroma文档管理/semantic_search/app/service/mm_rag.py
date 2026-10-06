@@ -325,6 +325,71 @@ class MultimodalRagService:
         )
         return (resp.choices[0].message.content or "").strip()
 
+    def _vl_describe(self, question: str, image_path: Path) -> str:
+        from openai import OpenAI
+
+        prompt = (
+            "请只分析用户刚刚上传的这一张图片，用简体中文详细说明："
+            "1）图中有哪些主体、人物或物体；2）场景和环境；"
+            "3）图上可见的文字；4）颜色、构图和显著细节。"
+            "看不清的不要编造。不要提知识库里其他图片。\n\n"
+            f"用户问题：{question}"
+        )
+        client = OpenAI(api_key=DASHSCOPE_API_KEY, base_url=DASHSCOPE_COMPAT_BASE)
+        resp = client.chat.completions.create(
+            model=VL_MODEL,
+            messages=[{
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": prompt},
+                    {"type": "image_url", "image_url": {"url": self._image_data_url(image_path)}},
+                ],
+            }],
+            max_tokens=1024,
+        )
+        return (resp.choices[0].message.content or "").strip()
+
+    def describe(
+        self,
+        question: str,
+        query_image_path: str,
+        *,
+        k: int = SIMILARITY_TOP_K,
+        backend: str | None = None,
+    ) -> dict:
+        q = (question or "").strip() or "请详细分析这张图片里有什么"
+        path = Path(query_image_path)
+        image_hits = []
+        try:
+            image_hits = self.search_images_by_image(str(path), k=k, backend=backend)
+        except Exception:
+            image_hits = []
+        vl_used = False
+        if DASHSCOPE_API_KEY and path.is_file():
+            try:
+                answer = self._vl_describe(q, path)
+                vl_used = True
+            except Exception as exc:  # noqa: BLE001
+                answer = self._text_fallback_answer(q, image_hits, [])
+                answer = f"（千问 VL 调用失败：{exc}，已退回文本模型）\n\n{answer}"
+        else:
+            answer = self._text_fallback_answer(q, image_hits, [])
+            if not DASHSCOPE_API_KEY:
+                answer = (
+                    "还不能真正看图：请在环境变量配置 DASHSCOPE_API_KEY（千问 VL，如 qwen-vl-plus）。\n"
+                    "当前只会把图片写入图库，并用 CLIP 找相似图。\n\n"
+                    + answer
+                )
+        return {
+            "question": q,
+            "answer": answer,
+            "sources": image_hits,
+            "images": image_hits,
+            "vl_used": vl_used,
+            "vl_model": VL_MODEL if vl_used else None,
+            "message": "已分析用户上传的图片" if vl_used else "未配置视觉模型，无法描述图像内容",
+        }
+
     def _text_fallback_answer(self, question: str, image_hits: list[dict], text_hits: list[dict]) -> str:
         names = "、".join(h.get("file_name") or "" for h in image_hits[:5]) or "无"
         texts = "\n".join((h.get("document") or "")[:400] for h in text_hits[:4]) or "无"

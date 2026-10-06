@@ -797,6 +797,25 @@ async def mm_search(
     }
 
 
+@app.post("/mm/describe")
+async def mm_describe(
+    question: str = Form(""),
+    image: UploadFile = File(...),
+    k: int = Form(5),
+    backend: str = Depends(vector_backend_dep),
+):
+    """分析用户上传的这一张图（视觉模型只看这张，不混入其它库内图片）。"""
+    mm = _require_mm_rag(app)
+    content = await image.read()
+    if not content:
+        raise HTTPException(status_code=400, detail="图片是空的")
+    query_image_path = str(mm.save_query_image(image.filename or "upload.jpg", content))
+    try:
+        return mm.describe(question, query_image_path, k=k, backend=backend)
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+
 @app.post("/mm/ask")
 async def mm_ask(
     question: str = Form(""),
