@@ -1508,8 +1508,8 @@
             <span>{{ classLabel(item.doc_class) }} · {{ item.file_type }} · {{ item.chunks }} 段</span>
             <div class="lib-preview" v-if="item.preview">{{ item.preview }}</div>
             <div class="lib-actions">
-              <button type="button" @click="openSourcePreview(item)">查看片段</button>
-              <a :href="'/library/file?file_name=' + encodeURIComponent(item.file_name)" target="_blank">原文件</a>
+              <button type="button" @click="openSourcePreview(item)">预览</button>
+              <a :href="'/library/file?file_name=' + encodeURIComponent(item.file_name)" target="_blank">新窗口打开</a>
               <button type="button" class="danger" @click="deleteLibraryFile(item.file_name)">删除</button>
             </div>
           </div>
@@ -1517,7 +1517,8 @@
             <strong>{{ img.file_name }}</strong>
             <span>图片</span>
             <div class="lib-actions">
-              <a :href="'/library/file?file_name=' + encodeURIComponent(img.file_name)" target="_blank">打开图片</a>
+              <button type="button" @click="openSourcePreview(img)">预览</button>
+              <a :href="'/library/file?file_name=' + encodeURIComponent(img.file_name)" target="_blank">新窗口打开</a>
               <button type="button" class="danger" @click="deleteLibraryFile(img.file_name)">删除</button>
             </div>
           </div>
@@ -2147,20 +2148,21 @@
           return 'file';
         };
         const openSourcePreview = async (src, page) => {
-          const name = src && (src.file_name || src.document || src);
-          if (!name || typeof name === 'object' && !src.file_name && !src.document) {
-            /* fall through */
-          }
-          const fileName = (src && (src.file_name || src.document)) || String(name || '');
+          const fileName = typeof src === 'string'
+            ? src
+            : String((src && (src.file_name || src.document)) || '');
           if (!fileName) return;
           const nextPage = page || 1;
           sourcePreview.value = {
-            ...sourcePreview.value,
             open: true,
             file_name: fileName,
             chunks: [],
             loading: true,
             page: nextPage,
+            pages: 1,
+            total: 0,
+            has_prev: false,
+            has_next: false,
             fileUrl: '/library/file?file_name=' + encodeURIComponent(fileName),
             kind: sourceKind(fileName),
             hint: '',
