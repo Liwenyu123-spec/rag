@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-      <title>RAG 四合一平台</title>
+      <title>DeepSeek 风格 · RAG</title>
   <script src="/static/vue.global.prod.js"></script>
   <style>
     [v-cloak] { display: none !important; }
@@ -458,10 +458,183 @@
       .bubble-wrap { max-width: 86%; }
       .input-area { padding: 12px 12px 16px; }
     }
+
+    /* —— DeepSeek 风格皮肤 —— */
+    body {
+      padding: 0;
+      background: #fff;
+      font-family: "PingFang SC", "Hiragino Sans GB", "Noto Sans SC", "Microsoft YaHei", Inter, sans-serif;
+    }
+    #app {
+      width: 100%;
+      border: 0;
+      border-radius: 0;
+      box-shadow: none;
+      background: #fff;
+    }
+    .module-bar {
+      display: none;
+    }
+    .rag-workspace {
+      grid-template-columns: 268px minmax(0, 1fr);
+      background: #fff;
+    }
+    .sidebar {
+      background: #f9f9f9;
+      color: #333;
+      border-right: 1px solid #ebebeb;
+      padding: 14px 12px 16px;
+    }
+    .brand { gap: 10px; padding: 4px 6px 12px; }
+    .brand-mark {
+      width: 36px; height: 36px; border-radius: 10px;
+      background: linear-gradient(160deg, #4d6bfe, #2563eb);
+      box-shadow: none; font-size: 18px;
+    }
+    .brand h1 { font-size: 16px; font-weight: 650; color: #1a1a1a; letter-spacing: 0; }
+    .brand p { color: #8b8b8b; }
+    .ds-new {
+      width: 100%; height: 42px; margin-bottom: 12px;
+      border: 1px solid #e5e5e5; border-radius: 12px;
+      background: #fff; color: #1a1a1a; font-size: 14px; font-weight: 600;
+      cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px;
+    }
+    .ds-new:hover { background: #f3f3f3; }
+    .ds-hist {
+      flex: 1; min-height: 72px; overflow: auto; margin-bottom: 8px;
+    }
+    .ds-hist-item {
+      width: 100%; text-align: left; padding: 9px 10px; margin-bottom: 2px;
+      border: 0; border-radius: 10px; background: transparent;
+      color: #4f4f4f; font-size: 13px; cursor: pointer;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .ds-hist-item:hover, .ds-hist-item.on { background: #ececec; color: #111; }
+    .side-label { color: #8b8b8b; margin: 12px 6px 8px; }
+    .model-card, .stat-card, .upload-card {
+      background: #fff; border: 1px solid #ececec; color: #333;
+    }
+    .model-name, .stat-item strong, .pipe-name { color: #1a1a1a; }
+    .model-detail, .stat-item, .stat-note, .upload-msg, .eval-hint, .pipe-detail, .pipe-head, .pipe-title { color: #8b8b8b; }
+    .status-dot { background: #22c55e; }
+    .stat-card select, .upload-card select, .upload-card input[type="file"],
+    .upload-card input[type="text"], .upload-card input:not([type]) {
+      color: #1a1a1a; background: #f6f6f6; border-color: #e8e8e8;
+    }
+    .upload-card select option { color: #1a1a1a; }
+    .mode-btn {
+      color: #4f4f4f; background: #fff; border: 1px solid #ececec;
+    }
+    .mode-btn:hover { background: #f3f3f3; }
+    .mode-btn.active {
+      color: #1a1a1a; background: #ecefff; border-color: #c9d4ff;
+    }
+    .mode-btn small { color: #8b8b8b; }
+    .opt-item {
+      color: #333; background: #f6f6f6; border-color: #ececec;
+    }
+    .opt-item.on {
+      color: #1a1a1a; background: #ecefff; border-color: #4d6bfe;
+      box-shadow: none;
+    }
+    .opt-item small, .opt-item.on small { color: #8b8b8b; }
+    .opt-item input[type="checkbox"] {
+      border-color: #c4c4c4; background: #fff;
+    }
+    .opt-item input[type="checkbox"]:checked {
+      background: #4d6bfe;
+      border-color: #4d6bfe;
+      box-shadow: none;
+    }
+    .upload-btn {
+      background: #4d6bfe; box-shadow: none; border-radius: 12px;
+    }
+    .side-tip { background: transparent; color: #8b8b8b; }
+    .side-tip strong { color: #4f4f4f; }
+    .side-tip a { color: #4d6bfe; }
+    .pipe-tag.on { color: #166534; background: #dcfce7; }
+    .pipe-chip { color: #4d6bfe; background: #ecefff; border-color: #d7dfff; }
+    .header {
+      border: 0; background: transparent; min-height: 56px; padding: 8px 28px 0;
+    }
+    .header h2 { font-size: 15px; font-weight: 600; color: #1a1a1a; }
+    .chat-shell { background: #fff; }
+    .messages { background: #fff; padding: 8px 24px 8px; display: flex; flex-direction: column; align-items: center; }
+    .empty-tip { min-height: 58vh; }
+    .empty-icon {
+      width: 72px; height: 72px; border-radius: 22px;
+      background: linear-gradient(160deg, #4d6bfe, #2563eb);
+      box-shadow: 0 12px 28px rgba(77,107,254,.28);
+    }
+    .empty-tip h3 { font-size: 28px; font-weight: 600; letter-spacing: .2px; }
+    .empty-tip > p { color: #8b8b8b; }
+    .suggestion {
+      border-radius: 16px; background: #f7f7f7; border-color: transparent;
+    }
+    .suggestion:hover {
+      color: #1a1a1a; background: #efefef; box-shadow: none; transform: none;
+    }
+    .message { width: min(760px, 100%); margin-bottom: 28px; }
+    .message.bot .avatar {
+      background: linear-gradient(160deg, #4d6bfe, #2563eb);
+    }
+    .message.user .avatar { display: none; }
+    .message.bot .bubble {
+      background: transparent; border: 0; box-shadow: none;
+      padding: 4px 2px; color: #1a1a1a; font-size: 15px; line-height: 1.8;
+    }
+    .message.user .bubble {
+      background: #eff6ff; color: #1a1a1a;
+      border-radius: 18px; box-shadow: none; padding: 10px 16px;
+    }
+    .pre-box {
+      background: #f7f8fa; border: 1px solid #eee; border-radius: 14px;
+    }
+    .pre-box strong { color: #4d6bfe; }
+    .opt-tag { background: #ecefff; color: #4d6bfe; border-color: #d7dfff; }
+    .input-area {
+      border: 0; background: linear-gradient(180deg, transparent, #fff 28%);
+      padding: 8px 24px 28px;
+    }
+    .composer {
+      max-width: 760px; flex-direction: column; align-items: stretch;
+      padding: 14px 14px 10px; border-radius: 24px; background: #fff;
+      border: 1px solid #e5e5e5;
+      box-shadow: 0 8px 24px rgba(0,0,0,.06);
+    }
+    .composer:focus-within {
+      border-color: #c9d4ff; box-shadow: 0 8px 28px rgba(77,107,254,.12);
+    }
+    .composer textarea { min-height: 28px; padding: 4px 6px 8px; font-size: 15px; }
+    .composer-bar {
+      display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+    }
+    .chip {
+      height: 32px; padding: 0 12px; border-radius: 999px; cursor: pointer;
+      border: 1px solid #e5e5e5; background: #fff; color: #4f4f4f; font-size: 12px;
+    }
+    .chip.on { color: #4d6bfe; border-color: #4d6bfe; background: #eef2ff; }
+    .send-round {
+      margin-left: auto; width: 36px; height: 36px; border: 0; border-radius: 50%;
+      background: #4d6bfe; color: #fff; cursor: pointer; display: grid; place-items: center;
+    }
+    .send-round:disabled { background: #d4d4d4; cursor: not-allowed; }
+    .send-btn { display: none; }
+    .input-hint { color: #b0b0b0; }
+    .fold { border: 0; background: transparent; color: #4d6bfe; font-size: 12px; cursor: pointer; text-align: left; padding: 6px; }
+    .ds-mods { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+    .ds-mods button {
+      border: 0; background: transparent; color: #8b8b8b; font-size: 11px; cursor: pointer;
+    }
+    .ds-mods button.active { color: #4d6bfe; font-weight: 600; }
+    #app.not-rag .module-bar { display: flex; }
+    @media (max-width: 760px) {
+      .rag-workspace { grid-template-columns: 1fr; }
+    }
   </style>
 </head>
 <body>
-  <div id="app" v-cloak>
+  <div id="app" v-cloak :class="{ 'not-rag': appModule !== 'rag' }">
     <nav class="module-bar">
       <strong>四合一</strong>
       <button class="mod-btn" :class="{active: appModule==='basic'}" @click="appModule='basic'">基础聊天</button>
@@ -543,11 +716,23 @@
     <div class="rag-workspace" v-if="appModule==='rag'">
     <aside class="sidebar">
       <div class="brand">
-        <div class="brand-mark">⌕</div>
+        <div class="brand-mark">🐋</div>
         <div>
-          <h1>RAG 知识库</h1>
-          <p>可选优化链路</p>
+          <h1>DeepSeek 风格</h1>
+          <p>知识库 RAG 工作台</p>
         </div>
+      </div>
+      <button class="ds-new" @click="newConversation">＋ 开启新对话</button>
+      <div class="ds-hist">
+        <div class="side-label" style="margin-top:0">对话</div>
+        <button
+          class="ds-hist-item"
+          :class="{ on: h.id === sessionId }"
+          v-for="h in historyList"
+          :key="h.id"
+          @click="loadConversation(h.id)"
+        >{{ h.title || '未命名对话' }}</button>
+        <div v-if="!historyList.length" class="side-tip" style="padding:4px 8px">暂无历史</div>
       </div>
 
       <div class="side-label">服务状态</div>
@@ -834,6 +1019,12 @@
         支持 pdf / txt / md / docx / pptx / csv / html / ipynb / 图片
         <a href="/docs" target="_blank">打开 API 文档</a>
       </div>
+      <div class="ds-mods">
+        <button :class="{active: appModule==='basic'}" @click="appModule='basic'">基础聊天</button>
+        <button :class="{active: appModule==='secure'}" @click="appModule='secure'">安全聊天</button>
+        <button :class="{active: appModule==='content'}" @click="appModule='content'">文案电商</button>
+        <button :class="{active: appModule==='rag'}" @click="appModule='rag'">知识库</button>
+      </div>
     </aside>
 
     <main class="chat-shell">
@@ -851,15 +1042,13 @@
             <option :value="10">10</option>
           </select>
         </div>
-        <button class="header-btn" @click="newConversation">新对话</button>
-        <button class="header-btn" @click="openHistory">对话历史</button>
-        <button class="header-btn danger" @click="clearAllConversations">清空全部对话</button>
+        <button class="header-btn danger" @click="clearAllConversations">清空全部</button>
       </header>
 
       <div class="messages" ref="messagesEl">
         <div class="empty-tip" v-if="messages.length === 0">
-          <div class="empty-icon">⌕</div>
-          <h3>{{ emptyTitle }}</h3>
+          <div class="empty-icon">🐋</div>
+          <h3>我是知识库助手，很高兴见到你！</h3>
           <p>{{ emptyDesc }}</p>
           <div class="suggestions">
             <button
@@ -1050,18 +1239,26 @@
             :disabled="loading"
             rows="1"
           ></textarea>
-          <input
-            v-if="mode === 'mmrag'"
-            type="file"
-            accept="image/*"
-            style="max-width:120px;font-size:11px"
-            @change="onPickQueryImage"
-          />
-          <button
-            class="send-btn"
-            :disabled="loading || !canSend"
-            @click="sendMessage"
-          >{{ loading ? '...' : '发送 ↑' }}</button>
+          <div class="composer-bar">
+            <button type="button" class="chip" :class="{ on: optUsePre }" @click="optUsePre = !optUsePre; askPreset='custom'">检索前</button>
+            <button type="button" class="chip" :class="{ on: optUseHybrid }" @click="optUseHybrid = !optUseHybrid; askPreset='custom'">混合检索</button>
+            <button type="button" class="chip" :class="{ on: optUseRerank }" @click="optUseRerank = !optUseRerank; askPreset='custom'">重排序</button>
+            <button type="button" class="chip" :class="{ on: optUseCrag }" @click="optUseCrag = !optUseCrag; askPreset='custom'">CRAG</button>
+            <button type="button" class="chip" :class="{ on: optCompareBaseline }" @click="optCompareBaseline = !optCompareBaseline">对照</button>
+            <input
+              v-if="mode === 'mmrag'"
+              type="file"
+              accept="image/*"
+              style="max-width:120px;font-size:11px"
+              @change="onPickQueryImage"
+            />
+            <button
+              class="send-round"
+              :disabled="loading || !canSend"
+              @click="sendMessage"
+              title="发送"
+            >{{ loading ? '…' : '↑' }}</button>
+          </div>
         </div>
         <div class="input-hint">答案基于知识库检索，重要信息请再核对原文</div>
       </div>
@@ -1453,22 +1650,26 @@
           sessionId.value = 'web-' + Math.random().toString(36).slice(2, 10);
         };
 
-        const newConversation = () => {
-          persistCurrentSession();
-          startFreshConversation();
-          historyHint.value = '已开启新对话';
-        };
-
-        const openHistory = async () => {
-          showHistory.value = true;
+        const refreshHistory = async () => {
           try {
             const res = await ragFetch('/conversations');
             const data = await res.json().catch(() => ({}));
             historyList.value = data.sessions || [];
           } catch (err) {
             historyList.value = [];
-            historyHint.value = '加载历史失败：' + (err.message || String(err));
           }
+        };
+
+        const newConversation = () => {
+          persistCurrentSession();
+          startFreshConversation();
+          historyHint.value = '已开启新对话';
+          refreshHistory();
+        };
+
+        const openHistory = async () => {
+          showHistory.value = true;
+          await refreshHistory();
         };
 
         const loadConversation = async (id) => {
@@ -1960,11 +2161,13 @@
             scrollToBottom();
             refreshHealth();
             persistCurrentSession();
+            refreshHistory();
           }
         };
 
         onMounted(() => {
           refreshHealth();
+          refreshHistory();
           setInterval(refreshHealth, 15000);
         });
 
@@ -1989,6 +2192,7 @@
           showHistory,
           historyList,
           historyHint,
+          sessionId,
           newConversation,
           openHistory,
           loadConversation,
