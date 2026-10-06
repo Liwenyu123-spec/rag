@@ -271,7 +271,12 @@ class SemanticSearchEngine:  # Native RAG 引擎主体
         """用 SimpleDirectoryReader 加载本地文件或目录后建索引。"""  # 方法说明
         kwargs: dict = {"required_exts": SUPPORTED_EXTS, "recursive": True}  # 目录模式默认参数
         if input_files:  # 有文件列表时只用文件列表（讲义 input_files 写法）
-            kwargs = {"input_files": input_files}  # 覆盖为仅文件列表
+            text_files = [
+                p for p in input_files if Path(p).suffix.lower() in SUPPORTED_EXTS
+            ]
+            if not text_files:
+                return {"loaded_documents": 0, "nodes": 0, "total_documents": self.collection.count()}
+            kwargs = {"input_files": text_files}  # 覆盖为仅文件列表
         elif input_dir:  # 指定目录
             kwargs["input_dir"] = input_dir  # 追加目录参数
         else:  # 都没传则用配置里的 DATA_DIR

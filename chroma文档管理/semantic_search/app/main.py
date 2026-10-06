@@ -23,12 +23,14 @@ from semantic_search.app.config import (  # 从配置模块导入密钥、模型
     EMBEDDING_PROVIDER,  # 向量化提供方：huggingface 或 dashscope
     GRAPH_RAG_ENABLED,  # GraphRAG 总开关
     HOST,  # 服务监听地址，默认 127.0.0.1
+    IMAGE_EXTS,
     LLM_MODEL,  # 大模型名称，如 deepseek-v4-flash
     LLM_PROVIDER,  # 大模型提供方：deepseek 或 dashscope
     NEO4J_PASSWORD,  # Neo4j 密码
     PORT,  # 服务端口，默认 8003
 )  # 括号结束
 from semantic_search.app.engine import SUPPORTED_EXTS, SemanticSearchEngine  # 引擎 + 允许的文件扩展名
+from semantic_search.app.service.mm_rag import is_image_path
 from semantic_search.app.schemas import (  # Pydantic 请求/响应模型，给接口做校验和文档
     AddDocumentsRequest,  # 追加纯文本文档的请求体
     AskRequest,  # 可勾选优化方向的 RAG 问答请求体
