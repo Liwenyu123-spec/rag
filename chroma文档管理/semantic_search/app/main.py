@@ -267,6 +267,7 @@ async def api_info():  # 方便程序或调试查看有哪些入口
         "graph_query": "POST /graph/query",
         "graph_retrieve": "POST /graph/retrieve",
         "mm_status": "GET /mm/status",
+        "library": "GET /library",
         "mm_search": "POST /mm/search",
         "mm_ask": "POST /mm/ask",
     }  # 字典/集合结束
@@ -642,6 +643,26 @@ async def upload_documents(  # multipart：files + splitter + target
 async def get_stats():  # 统计接口
     """返回文档数量、模型与存储路径。"""  # 接口说明
     return _require_engine(app).get_stats()  # 直接返回引擎统计字典
+
+
+@app.get("/library")
+async def list_library(
+    backend: str = Depends(vector_backend_dep),
+    scope: str = Query("all", description="business / course / all / .txt 等，与检索范围相同"),
+):
+    """列出当前向量库中的文件（按 file_name 去重汇总 chunk）。"""
+    engine = _bound_engine(app, backend)
+    payload = engine.list_library(scope=scope)
+    mm = getattr(app.state, "mm_rag", None)
+    images = []
+    if mm is not None:
+        try:
+            images = mm.list_images(backend)
+        except Exception:
+            images = []
+    payload["images"] = images
+    payload["image_count"] = len(images)
+    return payload
 
 
 @app.get("/graph/status")

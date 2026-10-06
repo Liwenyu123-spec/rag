@@ -1,0 +1,30 @@
+{
+  "sessions": [
+    {
+      "id": "web-bu2lq3a5",
+      "title": "贝壳科技总部在哪里？",
+      "mode": "ask",
+      "updated_at": 1791282336086,
+      "messages": [
+        {
+          "role": "user",
+          "content": "贝壳科技总部在哪里？",
+          "imageUrl": "",
+          "sources": []
+        },
+        {
+          "role": "bot",
+          "content": "贝壳科技总部地点：北京。",
+          "imageUrl": "",
+          "sources": [
+            {
+              "rank": 1,
+              "similarity": 0.9982,
+              "document": "另一个子公司员工数量为 300 人，注意不要混淆 子公司业务为销售，与总部不同 部分部门偶尔加班，但标准工时不变 另一个子公司员工数量为 300 人，注意不要混淆 子公司业务为销售，与总部不同 file_path: H:\\Python工程\\rag\\chroma文档管理\\semantic_search\\data\\company_info.txt\nfile_name: company_info.txt\nfile_type: text/plain\nfile_size: 627\ncreation_date: 2026-09-29\nlast_modified_date: 2026-09-29 公司名称：贝壳科技\r\n成立时间：2010年\r\n总部地点：北京\r\n员工人数：2000人\r\n上班时间：早上9:00\r\n下班时间：晚上18:00\r\n午休时间：12:00-13:00\r\n公司主要业务：AI软件开发、大数"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

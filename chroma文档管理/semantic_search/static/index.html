@@ -310,6 +310,14 @@
     .hist-item strong { display: block; font-size: 13px; }
     .hist-item span { display: block; margin-top: 4px; color: #8090a8; font-size: 11px; }
     .hist-empty { color: #8090a8; font-size: 13px; padding: 24px 8px; }
+    .lib-drawer { width: min(440px, 94%); }
+    .lib-search {
+      width: 100%; margin-bottom: 10px; padding: 8px 12px; border-radius: 10px;
+      border: 1px solid var(--line); font-size: 13px;
+    }
+    .lib-preview { margin-top: 6px; color: #64748b; font-size: 12px; line-height: 1.5; }
+    .stat-link { cursor: pointer; }
+    .stat-link:hover strong { color: #4d6bfe; }
     .messages {
       min-height: 0;
       overflow-y: auto; overflow-x: hidden;
@@ -868,13 +876,16 @@
             <option value=".ipynb">Notebook</option>
           </select>
         </div>
-        <div class="stat-item"><span>文档数</span><strong>{{ currentDocCount }}</strong></div>
+        <div class="stat-item stat-link" @click="openLibrary">
+          <span>文档数</span>
+          <strong>{{ currentDocCount }} · 点击查看</strong>
+        </div>
         <div class="stat-item"><span>Embedding</span><strong>{{ shortModel }}</strong></div>
         <div class="stat-item">
           <span>知识图谱</span>
           <strong>{{ graphStatus?.ready ? 'Neo4j 已连' : '未连接' }}</strong>
         </div>
-        <div class="stat-item">
+        <div class="stat-item stat-link" @click="openLibrary">
           <span>图库</span>
           <strong>{{ currentImageCount }}</strong>
         </div>
@@ -1132,6 +1143,7 @@
             <option :value="10">10</option>
           </select>
         </div>
+        <button class="header-btn" @click="openLibrary">查看文档</button>
         <button class="header-btn danger" @click="clearAllConversations">清空全部</button>
       </header>
 
@@ -1319,6 +1331,29 @@
         </div>
       </aside>
 
+      <div class="hist-mask" v-if="showLibrary" @click="showLibrary=false"></div>
+      <aside class="hist-drawer lib-drawer" v-if="showLibrary">
+        <div class="hist-head">
+          <h3>知识库文档（{{ libraryFiles.length }}）</h3>
+          <button class="header-btn" @click="showLibrary=false">关闭</button>
+        </div>
+        <div class="upload-msg" v-if="libraryHint">{{ libraryHint }}</div>
+        <input class="lib-search" v-model="libraryQuery" placeholder="按文件名筛选…" />
+        <div class="hist-empty" v-if="libraryLoading">正在读取知识库…</div>
+        <div class="hist-empty" v-else-if="!filteredLibrary.length && !filteredImages.length">当前范围没有文档</div>
+        <div class="hist-list" v-else>
+          <div class="hist-item" v-for="item in filteredLibrary" :key="item.file_name">
+            <strong>{{ item.file_name }}</strong>
+            <span>{{ classLabel(item.doc_class) }} · {{ item.file_type }} · {{ item.chunks }} 段</span>
+            <div class="lib-preview" v-if="item.preview">{{ item.preview }}</div>
+          </div>
+          <div class="hist-item" v-for="img in filteredImages" :key="'img-'+img.file_name">
+            <strong>{{ img.file_name }}</strong>
+            <span>图片</span>
+          </div>
+        </div>
+      </aside>
+
       <div class="input-area">
         <div class="composer">
           <textarea
@@ -1411,6 +1446,12 @@
         const messagesEl = ref(null);
         const sessionId = ref('web-' + Math.random().toString(36).slice(2, 10));
         const showHistory = ref(false);
+        const showLibrary = ref(false);
+        const libraryFiles = ref([]);
+        const libraryImages = ref([]);
+        const libraryQuery = ref('');
+        const libraryHint = ref('');
+        const libraryLoading = ref(false);
         const historyList = ref([]);
         const historyHint = ref('');
         const pickedFiles = ref([]);
@@ -1767,6 +1808,50 @@
         const openHistory = async () => {
           showHistory.value = true;
           await refreshHistory();
+        };
+
+        const classLabel = (kind) => {
+          if (kind === 'course') return '讲义课件';
+          if (kind === 'business') return '制度与业务';
+          return kind || '未分类';
+        };
+
+        const filteredLibrary = computed(() => {
+          const q = libraryQuery.value.trim().toLowerCase();
+          const files = libraryFiles.value || [];
+          if (!q) return files;
+          return files.filter((item) => String(item.file_name || '').toLowerCase().includes(q));
+        });
+        const filteredImages = computed(() => {
+          const q = libraryQuery.value.trim().toLowerCase();
+          const imgs = libraryImages.value || [];
+          if (!q) return imgs;
+          return imgs.filter((img) => String(img.file_name || '').toLowerCase().includes(q));
+        });
+
+        const openLibrary = async () => {
+          showLibrary.value = true;
+          libraryLoading.value = true;
+          libraryHint.value = '';
+          try {
+            const res = await ragFetch('/library?scope=all');
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok) {
+              libraryHint.value = data.detail || '读取文档列表失败';
+              libraryFiles.value = [];
+              libraryImages.value = [];
+              return;
+            }
+            libraryFiles.value = data.files || [];
+            libraryImages.value = data.images || [];
+            libraryHint.value = `当前 ${data.backend || vectorBackend.value} · 范围 ${data.scope || docScope.value} · ${data.file_count || 0} 个文件 / ${data.chunk_count || 0} 段`;
+          } catch (err) {
+            libraryHint.value = '读取失败：' + (err.message || String(err));
+            libraryFiles.value = [];
+            libraryImages.value = [];
+          } finally {
+            libraryLoading.value = false;
+          }
         };
 
         const loadConversation = async (id) => {
@@ -2320,6 +2405,16 @@
           onPickQueryImage,
           messages,
           showHistory,
+          showLibrary,
+          libraryFiles,
+          libraryImages,
+          libraryQuery,
+          libraryHint,
+          libraryLoading,
+          filteredLibrary,
+          filteredImages,
+          openLibrary,
+          classLabel,
           historyList,
           historyHint,
           sessionId,

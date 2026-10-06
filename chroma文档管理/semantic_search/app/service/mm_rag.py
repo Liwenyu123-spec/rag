@@ -118,6 +118,25 @@ class MultimodalRagService:
             ),
         }
 
+    def list_images(self, backend: str | None = None) -> list[dict]:
+        slot = self._img(backend)
+        try:
+            data = slot.get(include=["metadatas", "documents"])
+        except Exception:
+            return []
+        metas = data.get("metadatas") or []
+        docs = data.get("documents") or []
+        items = []
+        seen = set()
+        for i, raw in enumerate(metas):
+            meta = raw if isinstance(raw, dict) else {}
+            name = str(meta.get("file_name") or (docs[i] if i < len(docs) else "") or "").strip()
+            if not name or name in seen:
+                continue
+            seen.add(name)
+            items.append({"file_name": name, "kind": "image"})
+        return items
+
     def resolve_image(self, name: str) -> Path:
         safe = Path(name).name
         path = (self.image_dir / safe).resolve()

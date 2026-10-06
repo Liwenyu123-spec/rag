@@ -544,6 +544,61 @@ class SemanticSearchEngine:  # Native RAG 引擎主体
             "answer": str(response),  # 本轮回答
         }  # return 结束
 
+    def list_library(self, scope: str = "all") -> dict:
+        """按文件名汇总当前向量库里的文档（chunk 合并为文件列表）。"""
+        from semantic_search.app.knowledge_scope import (
+            infer_file_type,
+            is_course_note,
+            node_matches_scope,
+            normalize_scope,
+        )
+
+        want = normalize_scope(scope or "all")
+        grouped: dict[str, dict] = {}
+        try:
+            data = self.collection.get(include=["metadatas", "documents"])
+        except Exception:
+            data = {}
+        metas = data.get("metadatas") or []
+        docs = data.get("documents") or []
+        for i, raw_meta in enumerate(metas):
+            meta = raw_meta if isinstance(raw_meta, dict) else {}
+            text = (docs[i] if i < len(docs) else "") or ""
+            if not node_matches_scope(metadata=meta, text=text, scope=want):
+                continue
+            name = (
+                str(meta.get("file_name") or meta.get("filename") or "").strip()
+                or Path(str(meta.get("file_path") or "")).name
+                or "未命名片段"
+            )
+            suffix = infer_file_type(metadata=meta)
+            kind = str(meta.get("doc_class") or "")
+            if not kind:
+                kind = "course" if is_course_note(metadata=meta, text=text) else "business"
+            rec = grouped.setdefault(
+                name,
+                {
+                    "file_name": name,
+                    "file_type": suffix,
+                    "doc_class": kind,
+                    "chunks": 0,
+                    "chars": 0,
+                    "preview": "",
+                },
+            )
+            rec["chunks"] += 1
+            rec["chars"] += len(text)
+            if not rec["preview"] and text.strip():
+                rec["preview"] = " ".join(text.strip().split())[:160]
+        files = sorted(grouped.values(), key=lambda item: item["file_name"].lower())
+        return {
+            "backend": self.backend_name,
+            "scope": want,
+            "file_count": len(files),
+            "chunk_count": sum(item["chunks"] for item in files),
+            "files": files,
+        }
+
     def get_stats(self) -> dict:  # 供 /stats、/health 使用
         """返回文档数量、模型名称和持久化路径等状态。"""  # 方法说明
         chroma_n = self.slots["chroma"].count() if "chroma" in self.slots else 0
