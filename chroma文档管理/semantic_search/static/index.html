@@ -328,6 +328,14 @@
       padding: 0 14px 12px; color: #667085; font-size: 13px; line-height: 1.75;
       white-space: pre-wrap;
     }
+    .attach-row { display: flex; flex-wrap: wrap; gap: 8px; padding: 0 4px 8px; }
+    .attach-item { position: relative; width: 64px; height: 64px; }
+    .attach-item img { width: 64px; height: 64px; object-fit: cover; border-radius: 10px; }
+    .attach-item button {
+      position: absolute; top: -6px; right: -6px; width: 18px; height: 18px;
+      border: 0; border-radius: 50%; background: #111; color: #fff; cursor: pointer; font-size: 12px; line-height: 18px;
+    }
+    .attach-hint { color: #8b8b8b; font-size: 12px; padding: 0 6px 6px; }
     .stat-link { cursor: pointer; }
     .stat-link:hover strong { color: #4d6bfe; }
     .messages {
@@ -1391,10 +1399,18 @@
       </aside>
 
       <div class="input-area">
-        <div class="composer">
+        <div class="composer" @dragover.prevent @drop.prevent="onDropImages">
+          <div class="attach-row" v-if="composerImages.length">
+            <div class="attach-item" v-for="(img, i) in composerImages" :key="img.url">
+              <img :src="img.url" :alt="img.name" />
+              <button type="button" title="移除" @click="removeComposerImage(i)">×</button>
+            </div>
+          </div>
+          <div class="attach-hint" v-if="composerUploadHint">{{ composerUploadHint }}</div>
           <textarea
             v-model="inputText"
             @keydown.enter.exact.prevent="sendMessage"
+            @paste="onPasteImages"
             @input="autoResize"
             :placeholder="placeholder"
             :disabled="loading"
@@ -1402,18 +1418,20 @@
           ></textarea>
             <div class="composer-bar">
             <button type="button" class="chip" :class="{ on: optUseThink }" @click="optUseThink = !optUseThink">深度思考</button>
+            <button type="button" class="chip" :class="{ on: !!composerImages.length }" @click="openComposerImages">图片</button>
+            <input
+              ref="composerImageInput"
+              type="file"
+              accept="image/*"
+              multiple
+              style="display:none"
+              @change="onPickComposerImages"
+            />
             <button type="button" class="chip" :class="{ on: optUsePre }" @click="optUsePre = !optUsePre; askPreset='custom'">检索前</button>
             <button type="button" class="chip" :class="{ on: optUseHybrid }" @click="optUseHybrid = !optUseHybrid; askPreset='custom'">混合检索</button>
             <button type="button" class="chip" :class="{ on: optUseRerank }" @click="optUseRerank = !optUseRerank; askPreset='custom'">重排序</button>
             <button type="button" class="chip" :class="{ on: optUseCrag }" @click="optUseCrag = !optUseCrag; askPreset='custom'">CRAG</button>
             <button type="button" class="chip" :class="{ on: optCompareBaseline }" @click="optCompareBaseline = !optCompareBaseline">对照</button>
-            <input
-              v-if="mode === 'mmrag'"
-              type="file"
-              accept="image/*"
-              style="max-width:120px;font-size:11px"
-              @change="onPickQueryImage"
-            />
             <button
               class="send-round"
               :disabled="loading || !canSend"
@@ -1513,6 +1531,9 @@
         const mmTask = ref('qa');
         const mmQueryFile = ref(null);
         const mmQueryPreview = ref('');
+        const composerImages = ref([]);
+        const composerUploadHint = ref('');
+        const composerImageInput = ref(null);
 
         const modeMeta = {
           ask: {
@@ -1592,6 +1613,7 @@
         const emptyDesc = computed(() => modeMeta[mode.value].emptyDesc);
         const placeholder = computed(() => modeMeta[mode.value].placeholder);
         const canSend = computed(() => {
+          if (composerImages.value.length) return true;
           if (mode.value === 'mmrag') {
             if (mmTask.value === 'image2image') return !!mmQueryFile.value;
             if (mmTask.value === 'qa') return !!(inputText.value.trim() || mmQueryFile.value);
@@ -2332,13 +2354,18 @@
         const sendMessage = async () => {
           const question = inputText.value.trim();
           if (loading.value) return;
-          if (mode.value !== 'mmrag' && !question) return;
+          const hasImage = composerImages.value.length || mmQueryFile.value;
+          if (mode.value !== 'mmrag' && !question && !hasImage) return;
           if (mode.value === 'mmrag' && !canSend.value) return;
+
+          const queryImage = (composerImages.value[0] && composerImages.value[0].file) || mmQueryFile.value;
+          const queryPreview = (composerImages.value[0] && composerImages.value[0].url) || mmQueryPreview.value || '';
+          const askAboutImage = !!queryImage && (mode.value === 'mmrag' || !!question || !inputText.value.trim());
 
           messages.value.push({
             role: 'user',
-            content: question || (mmQueryFile.value ? '[图片查询]' : ''),
-            imageUrl: mmQueryPreview.value || '',
+            content: question || (queryImage ? '[图片]' : ''),
+            imageUrl: queryPreview,
           });
           messages.value.push({
             role: 'bot',
@@ -2351,11 +2378,21 @@
           scrollToBottom();
 
           const botMsg = messages.value[messages.value.length - 1];
-          const queryImage = mmQueryFile.value;
 
           try {
             let res;
-            if (mode.value === 'mmrag') {
+            if (askAboutImage && mode.value !== 'search' && mode.value !== 'graph') {
+              const form = new FormData();
+              form.append('k', String(topK.value));
+              const task = mode.value === 'mmrag' ? mmTask.value : 'qa';
+              if (question) form.append(task === 'qa' ? 'question' : 'query', question);
+              else form.append('question', '这张图里有什么？');
+              if (queryImage) form.append('image', queryImage);
+              const path = task === 'qa' || mode.value !== 'mmrag' ? '/mm/ask' : '/mm/search';
+              res = await ragFetch(path, { method: 'POST', body: form });
+              clearComposerImages();
+              composerUploadHint.value = '';
+            } else if (mode.value === 'mmrag') {
               const form = new FormData();
               form.append('k', String(topK.value));
               if (question) form.append(mmTask.value === 'qa' ? 'question' : 'query', question);
