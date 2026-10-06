@@ -232,13 +232,13 @@ class GraphRagService:
         extractor: str | None = None,
     ) -> dict:
         """读取本地文件，分块后抽三元组写入 Neo4j。"""
-        from llama_index.core import SimpleDirectoryReader
+        from semantic_search.app.file_loaders import make_directory_reader
         from llama_index.core.node_parser import SentenceSplitter
 
         paths = [p for p in file_paths if p]
         if not paths:
             raise ValueError("没有可导入图谱的文件")
-        docs = SimpleDirectoryReader(input_files=paths).load_data()
+        docs = make_directory_reader(input_files=paths).load_data()
         if not docs:
             raise ValueError("文件中没有可读文本")
         nodes = SentenceSplitter(chunk_size=512, chunk_overlap=64).get_nodes_from_documents(docs)

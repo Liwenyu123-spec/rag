@@ -9,6 +9,7 @@ import re  # 正则：中文分句
 from pathlib import Path  # 检查 data 目录、创建持久化路径
 from typing import List  # 类型注解
 
+from semantic_search.app.file_loaders import SUPPORTED_EXTS, make_directory_reader
 from llama_index.core import Document, Settings, SimpleDirectoryReader  # 文档、全局设置、加载器
 from llama_index.core.memory import ChatMemoryBuffer  # 多轮对话记忆缓冲区
 from llama_index.core.node_parser import SemanticSplitterNodeParser, SentenceSplitter, TokenTextSplitter  # 三种分块器
@@ -56,10 +57,7 @@ SAMPLE_DOCUMENTS = [  # 空库时写入的示例知识，方便一启动就能�
     "FAISS索引IVFFlat通过聚类技术将向量空间划分，大幅提升大规模检索效率",  # 示例：IVFFlat
 ]  # SAMPLE_DOCUMENTS 结束
 
-SUPPORTED_EXTS = [".pdf", ".txt", ".md", ".csv", ".docx", ".html", ".ipynb"]  # SimpleDirectoryReader 允许的扩展名
-
-
-def file_sha256(path: str | Path) -> str:
+def text_sha256(text: str) -> str:
     digest = hashlib.sha256()
     with Path(path).open("rb") as handle:
         for chunk in iter(lambda: handle.read(1024 * 1024), b""):
@@ -386,7 +384,7 @@ class SemanticSearchEngine:  # Native RAG 引擎主体
                 "skipped_duplicates": skipped_duplicates,
             }
 
-        reader = SimpleDirectoryReader(input_files=fresh_files)
+        reader = make_directory_reader(input_files=fresh_files)
         documents = clean_empty_text(reader.load_data())
         stamped: List[Document] = []
         for doc in documents:

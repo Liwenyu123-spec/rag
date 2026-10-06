@@ -15,6 +15,9 @@ llama-index-vector-stores-chroma
 llama-index-vector-stores-qdrant
 llama-index-multi-modal-llms-dashscope
 llama-index-readers-file
+pymupdf
+python-pptx
+unstructured
 llama-index-retrievers-bm25
 llama-index-postprocessor-dashscope-rerank
 llama-index-graph-stores-neo4j
