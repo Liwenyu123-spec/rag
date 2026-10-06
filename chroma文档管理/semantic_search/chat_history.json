@@ -1,6 +1,32 @@
 {
   "sessions": [
     {
+      "id": "web-oihir8go",
+      "title": "贝壳科技总部在哪里？",
+      "mode": "ask",
+      "updated_at": 1791282774271,
+      "messages": [
+        {
+          "role": "user",
+          "content": "贝壳科技总部在哪里？",
+          "imageUrl": "",
+          "sources": []
+        },
+        {
+          "role": "bot",
+          "content": "贝壳科技总部在北京。",
+          "imageUrl": "",
+          "sources": [
+            {
+              "rank": 1,
+              "similarity": 0.9982,
+              "document": "company_info.txt"
+            }
+          ]
+        }
+      ]
+    },
+    {
       "id": "web-bu2lq3a5",
       "title": "贝壳科技总部在哪里？",
       "mode": "ask",
