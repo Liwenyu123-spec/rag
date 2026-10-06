@@ -39,6 +39,7 @@ from semantic_search.app.schemas import (  # Pydantic 请求/响应模型，给�
     GenerationEvalInfo,  # 生成质量评估
     GraphBuildRequest,  # GraphRAG 构建请求
     GraphInfo,  # 图谱通道过程
+    GraphManualTripleRequest,  # 手工三元组
     GraphQueryRequest,  # GraphRAG 问答请求
     GraphRetrieveRequest,  # GraphRAG 仅检索请求
     IngestRequest,  # 从本地文件/目录导入的请求体
@@ -204,6 +205,7 @@ async def api_info():  # 方便程序或调试查看有哪些入口
         "ingest": "POST /ingest",
         "graph_status": "GET /graph/status",
         "graph_build": "POST /graph/build",
+        "graph_triple": "POST /graph/triple",
         "graph_load": "POST /graph/load",
         "graph_query": "POST /graph/query",
         "graph_retrieve": "POST /graph/retrieve",
@@ -558,7 +560,21 @@ async def graph_status():
     return service.status()
 
 
-@app.post("/graph/build")
+@app.post("/graph/triple")
+async def graph_add_triple(request: GraphManualTripleRequest):
+    """手工写入一条三元组到 Neo4j，不走 LLM 抽取。"""
+    try:
+        return _require_graph_rag(app).add_manual_triple(
+            request.subject,
+            request.relation,
+            request.object,
+            subject_label=request.subject_label,
+            object_label=request.object_label,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=503, detail=f"写入三元组失败: {exc}") from exc
 async def graph_build(request: GraphBuildRequest):
     """从文本抽取三元组写入 Neo4j（Simple / Schema 抽取器）。"""
     try:

@@ -6,6 +6,7 @@ Embedding：DeepSeek 无接口，默认 Chinese-CLIP / HuggingFace，也可千�
 
 from __future__ import annotations
 
+import re
 import socket
 from typing import List, Literal, Tuple
 from urllib.parse import urlparse
@@ -332,3 +333,68 @@ class GraphRagService:
             "results": data.get("results") or [],
         }
         return packed, info
+
+    def add_manual_triple(
+        self,
+        subject: str,
+        relation: str,
+        obj: str,
+        *,
+        subject_label: str = "entity",
+        object_label: str = "entity",
+    ) -> dict:
+        """手工写入一条三元组（头实体-关系-尾实体），不经过 LLM 抽取。"""
+        from llama_index.core.graph_stores.types import EntityNode, Relation
+
+        subj = (subject or "").strip()
+        rel_raw = (relation or "").strip()
+        obj_name = (obj or "").strip()
+        if not subj or not rel_raw or not obj_name:
+            raise ValueError("头实体、关系、尾实体都不能为空")
+        src_label = _neo4j_label(subject_label, default="entity")
+        dst_label = _neo4j_label(object_label, default="entity")
+        rel_label = _neo4j_label(rel_raw, default="RELATED_TO")
+
+        src_emb = self.embed_model.get_text_embedding(subj)
+        dst_emb = self.embed_model.get_text_embedding(obj_name)
+        src = EntityNode(
+            name=subj,
+            label=src_label,
+            embedding=src_emb,
+            properties={"source": "manual"},
+        )
+        dst = EntityNode(
+            name=obj_name,
+            label=dst_label,
+            embedding=dst_emb,
+            properties={"source": "manual"},
+        )
+        rel = Relation(
+            label=rel_label,
+            source_id=src.id,
+            target_id=dst.id,
+            properties={"source": "manual", "raw": rel_raw},
+        )
+        self.graph_store.upsert_nodes([src, dst])
+        self.graph_store.upsert_relations([rel])
+        try:
+            self.load_existing()
+        except Exception:  # noqa: BLE001
+            self._index = None
+        return {
+            "message": "已手工写入三元组",
+            "subject": subj,
+            "subject_label": src_label,
+            "relation": rel_label,
+            "object": obj_name,
+            "object_label": dst_label,
+        }
+
+
+def _neo4j_label(raw: str, *, default: str) -> str:
+    text = re.sub(r"[^\w]+", "_", (raw or "").strip(), flags=re.UNICODE).strip("_")
+    if not text:
+        return default
+    if text[0].isdigit():
+        text = "N_" + text
+    return text[:64]

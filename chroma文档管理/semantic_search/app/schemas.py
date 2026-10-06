@@ -295,3 +295,11 @@ class GraphQueryRequest(BaseModel):
 class GraphRetrieveRequest(BaseModel):
     question: str = Field(..., min_length=1, description="自然语言问题")
     k: int = Field(5, ge=1, le=50, description="similarity_top_k")
+
+
+class GraphManualTripleRequest(BaseModel):
+    subject: str = Field(..., min_length=1, description="头实体")
+    relation: str = Field(..., min_length=1, description="关系")
+    object: str = Field(..., min_length=1, description="尾实体")
+    subject_label: str = Field("entity", description="头实体类型，如 PERSON")
+    object_label: str = Field("entity", description="尾实体类型，如 COMPANY")

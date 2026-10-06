@@ -157,7 +157,7 @@
       background: rgba(255,255,255,.055);
       display: grid; gap: 10px;
     }
-    .upload-card select, .upload-card input[type="file"] {
+    .upload-card select, .upload-card input[type="file"], .upload-card input[type="text"], .upload-card input:not([type]) {
       width: 100%; color: #dce3ef; font-size: 12px;
       border: 1px solid rgba(255,255,255,.12); border-radius: 10px;
       background: rgba(0,0,0,.2); padding: 8px 10px;
@@ -508,6 +508,18 @@
         </button>
         <button class="upload-btn" :disabled="graphBusy" @click="loadGraph" style="opacity:.92">
           加载已有 Neo4j 图谱
+        </button>
+        <div style="height:1px;background:rgba(255,255,255,.1);margin:4px 0"></div>
+        <div class="upload-msg">手工三元组（不走 LLM）</div>
+        <input v-model="manualSubject" placeholder="头实体，如 乔布斯" />
+        <input v-model="manualRelation" placeholder="关系，如 CO_FOUNDED / 创立" />
+        <input v-model="manualObject" placeholder="尾实体，如 苹果公司" />
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+          <input v-model="manualSubjectLabel" placeholder="头类型 PERSON" />
+          <input v-model="manualObjectLabel" placeholder="尾类型 COMPANY" />
+        </div>
+        <button class="upload-btn" :disabled="graphBusy || !manualSubject.trim() || !manualRelation.trim() || !manualObject.trim()" @click="addManualTriple">
+          {{ graphBusy ? '写入中...' : '手工写入三元组' }}
         </button>
         <div class="upload-msg" :class="{ err: graphError }">{{ graphMsg }}</div>
       </div>
@@ -907,7 +919,12 @@
         const graphStatus = ref(null);
         const graphExtractor = ref('simple');
         const graphBusy = ref(false);
-        const graphMsg = ref('先 neo4j console，再用示例建图');
+        const graphMsg = ref('先 neo4j console，再用示例建图或手工录入');
+        const manualSubject = ref('');
+        const manualRelation = ref('');
+        const manualObject = ref('');
+        const manualSubjectLabel = ref('PERSON');
+        const manualObjectLabel = ref('COMPANY');
         const graphError = ref(false);
 
         const modeMeta = {
@@ -1147,13 +1164,34 @@
         };
 
         const loadGraph = async () => {
-          if (graphBusy.value) return;
           graphBusy.value = true;
           graphError.value = false;
           graphMsg.value = '正在从 Neo4j 加载…';
           try {
             const data = await graphApi('/graph/load', {});
             graphMsg.value = data.message || '已加载';
+            refreshGraphStatus();
+          } catch (err) {
+            graphError.value = true;
+            graphMsg.value = err.message || String(err);
+          } finally {
+            graphBusy.value = false;
+          }
+        };
+
+        const addManualTriple = async () => {
+          graphBusy.value = true;
+          graphError.value = false;
+          graphMsg.value = '正在写入三元组…';
+          try {
+            const data = await graphApi('/graph/triple', {
+              subject: manualSubject.value.trim(),
+              relation: manualRelation.value.trim(),
+              object: manualObject.value.trim(),
+              subject_label: manualSubjectLabel.value.trim() || 'entity',
+              object_label: manualObjectLabel.value.trim() || 'entity',
+            });
+            graphMsg.value = `${data.message}：${data.subject} -[${data.relation}]-> ${data.object}`;
             refreshGraphStatus();
           } catch (err) {
             graphError.value = true;
@@ -1552,6 +1590,12 @@
           graphError,
           buildGraphDemo,
           loadGraph,
+          addManualTriple,
+          manualSubject,
+          manualRelation,
+          manualObject,
+          manualSubjectLabel,
+          manualObjectLabel,
         };
       },
     }).mount('#app');
