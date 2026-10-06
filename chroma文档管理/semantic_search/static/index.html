@@ -1286,7 +1286,6 @@
       );
     } else {
     const { createApp, ref, computed, nextTick, onMounted } = Vue;
-
     createApp({
       setup() {
         const appModule = ref('rag');
@@ -1447,6 +1446,7 @@
           if (vectorBackend.value === 'qdrant') return health.value?.qdrant_documents ?? '-';
           return health.value?.chroma_documents ?? health.value?.total_documents ?? '-';
         });
+        const currentImageCount = computed(() => health.value?.image_count ?? 0);
         const typeCountHint = computed(() => {
           const counts = health.value?.type_counts || {};
           const keys = Object.keys(counts);
