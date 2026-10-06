@@ -659,11 +659,16 @@
           <option value="token">分块：按 Token</option>
           <option value="semantic">分块：语义 Semantic</option>
         </select>
+        <select v-model="uploadTarget">
+          <option value="chroma">写入：向量库 Chroma</option>
+          <option value="neo4j">写入：知识图谱 Neo4j</option>
+          <option value="both">写入：向量库 + Neo4j</option>
+        </select>
         <button
           class="upload-btn"
           :disabled="uploading || !pickedFiles.length"
           @click="uploadFiles"
-        >{{ uploading ? '上传分块中...' : '上传并写入知识库' }}</button>
+        >{{ uploadButtonText }}</button>
         <div class="upload-msg" :class="{ err: uploadError }">{{ uploadMessage }}</div>
       </div>
 
@@ -895,6 +900,7 @@
         const sessionId = ref('web-' + Math.random().toString(36).slice(2, 10));
         const pickedFiles = ref([]);
         const uploadSplitter = ref('sentence');
+        const uploadTarget = ref('chroma');
         const uploading = ref(false);
         const uploadMessage = ref('可选多个文件，上传后自动分块入库');
         const uploadError = ref(false);
@@ -1157,6 +1163,15 @@
           }
         };
 
+        const uploadButtonText = computed(() => {
+          if (uploading.value) {
+            return uploadTarget.value === 'chroma' ? '上传分块中...' : '抽取写入图谱中（较慢）...';
+          }
+          if (uploadTarget.value === 'neo4j') return '上传并写入 Neo4j';
+          if (uploadTarget.value === 'both') return '上传并写入向量库 + Neo4j';
+          return '上传并写入向量库';
+        });
+
         const onPickFiles = (e) => {
           pickedFiles.value = Array.from(e.target.files || []);
           uploadError.value = false;
@@ -1174,6 +1189,8 @@
           const form = new FormData();
           pickedFiles.value.forEach((f) => form.append('files', f));
           form.append('splitter', uploadSplitter.value);
+          form.append('target', uploadTarget.value);
+          form.append('extractor', graphExtractor.value);
 
           try {
             const res = await fetch('/upload', { method: 'POST', body: form });
@@ -1182,8 +1199,13 @@
               uploadError.value = true;
               uploadMessage.value = data.detail || ('上传失败：HTTP ' + res.status);
             } else {
+              const graphHint = data.graph
+                ? `；图谱 ${data.graph.chunks || data.graph.documents || 0} 段`
+                : '';
               uploadMessage.value =
-                `${data.message}：写入 ${data.nodes || 0} 个分块，知识库共 ${data.total_documents || 0} 条` +
+                `${data.message}` +
+                (data.nodes ? `：向量分块 ${data.nodes}，知识库 ${data.total_documents || 0} 条` : '') +
+                graphHint +
                 (data.skipped_files?.length ? `；跳过 ${data.skipped_files.join(', ')}` : '');
               pickedFiles.value = [];
               refreshHealth();
@@ -1516,6 +1538,8 @@
           runRetrievalEval,
           pickedFiles,
           uploadSplitter,
+          uploadTarget,
+          uploadButtonText,
           uploading,
           uploadMessage,
           uploadError,

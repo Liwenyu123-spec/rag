@@ -474,48 +474,66 @@ async def ingest_documents(request: IngestRequest):  # 可传 input_files 或 in
     return {"message": "文档加载并索引完成", **result}  # 合并 loaded_documents、nodes 等统计
 
 
-@app.post("/upload")  # 前端上传文件：保存到 data 目录后自动分块入库
-async def upload_documents(  # multipart：files + splitter
-    files: list[UploadFile] = File(..., description="要导入的文件，可多选"),  # 上传文件列表
-    splitter: str = Form("sentence", description="切分方式: sentence / token / semantic"),  # 分块策略表单字段
-):  # 函数签名结束
-    """浏览器上传文件 → 落盘到 DATA_DIR → SimpleDirectoryReader 分块索引。"""  # 接口说明
-    if not files:  # 一个文件都没选
-        raise HTTPException(status_code=400, detail="请至少选择一个文件")  # 参数错误
-    if splitter not in {"sentence", "token", "semantic"}:  # 限制合法分块模式
-        raise HTTPException(status_code=400, detail="splitter 只能是 sentence / token / semantic")  # 非法策略
+@app.post("/upload")  # 前端上传文件：保存到 data 目录后写入向量库和/或 Neo4j
+async def upload_documents(  # multipart：files + splitter + target
+    files: list[UploadFile] = File(..., description="要导入的文件，可多选"),
+    splitter: str = Form("sentence", description="切分方式: sentence / token / semantic"),
+    target: str = Form("chroma", description="chroma / neo4j / both"),
+    extractor: str = Form("simple", description="图谱抽取器：simple / schema"),
+):
+    """浏览器上传文件 → 落盘 → 写入 Chroma 和/或 Neo4j 图谱。"""
+    target = (target or "chroma").strip().lower()
+    if target not in {"chroma", "neo4j", "both"}:
+        raise HTTPException(status_code=400, detail="target 只能是 chroma / neo4j / both")
+    if not files:
+        raise HTTPException(status_code=400, detail="请至少选择一个文件")
+    if splitter not in {"sentence", "token", "semantic"}:
+        raise HTTPException(status_code=400, detail="splitter 只能是 sentence / token / semantic")
 
-    upload_dir = Path(DATA_DIR)  # 与讲义 data 目录一致
-    upload_dir.mkdir(parents=True, exist_ok=True)  # 确保目录存在
+    upload_dir = Path(DATA_DIR)
+    upload_dir.mkdir(parents=True, exist_ok=True)
 
-    saved_paths: list[str] = []  # 本次成功保存的绝对路径
-    skipped: list[str] = []  # 扩展名不支持而跳过的文件名
-    for item in files:  # 逐个处理上传文件
-        name = Path(item.filename or "upload.bin").name  # 只用文件名，防止路径穿越
-        suffix = Path(name).suffix.lower()  # 扩展名小写
-        if suffix not in SUPPORTED_EXTS:  # 不在白名单则跳过
-            skipped.append(name)  # 记录跳过的文件名
-            continue  # 处理下一个上传文件
-        target = upload_dir / name  # 落盘路径：semantic_search/data/xxx
-        content = await item.read()  # 读上传内容
-        target.write_bytes(content)  # 写入磁盘
-        saved_paths.append(str(target.resolve()))  # 记录绝对路径给 ingest
+    saved_paths: list[str] = []
+    skipped: list[str] = []
+    for item in files:
+        name = Path(item.filename or "upload.bin").name
+        suffix = Path(name).suffix.lower()
+        if suffix not in SUPPORTED_EXTS:
+            skipped.append(name)
+            continue
+        target_path = upload_dir / name
+        content = await item.read()
+        target_path.write_bytes(content)
+        saved_paths.append(str(target_path.resolve()))
 
-    if not saved_paths:  # 全都跳过了
-        raise HTTPException(  # 没有可入库文件
-            status_code=400,  # Bad Request
-            detail=f"没有可导入的文件。支持扩展名: {', '.join(SUPPORTED_EXTS)}；已跳过: {skipped}",  # 说明原因
-        )  # 括号结束
+    if not saved_paths:
+        raise HTTPException(
+            status_code=400,
+            detail=f"没有可导入的文件。支持扩展名: {', '.join(SUPPORTED_EXTS)}；已跳过: {skipped}",
+        )
 
-    engine = _require_engine(app)  # 拿到引擎
-    result = engine.ingest_files(input_files=saved_paths, splitter=splitter)  # 加载→分块→向量化
-    return {  # 上传结果摘要
-        "message": "上传并索引完成",  # 操作说明
-        "saved_files": [Path(p).name for p in saved_paths],  # 成功保存的文件名
-        "skipped_files": skipped,  # 扩展名不支持而跳过的
-        "splitter": splitter,  # 本次使用的分块策略
-        **result,  # 合并 loaded_documents / nodes / total_documents
-    }  # 字典/集合结束
+    payload: dict = {
+        "saved_files": [Path(p).name for p in saved_paths],
+        "skipped_files": skipped,
+        "splitter": splitter,
+        "target": target,
+    }
+    parts: list[str] = []
+
+    if target in {"chroma", "both"}:
+        engine = _require_engine(app)
+        chroma_result = engine.ingest_files(input_files=saved_paths, splitter=splitter)
+        payload.update(chroma_result)
+        parts.append("已写入向量库")
+
+    if target in {"neo4j", "both"}:
+        graph = _require_graph_rag(app)
+        graph_result = graph.build_from_files(saved_paths, extractor=extractor)
+        payload["graph"] = graph_result
+        parts.append("已写入 Neo4j 图谱")
+
+    payload["message"] = "；".join(parts) or "上传完成"
+    return payload
 
 
 @app.get("/stats")  # 查看知识库与模型配置统计
