@@ -541,6 +541,15 @@
       white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
     }
     .ds-hist-item:hover, .ds-hist-item.on { background: #ececec; color: #111; }
+    .ds-hist-row { display: flex; align-items: center; gap: 2px; }
+    .ds-hist-row .ds-hist-item { flex: 1; min-width: 0; }
+    .hist-del {
+      width: 28px; height: 28px; flex-shrink: 0; border: 0; border-radius: 8px;
+      background: transparent; color: #9a9a9a; cursor: pointer; font-size: 16px; line-height: 1;
+    }
+    .hist-del:hover { color: #e11d48; background: #fee2e2; }
+    .hist-item-row { display: flex; align-items: flex-start; gap: 8px; }
+    .hist-item-row .hist-body { flex: 1; min-width: 0; }
     .side-label { color: #8b8b8b; margin: 12px 6px 8px; }
     .model-card, .stat-card, .upload-card {
       background: #fff; border: 1px solid #ececec; color: #333;
@@ -829,13 +838,18 @@
       <button class="ds-new" @click="newConversation">＋ 开启新对话</button>
       <div class="ds-hist">
         <div class="side-label" style="margin-top:0">对话</div>
-        <button
-          class="ds-hist-item"
-          :class="{ on: h.id === sessionId }"
+        <div
+          class="ds-hist-row"
           v-for="h in historyList"
           :key="h.id"
-          @click="loadConversation(h.id)"
-        >{{ h.title || '未命名对话' }}</button>
+        >
+          <button
+            class="ds-hist-item"
+            :class="{ on: h.id === sessionId }"
+            @click="loadConversation(h.id)"
+          >{{ h.title || '未命名对话' }}</button>
+          <button class="hist-del" title="删除对话" @click.stop="deleteConversation(h.id)">×</button>
+        </div>
         <div v-if="!historyList.length" class="side-tip" style="padding:4px 8px">暂无历史</div>
       </div>
 
@@ -1144,6 +1158,7 @@
           </select>
         </div>
         <button class="header-btn" @click="openLibrary">查看文档</button>
+        <button class="header-btn danger" @click="deleteConversation(sessionId)" :disabled="!messages.length">删除本对话</button>
         <button class="header-btn danger" @click="clearAllConversations">清空全部</button>
       </header>
 
@@ -1318,9 +1333,12 @@
         </div>
         <div class="hist-empty" v-if="!historyList.length">还没有保存的对话</div>
         <div class="hist-list" v-else>
-          <div class="hist-item" v-for="item in historyList" :key="item.id" @click="loadConversation(item.id)">
-            <strong>{{ item.title }}</strong>
-            <span>{{ item.turns || 0 }} 条 · {{ item.mode }} · {{ formatTime(item.updated_at) }}</span>
+          <div class="hist-item hist-item-row" v-for="item in historyList" :key="item.id">
+            <div class="hist-body" @click="loadConversation(item.id)">
+              <strong>{{ item.title }}</strong>
+              <span>{{ item.turns || 0 }} 条 · {{ item.mode }} · {{ formatTime(item.updated_at) }}</span>
+            </div>
+            <button class="hist-del" title="删除对话" @click.stop="deleteConversation(item.id)">×</button>
           </div>
         </div>
       </aside>
@@ -1886,6 +1904,27 @@
           }
         };
 
+        const deleteConversation = async (id) => {
+          if (!id) return;
+          if (!window.confirm('确定删除这段对话？')) return;
+          try {
+            const res = await ragFetch('/conversations/' + encodeURIComponent(id), { method: 'DELETE' });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok) {
+              historyHint.value = data.detail || '删除失败';
+              return;
+            }
+          } catch (err) {
+            historyHint.value = '删除失败：' + (err.message || String(err));
+            return;
+          }
+          historyList.value = historyList.value.filter((h) => h.id !== id);
+          if (sessionId.value === id) {
+            startFreshConversation();
+          }
+          historyHint.value = '已删除对话';
+        };
+
         const clearAllConversations = async () => {
           persistCurrentSession();
           try {
@@ -2428,6 +2467,7 @@
           newConversation,
           openHistory,
           loadConversation,
+          deleteConversation,
           clearAllConversations,
           formatTime,
           loading,
