@@ -17,9 +17,10 @@ class SearchRequest(BaseModel):  # POST /search 的请求体
 class DocumentResponse(BaseModel):  # 单条检索命中结果
     rank: int  # 排名，从 1 开始
     index: int  # 列表下标，从 0 开始
-    document: str  # 命中的文本片段
+    document: str  # 来源文件名（不再回传路径和元数据）
     similarity: float  # 相似度分数（越高越相关）
     distance: float  # 距离（越小越近，常由 1-similarity 近似）
+    file_name: str = ""  # 与 document 相同，便于前端展示
 
 
 class SearchResponse(BaseModel):  # /search 的响应体

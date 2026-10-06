@@ -472,8 +472,14 @@ def _diff_ask_runs(baseline: dict, current: dict, flags: dict) -> dict:
         "baseline_answer": b_ans,
         "baseline_queries": [str(q) for q in b_q if q],
         "current_queries": [str(q) for q in c_q if q],
-        "baseline_sources": [{"rank": s.get("rank"), "preview": _snip(s.get("document") or "")} for s in b_src],
-        "current_sources": [{"rank": s.get("rank"), "preview": _snip(s.get("document") or "")} for s in c_src],
+        "baseline_sources": [
+            {"rank": s.get("rank"), "file_name": s.get("file_name") or s.get("document") or "", "preview": s.get("file_name") or s.get("document") or ""}
+            for s in b_src
+        ],
+        "current_sources": [
+            {"rank": s.get("rank"), "file_name": s.get("file_name") or s.get("document") or "", "preview": s.get("file_name") or s.get("document") or ""}
+            for s in c_src
+        ],
         "only_in_optimized": only_opt[:5],
         "only_in_baseline": only_base[:5],
     }

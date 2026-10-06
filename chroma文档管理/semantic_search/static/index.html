@@ -1209,7 +1209,7 @@
                   <p>{{ msg.comparison.baseline_answer || '（无）' }}</p>
                   <div class="pre-line" v-if="msg.comparison.baseline_queries?.length">查询：{{ msg.comparison.baseline_queries.join(' ｜ ') }}</div>
                   <div class="pre-line" v-for="(s, si) in (msg.comparison.baseline_sources || [])" :key="'bs'+si">
-                    #{{ s.rank }} {{ s.preview }}
+                    #{{ s.rank }} {{ s.file_name || s.preview }}
                   </div>
                 </div>
                 <div class="cmp-col">
@@ -1217,7 +1217,7 @@
                   <p>{{ msg.content }}</p>
                   <div class="pre-line" v-if="msg.comparison.current_queries?.length">查询：{{ msg.comparison.current_queries.join(' ｜ ') }}</div>
                   <div class="pre-line" v-for="(s, si) in (msg.comparison.current_sources || [])" :key="'cs'+si">
-                    #{{ s.rank }} {{ s.preview }}
+                    #{{ s.rank }} {{ s.file_name || s.preview }}
                   </div>
                 </div>
               </div>
@@ -1296,20 +1296,14 @@
               <div
                 class="source-card"
                 :class="{ expanded: msg.expanded?.[i] }"
-                v-for="(src, i) in msg.sources"
+                v-for="(src, i) in uniqueSources(msg.sources)"
                 :key="i"
               >
                 <div class="source-meta">
-                  <strong>来源 #{{ src.rank }}</strong>
+                  <strong>{{ src.file_name || src.document }}</strong>
                   <span>相似度 {{ formatScore(src.similarity) }}</span>
                 </div>
-                <div class="source-text">{{ src.document }}</div>
                 <img v-if="src.url" class="hit-img" :src="src.url" :alt="src.file_name || 'hit'" />
-                <button
-                  class="source-toggle"
-                  v-if="src.document && src.document.length > 120"
-                  @click="toggleSource(msg, i)"
-                >{{ msg.expanded?.[i] ? '收起' : '展开全文' }}</button>
               </div>
             </div>
           </div>
@@ -1742,6 +1736,18 @@
           return (n * 100).toFixed(1) + '%';
         };
 
+        const uniqueSources = (list) => {
+          const seen = new Set();
+          const out = [];
+          for (const s of list || []) {
+            const name = s.file_name || s.document || s.url || String(s.rank);
+            if (seen.has(name)) continue;
+            seen.add(name);
+            out.push(s);
+          }
+          return out;
+        };
+
         const toggleSource = (msg, index) => {
           if (!msg.expanded) msg.expanded = {};
           msg.expanded[index] = !msg.expanded[index];
@@ -1762,7 +1768,8 @@
           sources: (m.sources || []).slice(0, 5).map((s) => ({
             rank: s.rank,
             similarity: s.similarity,
-            document: String(s.document || '').slice(0, 400),
+            file_name: s.file_name || s.document || '',
+            document: s.file_name || s.document || '',
           })),
         }));
 
@@ -2460,6 +2467,7 @@
           applyPreset,
           autoResize,
           formatScore,
+          uniqueSources,
           toggleSource,
           setMode,
           useSuggestion,

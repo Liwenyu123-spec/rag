@@ -9,7 +9,9 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from typing import Any, Optional
 
-from llama_index.core.schema import NodeWithScore
+from pathlib import Path
+
+from llama_index.core.schema import MetadataMode, NodeWithScore
 
 
 def empty_graph() -> dict:
@@ -70,19 +72,39 @@ def empty_pre(question: str, strategy: str) -> dict:
     }
 
 
+def node_plain_text(node: Any) -> str:
+    n = getattr(node, "node", node)
+    if hasattr(n, "get_content"):
+        try:
+            return (n.get_content(metadata_mode=MetadataMode.NONE) or "").strip()
+        except TypeError:
+            return (n.get_content() or "").strip()
+    return str(getattr(n, "text", "") or "").strip()
+
+
+def source_file_name(node: Any) -> str:
+    n = getattr(node, "node", node)
+    meta = getattr(n, "metadata", None) or {}
+    raw = meta.get("file_name") or meta.get("filename") or meta.get("file_path") or ""
+    name = Path(str(raw)).name if raw else ""
+    return name or "未知文档"
+
+
 def node_key(node: NodeWithScore) -> str:
     nid = getattr(node.node, "node_id", None) or getattr(node.node, "id_", None)
     if nid:
         return str(nid)
-    return (node.node.get_content() or "")[:200]
+    return node_plain_text(node)[:200]
 
 
 def format_source(rank: int, item: NodeWithScore) -> dict:
     score = float(item.score or 0.0)
+    name = source_file_name(item)
     return {
         "rank": rank,
         "index": rank - 1,
-        "document": item.node.get_content(),
+        "file_name": name,
+        "document": name,
         "similarity": round(score, 4),
         "distance": (
             round(max(1.0 - score, 0.0), 4)
@@ -118,7 +140,7 @@ def merge_nodes_rrf(
 def context_from_nodes(nodes: list[NodeWithScore]) -> str:
     parts = []
     for i, item in enumerate(nodes, 1):
-        text = (item.node.get_content() or "").strip()
+        text = node_plain_text(item)
         if text:
             parts.append(f"[{i}] {text}")
     return "\n\n".join(parts)

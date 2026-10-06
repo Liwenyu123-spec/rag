@@ -473,19 +473,10 @@ class SemanticSearchEngine:  # Native RAG 引擎主体
         results = filter_nodes_by_scope(list(retriever.retrieve(query)), scope)
         results = apply_postprocessors(results, query, k)  # 检索后：重排/压缩/排版
         formatted_results = []  # 转成 API 友好结构
+        from semantic_search.app.service.pipeline import format_source
+
         for i, item in enumerate(results):  # 逐条格式化
-            score = float(item.score or 0.0)  # LlamaIndex 分数
-            similarity = round(score, 4)  # 当作相似度展示
-            distance = round(max(1.0 - score, 0.0), 4) if 0.0 <= score <= 1.0 else round(1 / (1 + score), 4)  # 近似距离
-            formatted_results.append(  # 追加一条结构化结果
-                {  # 单条命中字典
-                    "rank": i + 1,  # 排名
-                    "index": i,  # 下标
-                    "document": item.node.get_content(),  # 文本内容
-                    "similarity": similarity,  # 相似度
-                    "distance": distance,  # 近似距离
-                }  # 字典结束
-            )  # append 结束
+            formatted_results.append(format_source(i + 1, item))
         return formatted_results  # 返回格式化列表
 
     def query(self, question: str, k: int = SIMILARITY_TOP_K, doc_scope: str | None = None) -> dict:  # 一次性 RAG：检索 + 生成
