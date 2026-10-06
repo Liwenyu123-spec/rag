@@ -2259,11 +2259,7 @@
           form.append('splitter', uploadSplitter.value);
           form.append('target', 'chroma');
           form.append('extractor', graphExtractor.value);
-          try {
-            const res = await ragFetch('/upload', { method: 'POST', body: form });
-            const data = await res.json().catch(() => ({}));
-            if (!res.ok) {
-              composerUploadHint.value = data.detail || '图片写入图库失败';
+          form.append('replace_existing', 'false');
               return;
             }
             const n = (data.multimodal && data.multimodal.indexed) || (data.saved_images || []).length || files.length;

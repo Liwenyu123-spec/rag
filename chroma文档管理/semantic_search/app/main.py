@@ -554,7 +554,7 @@ async def upload_documents(  # multipart：files + splitter + target
     splitter: str = Form("sentence", description="切分方式: sentence / token / semantic"),
     target: str = Form("chroma", description="chroma / neo4j / both"),
     extractor: str = Form("simple", description="图谱抽取器：simple / schema"),
-    replace_existing: bool = Form(True, description="同名文件先删旧再写入"),
+    replace_existing: bool = Form(False, description="同名文件先删旧再写入"),
     backend: str = Depends(vector_backend_dep),
 ):
     """浏览器上传文件 → 落盘 → 写入 Chroma 和/或 Neo4j 图谱。"""
