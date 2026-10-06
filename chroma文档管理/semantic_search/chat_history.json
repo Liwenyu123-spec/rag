@@ -1,6 +1,37 @@
 {
   "sessions": [
     {
+      "id": "web-rst95m3f",
+      "title": "机器学习有什么相关知识",
+      "mode": "ask",
+      "updated_at": 1791283224599,
+      "messages": [
+        {
+          "role": "user",
+          "content": "机器学习有什么相关知识",
+          "imageUrl": "",
+          "sources": []
+        },
+        {
+          "role": "bot",
+          "content": "根据给定上下文，提到的机器学习相关知识有：\n\n1. 深度学习模型如 BERT、RoBERTa 可以生成高质量的文本嵌入向量，捕捉语义信息。  \n2. 阿里云千问提供 text-embedding 系列模型，支持文档和查询向量的差异编码。\n\n上下文没有提供更多关于机器学习的其他知识，因此其他内容我无法根据现有信息回答。",
+          "imageUrl": "",
+          "sources": [
+            {
+              "rank": 1,
+              "similarity": 0.0246,
+              "document": "未知文档"
+            },
+            {
+              "rank": 2,
+              "similarity": 0.0004,
+              "document": "未知文档"
+            }
+          ]
+        }
+      ]
+    },
+    {
       "id": "web-bu2lq3a5",
       "title": "贝壳科技总部在哪里？",
       "mode": "ask",
