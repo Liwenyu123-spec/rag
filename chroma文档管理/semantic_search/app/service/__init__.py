@@ -2,5 +2,6 @@
 
 from semantic_search.app.service.rag_service import RagAskService
 from semantic_search.app.service.graph_rag import GraphRagService
+from semantic_search.app.service.pipeline import AskModule, AskPipeline
 
-__all__ = ["RagAskService", "GraphRagService"]
+__all__ = ["RagAskService", "GraphRagService", "AskModule", "AskPipeline"]

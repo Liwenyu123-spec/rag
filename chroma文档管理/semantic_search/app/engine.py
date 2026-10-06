@@ -339,31 +339,23 @@ class SemanticSearchEngine:  # Native RAG 引擎主体
         return formatted_results  # 返回格式化列表
 
     def query(self, question: str, k: int = SIMILARITY_TOP_K) -> dict:  # 一次性 RAG：检索 + 生成
-        """一次性问答：混合召回 + 检索后三件套 + 生成。"""  # 方法说明
-        self._require_llm()  # 没 LLM 就抛错
-        from llama_index.core.query_engine import RetrieverQueryEngine  # 延迟导入查询引擎
+        """一次性问答：走与 /ask 相同的 AskPipeline，预设 basic。"""
+        self._require_llm()
+        from semantic_search.app.service.rag_service import RagAskService
 
-        retriever = self._build_retriever(k)  # 检索器
-        postprocessors = self._build_postprocessors(k)  # 检索后处理器
-        # RetrieverQueryEngine：自定义 retriever + node_postprocessors
-        engine = RetrieverQueryEngine.from_args(  # 组装查询引擎
-            retriever=retriever,  # 自定义检索器
-            node_postprocessors=postprocessors or None,  # 空列表当 None
-        )  # from_args 结束
-        response = engine.query(question)  # 执行问答
-        sources = []  # 收集引用来源
-        for i, item in enumerate(getattr(response, "source_nodes", []) or []):  # 遍历命中节点
-            score = float(item.score or 0.0)  # 取出分数
-            sources.append(  # 追加来源卡片字段
-                {  # 单条来源
-                    "rank": i + 1,  # 排名
-                    "index": i,  # 下标
-                    "document": item.node.get_content(),  # 原文片段
-                    "similarity": round(score, 4),  # 相似度
-                    "distance": round(max(1.0 - score, 0.0), 4) if 0.0 <= score <= 1.0 else round(1 / (1 + score), 4),  # 近似距离
-                }  # 字典结束
-            )  # append 结束
-        return {"question": question, "answer": str(response), "sources": sources}  # 问题、答案、来源
+        payload = RagAskService(self).ask(
+            question,
+            k,
+            preset="basic",
+            use_graph=False,
+            use_eval=False,
+            use_self_rag=False,
+        )
+        return {
+            "question": payload["question"],
+            "answer": payload["answer"],
+            "sources": payload["sources"],
+        }
 
     def chat(self, question: str, session_id: str = "default", k: int = SIMILARITY_TOP_K) -> dict:  # 多轮 RAG
         """多轮对话：带 ChatMemoryBuffer；检索侧与 query 共用混合/后处理。"""  # 方法说明

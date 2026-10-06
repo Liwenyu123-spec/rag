@@ -141,6 +141,7 @@ class OptimizeFlags(BaseModel):  # 本次实际生效的优化开关（回显给
     use_self_rag: bool = False  # 是否 Self-RAG
     use_graph: bool = False  # 是否向量+图谱双通道
     use_eval: bool = False  # 是否做了生成评估
+    ran_modules: List[str] = Field(default_factory=list)  # 本次实际跑过的管线模块名
 
 
 class SelfRagInfo(BaseModel):  # Self-RAG 过程信息（作业演示）

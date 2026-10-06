@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from llama_index.core import Settings
 from llama_index.core.prompts import PromptTemplate
 from llama_index.core.response_synthesizers import get_response_synthesizer
 from llama_index.core.schema import NodeWithScore
@@ -13,9 +12,7 @@ from semantic_search.app.service.pipeline import (
     AskContext,
     AskModule,
     context_from_nodes,
-    empty_crag,
     empty_eval,
-    empty_graph,
     format_source,
     merge_nodes_rrf,
 )
@@ -145,8 +142,6 @@ class CragModule(AskModule):
         return bool(ctx.flags.get("use_crag") or ctx.flags.get("use_self_rag"))
 
     def run(self, ctx: AskContext) -> None:
-        flags = ctx.flags
-        service = ctx.engine  # used via retrieve_fn below through RagAskService stored on ctx
         retrieve_fn = getattr(ctx, "retrieve_retry", None)
         if flags.get("use_crag"):
             ctx.nodes, ctx.crag = apply_crag(

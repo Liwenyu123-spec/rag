@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from typing import List, Literal, Tuple
 
-from llama_index.core import Document, Settings
+from llama_index.core import Document
 from llama_index.core.indices.property_graph import (
     PropertyGraphIndex,
     SchemaLLMPathExtractor,
@@ -53,18 +53,14 @@ class GraphRagService:
             raise RuntimeError(
                 "未配置 NEO4J_PASSWORD。请在 .env 写入 Neo4j 密码。"
             )
-        self._configure_models()
+        self.llm = self._init_llm()
+        self.embed_model = self._init_embed()
         self.graph_store = Neo4jPropertyGraphStore(
             username=NEO4J_USERNAME,
             password=NEO4J_PASSWORD,
             url=NEO4J_URI,
         )
         self._index: PropertyGraphIndex | None = None
-
-    def _configure_models(self) -> None:
-        """配置 GraphRAG 用的 LLM + Embedding。"""
-        Settings.llm = self._init_llm()
-        Settings.embed_model = self._init_embed()
 
     def _init_llm(self):
         provider = GRAPH_LLM_PROVIDER
@@ -155,7 +151,7 @@ class GraphRagService:
         mode = (mode or GRAPH_EXTRACTOR).strip().lower()
         if mode in {"schema", "schema_llm", "schemallmpathextractor"}:
             return SchemaLLMPathExtractor(
-                llm=Settings.llm,
+                llm=self.llm,
                 possible_entities=DEFAULT_ENTITIES,
                 possible_relations=DEFAULT_RELATIONS,
                 kg_validation_schema=DEFAULT_VALIDATION_SCHEMA,
@@ -164,7 +160,7 @@ class GraphRagService:
             ), "schema"
         return (
             SimpleLLMPathExtractor(
-                llm=Settings.llm,
+                llm=self.llm,
                 max_paths_per_chunk=10,
                 num_workers=2,
             ),
@@ -185,7 +181,7 @@ class GraphRagService:
         self._index = PropertyGraphIndex.from_documents(
             docs,
             kg_extractors=[kg_extractor],
-            embed_model=Settings.embed_model,
+            embed_model=self.embed_model,
             property_graph_store=self.graph_store,
             embed_kg_nodes=True,
             show_progress=True,
@@ -203,6 +199,7 @@ class GraphRagService:
         """从已有 Neo4j 图谱加载索引（不再重新抽文本）。"""
         self._index = PropertyGraphIndex.from_existing(
             property_graph_store=self.graph_store,
+            embed_model=self.embed_model,
             embed_kg_nodes=True,
         )
         return {"message": "已从 Neo4j 加载图谱索引", "neo4j_uri": NEO4J_URI}
@@ -216,7 +213,12 @@ class GraphRagService:
     def query(self, question: str, *, k: int = 5) -> dict:
         """自然语言 GraphRAG 问答。"""
         index = self._ensure_index()
-        engine = index.as_query_engine(include_text=True, similarity_top_k=k)
+        engine = index.as_query_engine(
+            include_text=True,
+            similarity_top_k=k,
+            llm=self.llm,
+            embed_model=self.embed_model,
+        )
         response = engine.query(question)
         return {
             "question": question,
@@ -229,7 +231,11 @@ class GraphRagService:
     def retrieve(self, question: str, *, k: int = 5) -> dict:
         """只检索子图/节点，不生成答案。"""
         index = self._ensure_index()
-        retriever = index.as_retriever(include_text=True, similarity_top_k=k)
+        retriever = index.as_retriever(
+            include_text=True,
+            similarity_top_k=k,
+            embed_model=self.embed_model,
+        )
         nodes = retriever.retrieve(question)
         items = []
         for i, node in enumerate(nodes):

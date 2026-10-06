@@ -192,8 +192,13 @@ async def api_info():  # 方便程序或调试查看有哪些入口
 
 @app.get("/modules")
 async def list_modules():
-    """Modular RAG 三层抽象：Module Type → Module → Operator，以及 YAML 默认编排。"""
-    return describe_module_graph(yaml_as_ask_defaults())
+    """Modular RAG 三层抽象 + 当前 AskPipeline 注册表。"""
+    from semantic_search.app.service.ask_modules import default_ask_modules
+    from semantic_search.app.service.pipeline import AskPipeline
+
+    data = describe_module_graph(yaml_as_ask_defaults())
+    data["pipeline"] = AskPipeline(default_ask_modules()).describe()
+    return data
 
 
 @app.post("/ask", response_model=AskResponse)  # 作业主接口：可勾选优化方向的 RAG 问答
