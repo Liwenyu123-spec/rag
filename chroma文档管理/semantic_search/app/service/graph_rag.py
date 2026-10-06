@@ -56,6 +56,10 @@ class GraphRagService:
     """封装 Neo4j 连接、图谱构建与自然语言问答。"""
 
     def __init__(self) -> None:
+        if _GRAPH_STORE_IMPORT_ERROR is not None or Neo4jPropertyGraphStore is None:
+            raise RuntimeError(
+                "未安装 GraphRAG 依赖。请执行: pip install llama-index-graph-stores-neo4j"
+            ) from _GRAPH_STORE_IMPORT_ERROR
         if not NEO4J_PASSWORD:
             raise RuntimeError(
                 "未配置 NEO4J_PASSWORD。请在 .env 写入 Neo4j 密码。"

@@ -57,7 +57,7 @@ from semantic_search.app.schemas import (  # Pydantic 请求/响应模型，给�
     SearchResponse,  # 语义搜索响应体
 )  # 括号结束
 from semantic_search.app.modular_config import describe_module_graph, yaml_as_ask_defaults
-from semantic_search.app.service import GraphRagService, RagAskService
+from semantic_search.app.service.rag_service import RagAskService
 from semantic_search.app.service.presets import PRESETS
 from semantic_search.app.service.rag_eval import (
     DEFAULT_RETRIEVAL_CASES,
@@ -79,7 +79,7 @@ def _require_engine(app: FastAPI) -> SemanticSearchEngine:  # 从 app 取出已�
     return engine  # 引擎可用，返回给路由函数继续用
 
 
-def _try_init_graph_rag(app: FastAPI) -> GraphRagService | None:
+def _try_init_graph_rag(app: FastAPI):
     """启动时或 Neo4j 后开时尝试连接图谱；失败不拖垮向量 RAG。"""
     existing = getattr(app.state, "graph_rag", None)
     if existing is not None:
@@ -89,6 +89,8 @@ def _try_init_graph_rag(app: FastAPI) -> GraphRagService | None:
     if not (DEEPSEEK_API_KEY or DASHSCOPE_API_KEY):
         return None
     try:
+        from semantic_search.app.service.graph_rag import GraphRagService
+
         app.state.graph_rag = GraphRagService()
         app.state.graph_rag_error = None
         print("GraphRAG 已就绪（Neo4j + DeepSeek/千问可配）")
@@ -100,7 +102,7 @@ def _try_init_graph_rag(app: FastAPI) -> GraphRagService | None:
         return None
 
 
-def _require_graph_rag(app: FastAPI) -> GraphRagService:
+def _require_graph_rag(app: FastAPI):
     service = _try_init_graph_rag(app)
     if service is None:
         extra = getattr(app.state, "graph_rag_error", None)
