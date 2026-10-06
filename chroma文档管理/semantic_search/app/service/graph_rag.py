@@ -15,7 +15,14 @@ from llama_index.core.indices.property_graph import (
     SimpleLLMPathExtractor,
 )
 from llama_index.core.types import PydanticProgramMode
-from llama_index.graph_stores.neo4j import Neo4jPropertyGraphStore
+
+try:
+    from llama_index.graph_stores.neo4j import Neo4jPropertyGraphStore
+except ModuleNotFoundError as exc:  # 未装图谱包时，延迟到真正用 GraphRAG 再报
+    Neo4jPropertyGraphStore = None  # type: ignore[misc, assignment]
+    _GRAPH_STORE_IMPORT_ERROR = exc
+else:
+    _GRAPH_STORE_IMPORT_ERROR = None
 
 from semantic_search.app.config import (
     DASHSCOPE_API_KEY,
