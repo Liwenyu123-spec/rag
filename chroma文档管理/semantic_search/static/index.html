@@ -1501,7 +1501,21 @@
               <button type="button" class="danger" @click="deleteLibraryFile(img.file_name)">删除</button>
             </div>
           </div>
-          </div>
+        </div>
+      </aside>
+
+      <div class="hist-mask" v-if="sourcePreview.open" @click="sourcePreview.open=false"></div>
+      <aside class="src-drawer" v-if="sourcePreview.open">
+        <div class="hist-head">
+          <h3>{{ sourcePreview.file_name }}</h3>
+          <button class="header-btn" @click="sourcePreview.open=false">关闭</button>
+        </div>
+        <a class="source-toggle" :href="'/library/file?file_name=' + encodeURIComponent(sourcePreview.file_name || '')" target="_blank">打开原文件</a>
+        <div class="hist-empty" v-if="sourcePreview.loading">正在读取片段…</div>
+        <div class="hist-empty" v-else-if="!(sourcePreview.chunks || []).length">没有入库片段（可能是图片或文件已不在向量库）</div>
+        <div class="src-chunk" v-for="(c, i) in (sourcePreview.chunks || [])" :key="'sc'+i">
+          <strong v-if="c.location">{{ c.location }}</strong>
+          <div>{{ c.text }}</div>
         </div>
       </aside>
 
