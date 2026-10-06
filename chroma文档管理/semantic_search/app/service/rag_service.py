@@ -274,6 +274,7 @@ class RagAskService:
         use_eval: Optional[bool] = False,
         reference: Optional[str] = None,
         doc_scope: Optional[str] = None,
+        compare_baseline: bool | None = True,
     ) -> dict:
         """解析开关后跑默认 AskPipeline。"""
         self.engine._require_llm()
@@ -332,4 +333,74 @@ class RagAskService:
             doc_scope=flags.get("doc_scope"),
         )
         self.pipeline.run(ctx)
-        return ctx.to_response()
+        current = ctx.to_response()
+        if compare_baseline:
+            current["comparison"] = self._compare_with_baseline(question, k, flags, current, reference)
+        else:
+            current["comparison"] = {"enabled": False, "message": "未开启优化对照"}
+        return current
+
+    def _flags_look_optimized(self, flags: dict) -> bool:
+        if flags.get("use_pre") and flags.get("strategy") not in {None, "", "none"}:
+            return True
+        if int(flags.get("num_queries") or 1) > 1:
+            return True
+        if flags.get("use_rerank") or flags.get("use_compress") or flags.get("use_reorder"):
+            return True
+        if flags.get("use_crag") or flags.get("use_self_rag") or flags.get("use_graph"):
+            return True
+        fusion = str(flags.get("fusion_mode") or "")
+        if flags.get("use_hybrid") and fusion not in {"", "simple"}:
+            return True
+        return False
+
+    def _compare_with_baseline(
+        self,
+        question: str,
+        k: int,
+        flags: dict,
+        current: dict,
+        reference: Optional[str],
+    ) -> dict:
+        if not self._flags_look_optimized(flags):
+            return {
+                "enabled": False,
+                "message": "当前配置与基础 RAG 相同，没有可对照的优化项。请勾选检索前/后优化后再问。",
+            }
+        baseline_flags = {
+            "use_pre": False,
+            "strategy": "none",
+            "use_hybrid": True,
+            "fusion_mode": "simple",
+            "num_queries": 1,
+            "use_rerank": False,
+            "use_compress": False,
+            "use_reorder": False,
+            "use_crag": False,
+            "use_self_rag": False,
+            "use_graph": False,
+            "use_eval": False,
+            "doc_scope": flags.get("doc_scope"),
+            "preset": "basic",
+        }
+        baseline = self.ask(
+            question,
+            k,
+            strategy="none",
+            preset="basic",
+            use_pre=False,
+            use_hybrid=True,
+            fusion_mode="simple",
+            num_queries=1,
+            use_rerank=False,
+            use_compress=False,
+            use_reorder=False,
+            use_crag=False,
+            use_self_rag=False,
+            use_graph=False,
+            use_eval=False,
+            reference=None,
+            doc_scope=flags.get("doc_scope"),
+            compare_baseline=False,
+        )
+        return _diff_ask_runs(baseline, current, flags)

@@ -146,6 +146,10 @@ class AskRequest(BaseModel):  # POST /ask：基础 RAG + 可选优化链路
         False,  # 默认关闭评估
         description="是否对本次回答做 Faithfulness/Relevancy（+可选 Correctness）评估",  # OpenAPI 字段说明
     )  # use_eval 字段结束
+    compare_baseline: bool | None = Field(
+        True,
+        description="同时跑一遍基础 RAG（关闭检索前/后优化），对照查询、召回与答案差别",
+    )
     reference: str | None = Field(  # 标准答案（算 Correctness 用）
         None,  # 默认不提供
         description="标准答案；提供时额外算 Correctness（1~5）",  # OpenAPI 字段说明
@@ -214,6 +218,7 @@ class AskResponse(BaseModel):  # /ask 的响应体
     graph: GraphInfo | None = None  # 知识图谱通道
     generation_eval: GenerationEvalInfo | None = None  # 生成质量评估
     optimizations: OptimizeFlags | None = None  # 本次实际开启的优化项
+    comparison: dict | None = None  # 优化前基础 RAG vs 当前优化对照
 
 
 class RetrievalEvalCase(BaseModel):  # 单条检索评测样例
