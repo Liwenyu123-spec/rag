@@ -11,7 +11,7 @@ _PACKAGE_PARENT = Path(__file__).resolve().parents[2]  # .../chroma文档管理�
 if str(_PACKAGE_PARENT) not in sys.path:  # 路径尚未加入时
     sys.path.insert(0, str(_PACKAGE_PARENT))  # 插到最前，保证能 import semantic_search
 
-from fastapi import FastAPI, File, Form, HTTPException, Query, UploadFile  # FastAPI 应用、上传、查询参数
+from fastapi import Depends, FastAPI, File, Form, HTTPException, Query, Request, UploadFile  # FastAPI 应用、上传、查询参数
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
@@ -28,6 +28,7 @@ from semantic_search.app.config import (  # 从配置模块导入密钥、模型
     LLM_PROVIDER,  # 大模型提供方：deepseek 或 dashscope
     NEO4J_PASSWORD,  # Neo4j 密码
     PORT,  # 服务端口，默认 8003
+    normalize_vector_backend,
 )  # 括号结束
 from semantic_search.app.engine import SUPPORTED_EXTS, SemanticSearchEngine  # 引擎 + 允许的文件扩展名
 from semantic_search.app.service.mm_rag import is_image_path
@@ -76,7 +77,7 @@ STATIC_DIR = Path(__file__).resolve().parent.parent / "static"  # static 目录�
 INDEX_HTML = STATIC_DIR / "index.html"  # 前端入口 HTML 的完整路径
 
 
-def _require_engine(app: FastAPI) -> SemanticSearchEngine:  # 从 app 取出已初始化的搜索引擎
+def _require_engine(app: FastAPI):  # 从 app 取出已初始化的搜索引擎
     engine = getattr(app.state, "search_engine", None)  # lifespan 里挂到 app.state 上的引擎实例
     if engine is None:  # 没初始化成功（常见原因：缺 API Key）
         raise HTTPException(  # 返回 HTTP 503 给调用方
@@ -84,6 +85,20 @@ def _require_engine(app: FastAPI) -> SemanticSearchEngine:  # 从 app 取出已�
             detail="搜索引擎未初始化，请检查 Windows 环境变量 DEEPSEEK_API_KEY",  # 错误说明
         )  # 括号结束
     return engine  # 引擎可用，返回给路由函数继续用
+
+
+def vector_backend_dep(
+    request: Request,
+    vector_backend: str | None = Query(None, description="chroma / qdrant"),
+) -> str:
+    return normalize_vector_backend(vector_backend or request.headers.get("x-vector-backend"))
+
+
+def _bound_engine(app: FastAPI, backend: str):
+    try:
+        return _require_engine(app).bind(backend)
+    except RuntimeError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 def _try_init_graph_rag(app: FastAPI):
@@ -267,7 +282,7 @@ async def list_modules():
 
 
 @app.post("/ask", response_model=AskResponse)  # 作业主接口：可勾选优化方向的 RAG 问答
-async def ask(request: AskRequest):  # 请求体含 question / k / 各优化开关
+async def ask(request: AskRequest, backend: str = Depends(vector_backend_dep)):  # 请求体含 question / k / 各优化开关
     """基础 RAG + ModularRAG 预设 / 勾选优化 + 可选生成评估。
 
     preset: basic / hybrid_search / advanced / full_optimization（对齐 demo01）
@@ -295,7 +310,7 @@ async def ask(request: AskRequest):  # 请求体含 question / k / 各优化开�
     try:  # 业务层可能抛 ValueError / RuntimeError
         want_graph = bool(request.use_graph) or request.preset == "graph_hybrid"
         payload = RagAskService(
-            _require_engine(app),
+            _bound_engine(app, backend),
             graph_rag=_try_init_graph_rag(app) if want_graph else getattr(app.state, "graph_rag", None),
         ).ask(  # 编排：检索前→检索→生成→可选评估
             request.question,  # 用户问题
@@ -336,13 +351,13 @@ async def ask(request: AskRequest):  # 请求体含 question / k / 各优化开�
 
 
 @app.post("/eval/retrieval", response_model=RetrievalEvalResponse)  # 检索质量评估接口
-async def eval_retrieval(request: RetrievalEvalRequest):  # 请求体含 k / 开关 / cases
+async def eval_retrieval(request: RetrievalEvalRequest, backend: str = Depends(vector_backend_dep)):  # 请求体含 k / 开关 / cases
     """检索质量评估：Hit Rate / MRR / Precision@K / Recall@K。
 
     默认走与 /ask 相同的检索链（检索前、混合、后处理、可选 CRAG）。
     compare=true 时同时跑 basic 预设做 A/B。
     """
-    engine = _require_engine(app)
+    engine = _bound_engine(app, backend)
     service = RagAskService(engine)
     cases = (
         [c.model_dump() for c in request.cases]
@@ -430,9 +445,10 @@ async def eval_retrieval(request: RetrievalEvalRequest):  # 请求体含 k / 开
 async def search_get(  # 适合浏览器地址栏直接试
     q: str = Query(..., description="搜索查询", min_length=1),  # 必填查询词，至少 1 个字符
     k: int = Query(5, description="返回结果数量", ge=1, le=100),  # 返回条数，默认 5，范围 1~100
+    backend: str = Depends(vector_backend_dep),
 ):  # 参数列表结束
     """GET 搜索，只检索相似文档，不调用大模型。"""  # OpenAPI 接口说明
-    results = _require_engine(app).search(q, k)  # 调用引擎做向量检索
+    results = _bound_engine(app, backend).search(q, k)  # 调用引擎做向量检索
     return SearchResponse(  # 包装成统一响应结构
         query=q,  # 回显用户查询
         results=[DocumentResponse(**item) for item in results],  # 把每条 dict 转成 DocumentResponse
@@ -441,9 +457,9 @@ async def search_get(  # 适合浏览器地址栏直接试
 
 
 @app.post("/search", response_model=SearchResponse)  # POST 语义搜索，适合前端 / 程序化调用
-async def search_post(request: SearchRequest):  # 请求体是 JSON：{"query":"...","k":5}
+async def search_post(request: SearchRequest, backend: str = Depends(vector_backend_dep)):  # 请求体是 JSON：{"query":"...","k":5}
     """POST 搜索，适合程序化调用。"""  # OpenAPI 接口说明
-    results = _require_engine(app).search(request.query, request.k)  # 用请求体里的参数检索
+    results = _bound_engine(app, backend).search(request.query, request.k)  # 用请求体里的参数检索
     return SearchResponse(  # 返回检索结果列表
         query=request.query,  # 回显查询文本
         results=[DocumentResponse(**item) for item in results],  # 结构化结果
@@ -455,10 +471,11 @@ async def search_post(request: SearchRequest):  # 请求体是 JSON：{"query":"
 async def query_get(  # 检索后交给大模型生成答案，并带来源
     q: str = Query(..., description="用户问题", min_length=1),  # 必填问题
     k: int = Query(5, description="检索条数", ge=1, le=100),  # 检索 Top-K
+    backend: str = Depends(vector_backend_dep),
 ):  # 参数列表结束
     """一次性 RAG 问答：检索后交给大模型生成。"""  # OpenAPI 接口说明
     try:  # 引擎缺 LLM 时会抛 RuntimeError
-        payload = _require_engine(app).query(q, k)  # 执行「检索 + 生成」
+        payload = _bound_engine(app, backend).query(q, k)  # 执行「检索 + 生成」
     except RuntimeError as exc:  # 捕获引擎层业务错误
         raise HTTPException(status_code=503, detail=str(exc)) from exc  # 转成 503 给客户端
     return QueryResponse(  # 组装问答响应
@@ -469,10 +486,10 @@ async def query_get(  # 检索后交给大模型生成答案，并带来源
 
 
 @app.post("/query", response_model=QueryResponse)  # POST 一次性 RAG 问答
-async def query_post(request: QueryRequest):  # JSON 体：question + k
+async def query_post(request: QueryRequest, backend: str = Depends(vector_backend_dep)):  # JSON 体：question + k
     """一次性 RAG 问答。"""  # OpenAPI 接口说明
     try:  # 引擎缺 LLM 时会抛 RuntimeError
-        payload = _require_engine(app).query(request.question, request.k)  # 用请求体参数问答
+        payload = _bound_engine(app, backend).query(request.question, request.k)  # 用请求体参数问答
     except RuntimeError as exc:  # 捕获引擎层业务错误
         raise HTTPException(status_code=503, detail=str(exc)) from exc  # LLM 不可用时返回 503
     return QueryResponse(  # 返回问题、答案、来源
@@ -483,10 +500,10 @@ async def query_post(request: QueryRequest):  # JSON 体：question + k
 
 
 @app.post("/chat", response_model=ChatResponse)  # 多轮对话接口
-async def chat(request: ChatRequest):  # 相同 session_id 会共用记忆缓冲区
+async def chat(request: ChatRequest, backend: str = Depends(vector_backend_dep)):  # 相同 session_id 会共用记忆缓冲区
     """多轮 RAG 对话，相同 session_id 会保留记忆。"""  # OpenAPI 接口说明
     try:  # 引擎缺 LLM 时会抛 RuntimeError
-        payload = _require_engine(app).chat(  # 调用带记忆的 chat_engine
+        payload = _bound_engine(app, backend).chat(  # 调用带记忆的 chat_engine
             request.question,  # 本轮用户问题
             session_id=request.session_id,  # 会话 ID，前端可随机生成并保持不变
             k=request.k,  # 每轮检索条数
@@ -497,9 +514,9 @@ async def chat(request: ChatRequest):  # 相同 session_id 会共用记忆缓冲
 
 
 @app.post("/documents")  # 向向量库追加纯文本（不是读文件）
-async def add_documents(request: AddDocumentsRequest):  # documents 是字符串列表
+async def add_documents(request: AddDocumentsRequest, backend: str = Depends(vector_backend_dep)):  # documents 是字符串列表
     """向向量库追加纯文本文档。"""  # OpenAPI 接口说明
-    engine = _require_engine(app)  # 拿到可用引擎
+    engine = _bound_engine(app, backend)  # 拿到可用引擎
     engine.add_documents(request.documents, splitter=request.splitter)  # 切分后写入索引
     return {  # 返回操作结果摘要
         "message": f"成功添加 {len(request.documents)} 个文档",  # 本次提交的文档条数
@@ -508,9 +525,9 @@ async def add_documents(request: AddDocumentsRequest):  # documents 是字符串
 
 
 @app.post("/ingest")  # 对应讲义 SimpleDirectoryReader：从本地文件/目录导入
-async def ingest_documents(request: IngestRequest):  # 可传 input_files 或 input_dir
+async def ingest_documents(request: IngestRequest, backend: str = Depends(vector_backend_dep)):  # 可传 input_files 或 input_dir
     """从本地目录或文件列表加载文档（SimpleDirectoryReader）。"""  # OpenAPI 接口说明
-    engine = _require_engine(app)  # 确保引擎已初始化
+    engine = _bound_engine(app, backend)  # 确保引擎已初始化
     result = engine.ingest_files(  # 内部：SimpleDirectoryReader → 切分 → insert_nodes
         input_files=request.input_files,  # 指定文件列表时优先用这个
         input_dir=request.input_dir,  # 否则加载目录；都空则用默认 DATA_DIR
@@ -525,6 +542,7 @@ async def upload_documents(  # multipart：files + splitter + target
     splitter: str = Form("sentence", description="切分方式: sentence / token / semantic"),
     target: str = Form("chroma", description="chroma / neo4j / both"),
     extractor: str = Form("simple", description="图谱抽取器：simple / schema"),
+    backend: str = Depends(vector_backend_dep),
 ):
     """浏览器上传文件 → 落盘 → 写入 Chroma 和/或 Neo4j 图谱。"""
     target = (target or "chroma").strip().lower()
@@ -578,14 +596,14 @@ async def upload_documents(  # multipart：files + splitter + target
 
     if image_paths:
         mm = _require_mm_rag(app)
-        payload["multimodal"] = mm.ingest_paths(image_paths)
+        payload["multimodal"] = mm.ingest_paths(image_paths, backend=backend)
         parts.append(f"已写入图库 {payload['multimodal'].get('indexed', 0)} 张")
 
     if target in {"chroma", "both"} and saved_paths:
-        engine = _require_engine(app)
+        engine = _bound_engine(app, backend)
         chroma_result = engine.ingest_files(input_files=saved_paths, splitter=splitter)
         payload.update(chroma_result)
-        parts.append("已写入向量库")
+        parts.append(f"已写入向量库（{backend}）")
 
     if target in {"neo4j", "both"} and saved_paths:
         graph = _require_graph_rag(app)
@@ -704,6 +722,7 @@ async def mm_search(
     query: str = Form(""),
     k: int = Form(5),
     image: UploadFile | None = File(None),
+    backend: str = Depends(vector_backend_dep),
 ):
     """以文搜图或以上传图搜图（可选同时以图搜文）。"""
     mm = _require_mm_rag(app)
@@ -713,11 +732,11 @@ async def mm_search(
         if content:
             query_image_path = str(mm.save_query_image(image.filename, content))
     if query_image_path:
-        images = mm.search_images_by_image(query_image_path, k=k)
-        texts = mm.search_texts_by_image(query_image_path, k=k)
+        images = mm.search_images_by_image(query_image_path, k=k, backend=backend)
+        texts = mm.search_texts_by_image(query_image_path, k=k, backend=backend)
         task = "image2image"
     elif (query or "").strip():
-        images = mm.search_images_by_text(query.strip(), k=k)
+        images = mm.search_images_by_text(query.strip(), k=k, backend=backend)
         texts = []
         task = "text2image"
     else:
@@ -737,6 +756,7 @@ async def mm_ask(
     question: str = Form(""),
     k: int = Form(5),
     image: UploadFile | None = File(None),
+    backend: str = Depends(vector_backend_dep),
 ):
     """多模态问答：CLIP 召回图片后，有千问 Key 则用 VL 看图作答。"""
     mm = _require_mm_rag(app)
@@ -748,7 +768,7 @@ async def mm_ask(
     if not (question or "").strip() and not query_image_path:
         raise HTTPException(status_code=400, detail="请输入问题或上传图片")
     try:
-        return mm.ask(question, query_image_path=query_image_path, k=k)
+        return mm.ask(question, query_image_path=query_image_path, k=k, backend=backend)
     except RuntimeError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
 
@@ -777,20 +797,25 @@ async def health_check():  # 健康检查接口
         "model": stats["model_name"],  # Embedding 模型名
         "llm_provider": stats["llm_provider"],  # LLM 提供方
         "llm_model": stats["llm_model"],  # LLM 模型名
-        "total_documents": stats["total_documents"],  # 向量库文档数
+        "total_documents": stats["total_documents"],  # 当前默认后端文档数
+        "chroma_documents": stats.get("chroma_documents", 0),
+        "qdrant_documents": stats.get("qdrant_documents", 0),
+        "qdrant_ready": stats.get("qdrant_ready", False),
         "index_type": stats["index_type"],  # 索引类型说明
         "graph_rag_ready": graph is not None,
         "mm_ready": bool(mm_status_data.get("ready")),
         "image_count": mm_status_data.get("image_count", 0),
+        "chroma_images": mm_status_data.get("chroma_images", 0),
+        "qdrant_images": mm_status_data.get("qdrant_images", 0),
         "vl_ready": bool(mm_status_data.get("vl_ready")),
     }  # 字典/集合结束
 
 
 @app.delete("/documents")  # 清空向量集合（危险操作，调试用）
-async def clear_documents():  # 清空接口
-    """清空集合中的全部文档。"""  # 接口说明
-    _require_engine(app).clear_documents()  # 删除集合内全部向量与文档
-    return {"message": "所有文档已清空"}  # 确认清空成功
+async def clear_documents(backend: str = Depends(vector_backend_dep)):  # 清空接口
+    """清空当前向量后端中的全部文档。"""  # 接口说明
+    _bound_engine(app, backend).clear_documents()  # 删除集合内全部向量与文档
+    return {"message": f"{backend} 中的文档已清空"}  # 确认清空成功
 
 
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")

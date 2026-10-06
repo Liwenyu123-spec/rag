@@ -8,11 +8,9 @@ import re  # 正则：中文分句
 from pathlib import Path  # 检查 data 目录、创建持久化路径
 from typing import List  # 类型注解
 
-import chromadb  # 向量数据库客户端
-from llama_index.core import Document, Settings, SimpleDirectoryReader, StorageContext, VectorStoreIndex  # 文档、全局设置、加载器、存储与索引
+from llama_index.core import Document, Settings, SimpleDirectoryReader  # 文档、全局设置、加载器
 from llama_index.core.memory import ChatMemoryBuffer  # 多轮对话记忆缓冲区
 from llama_index.core.node_parser import SemanticSplitterNodeParser, SentenceSplitter, TokenTextSplitter  # 三种分块器
-from llama_index.vector_stores.chroma import ChromaVectorStore  # LlamaIndex 对 Chroma 的适配层
 
 from semantic_search.app.config import (  # 导入运行时配置常量
     CHROMA_PERSIST_DIR,  # Chroma 落盘目录
@@ -30,13 +28,16 @@ from semantic_search.app.config import (  # 导入运行时配置常量
     HYBRID_ENABLED,  # 混合检索开关
     LLM_MODEL,  # 大模型名
     LLM_PROVIDER,  # 大模型提供方
+    QDRANT_PATH,
     RAG_SYSTEM_PROMPT,  # 对话系统提示词
     REORDER_ENABLED,  # 长上下文重排开关
     RERANK_ENABLED,  # 重排开关
     RERANK_PROVIDER,  # 重排提供方
     SELF_RAG_ENABLED,  # Self-RAG 开关
     SIMILARITY_TOP_K,  # 默认 Top-K
+    normalize_vector_backend,
 )  # config 导入结束
+from semantic_search.app.vector_backends import nodes_from_slot, open_chroma_slot, open_qdrant_slot
 from semantic_search.app.service.retrieval_optimize import (  # 检索中/后优化工具
     apply_postprocessors,  # 对召回节点做重排/压缩/重排版
     build_hybrid_retriever,  # 构建向量或混合检索器
@@ -75,35 +76,46 @@ def chinese_sentence_splitter(text: str) -> List[str]:  # 语义分块用的中�
 
 
 class SemanticSearchEngine:  # Native RAG 引擎主体
-    """LlamaIndex + Chroma 的 Native RAG 引擎，默认用 Windows 环境里的 DeepSeek。"""  # 类说明
+    """LlamaIndex 引擎：Chroma 与 Qdrant 两套向量库并存，按 bind(backend) 切换。"""  # 类说明
 
-    def __init__(  # 初始化：Embedding、LLM、Chroma、索引
+    def __init__(  # 初始化：Embedding、LLM、双向量库
         self,  # 引擎实例自身
-        persist_dir: str = CHROMA_PERSIST_DIR,  # 向量库持久化路径
+        persist_dir: str = CHROMA_PERSIST_DIR,  # Chroma 持久化路径
         collection_name: str = COLLECTION_NAME,  # 集合名
         model_name: str = EMBEDDING_MODEL,  # Embedding 模型名
     ):  # 构造函数签名结束
         self.model_name = model_name  # 记下 Embedding 模型，供 /stats 展示
-        self.persist_dir = persist_dir  # 记下持久化目录
+        self.persist_dir = persist_dir  # 记下 Chroma 持久化目录
         self.collection_name = collection_name  # 记下集合名
         self.llm_model = LLM_MODEL  # 记下当前 LLM 模型名
+        self.backend_name = "chroma"
         self._memories: dict[str, ChatMemoryBuffer] = {}  # session_id → 对话记忆
-        self._chat_engines: dict[str, object] = {}  # session+k → chat_engine 缓存
-        self._bm25_nodes_cache: list | None = None  # BM25 语料缓存，入库变更时清空
+        self._chat_engines: dict[str, object] = {}  # backend+session+k → chat_engine 缓存
+        self._bm25_nodes_cache: dict[str, list | None] = {"chroma": None, "qdrant": None}
 
         Settings.embed_model = self._init_embed_model()  # 设置全局 Embedding
         Settings.llm = self._init_llm()  # 设置全局 LLM（可能为 None）
         Settings.node_parser = self._sentence_splitter()  # 默认按句子分块
 
-        Path(persist_dir).mkdir(parents=True, exist_ok=True)  # 确保持久化目录存在
-        self.client = chromadb.PersistentClient(path=persist_dir)  # 打开/创建本地 Chroma
-        self.collection = self.client.get_or_create_collection(name=self.collection_name)  # 拿到集合
-        self.vector_store = ChromaVectorStore(chroma_collection=self.collection)  # 包成 LlamaIndex 向量存储
-        self.storage_context = StorageContext.from_defaults(vector_store=self.vector_store)  # 存储上下文
-        self.index = self._load_or_create_index()  # 有数据则加载，无数据则建空索引
+        chroma_slot = open_chroma_slot(persist_dir, collection_name)
+        self.chroma_client = chroma_slot.raw_client
+        self.slots = {"chroma": chroma_slot}
+        self.qdrant_ready = False
+        self.qdrant_error = None
+        self.qdrant_client = None
+        try:
+            qdrant_slot = open_qdrant_slot(QDRANT_PATH, collection_name)
+            self.slots["qdrant"] = qdrant_slot
+            self.qdrant_client = qdrant_slot.client
+            self.qdrant_ready = True
+            print(f"Qdrant 本机库已就绪: {QDRANT_PATH}（{qdrant_slot.count()} 条）")
+        except Exception as exc:  # noqa: BLE001
+            self.qdrant_error = str(exc)
+            print(f"警告: Qdrant 初始化失败，仅能使用 Chroma: {exc}")
+
         print(  # 启动日志
             f"搜索引擎已初始化，Embedding: {EMBEDDING_PROVIDER}/{model_name}，"  # Embedding 提供方与模型
-            f"LLM: {LLM_PROVIDER}/{self.llm_model}，持久化目录: {persist_dir}"  # LLM 与 Chroma 路径
+            f"LLM: {LLM_PROVIDER}/{self.llm_model}，Chroma: {persist_dir}"
         )  # print 结束
         print(  # 检索优化开关汇总日志
             "检索优化: "  # 前缀文案
@@ -111,6 +123,36 @@ class SemanticSearchEngine:  # Native RAG 引擎主体
             f"compress={COMPRESS_ENABLED}, reorder={REORDER_ENABLED}, "  # 压缩与重排版
             f"crag={CRAG_ENABLED}, self_rag={SELF_RAG_ENABLED}"  # CRAG 与 Self-RAG
         )  # 优化开关日志结束
+
+    def bind(self, backend: str | None) -> "SemanticSearchEngine":
+        name = normalize_vector_backend(backend)
+        if name == "qdrant" and not self.qdrant_ready:
+            raise RuntimeError(self.qdrant_error or "Qdrant 不可用")
+        bound = object.__new__(SemanticSearchEngine)
+        bound.__dict__ = {**self.__dict__, "backend_name": name}
+        return bound
+
+    def _slot(self):
+        slot = self.slots.get(self.backend_name)
+        if slot is None:
+            raise RuntimeError(f"向量后端不可用: {self.backend_name}")
+        return slot
+
+    @property
+    def index(self):
+        return self._slot().index
+
+    @index.setter
+    def index(self, value) -> None:
+        self._slot().index = value
+
+    @property
+    def collection(self):
+        return self._slot()
+
+    @property
+    def client(self):
+        return self._slot().raw_client
 
     def _init_embed_model(self):  # 按配置选择 Embedding 实现
         """DeepSeek 不做向量化；支持 Chinese-CLIP / HuggingFace / 千问。"""  # 方法说明
@@ -185,24 +227,20 @@ class SemanticSearchEngine:  # Native RAG 引擎主体
             return self._semantic_splitter()  # SemanticSplitterNodeParser
         return self._sentence_splitter()  # 默认 sentence
 
-    def _load_or_create_index(self) -> VectorStoreIndex:  # 有存量向量则挂载，否则建空索引
-        if self.collection.count() > 0:  # Chroma 里已有数据
-            return VectorStoreIndex.from_vector_store(vector_store=self.vector_store)  # 从向量库恢复索引
-        return VectorStoreIndex(nodes=[], storage_context=self.storage_context)  # 空索引，后续 insert
-
-    def _reset_chat_engines(self) -> None:  # 知识库变更后清掉旧 chat_engine，避免用过期上下文
-        self._chat_engines.clear()  # 清空缓存字典
-
     def _invalidate_retrieval_cache(self) -> None:  # 入库变更后清缓存
-        """入库变更后清空 BM25 语料与对话引擎缓存。"""  # 方法说明
-        self._bm25_nodes_cache = None  # 下次再懒加载 BM25 语料
-        self._reset_chat_engines()  # 同时清掉 chat_engine
+        """入库变更后清空当前后端的 BM25 语料与对话引擎缓存。"""  # 方法说明
+        self._bm25_nodes_cache[self.backend_name] = None
+        prefix = f"{self.backend_name}:"
+        for key in [k for k in list(self._chat_engines) if str(k).startswith(prefix)]:
+            self._chat_engines.pop(key, None)
 
     def _bm25_nodes(self) -> list:  # 获取 BM25 语料节点
         """懒加载 BM25 节点列表。"""  # 方法说明
-        if self._bm25_nodes_cache is None:  # 尚未缓存
-            self._bm25_nodes_cache = nodes_from_index(self.index, self.collection)  # 从索引/集合拉节点
-        return self._bm25_nodes_cache  # 返回缓存列表
+        cached = self._bm25_nodes_cache.get(self.backend_name)
+        if cached is None:  # 尚未缓存
+            cached = nodes_from_slot(self._slot())
+            self._bm25_nodes_cache[self.backend_name] = cached
+        return cached  # 返回缓存列表
 
     def _build_retriever(  # 构建检索器（可覆盖混合开关）
         self,  # 引擎实例
@@ -217,7 +255,7 @@ class SemanticSearchEngine:  # Native RAG 引擎主体
         return build_hybrid_retriever(  # 委托给 retrieval_optimize
             self.index,  # 向量索引
             final_k=k,  # 最终条数
-            collection=self.collection,  # Chroma 集合
+            collection=self.collection,  # 当前向量后端（Duck typing: .get）
             nodes_cache=self._bm25_nodes() if use_hybrid else None,  # 混合时才喂 BM25 语料
             hybrid_enabled=use_hybrid,  # 是否混合
             num_queries=num_queries,  # Multi-Query
@@ -305,7 +343,7 @@ class SemanticSearchEngine:  # Native RAG 引擎主体
 
         docs = texts if texts is not None else SAMPLE_DOCUMENTS  # 可用自定义文本覆盖示例
         print("正在加载示例文档...")  # 灌入提示
-        self.add_documents(docs)  # 写入示例知识
+        self.add_documents(docs)  # 写入示例知识（默认 Chroma）
 
         data_dir = Path(DATA_DIR)  # 默认数据目录
         has_files = data_dir.is_dir() and any(p.is_file() for p in data_dir.rglob("*"))  # 目录里是否有文件
@@ -366,8 +404,8 @@ class SemanticSearchEngine:  # Native RAG 引擎主体
         """多轮对话：带 ChatMemoryBuffer；检索侧与 query 共用混合/后处理。"""  # 方法说明
         self._require_llm()  # 没 LLM 就抛错
         # 缓存键带上优化开关，改配置后会重建引擎
-        key = (  # session + k + 优化开关组合键
-            f"{session_id}:{k}:h{int(HYBRID_ENABLED)}:r{int(RERANK_ENABLED)}"  # 会话、k、混合、重排
+        key = (  # backend + session + k + 优化开关组合键
+            f"{self.backend_name}:{session_id}:{k}:h{int(HYBRID_ENABLED)}:r{int(RERANK_ENABLED)}"  # 后端、会话、k、混合、重排
             f":c{int(COMPRESS_ENABLED)}:o{int(REORDER_ENABLED)}"  # 压缩、重排版
         )  # key 赋值结束
         if key not in self._chat_engines:  # 首次创建
@@ -400,16 +438,24 @@ class SemanticSearchEngine:  # Native RAG 引擎主体
 
     def get_stats(self) -> dict:  # 供 /stats、/health 使用
         """返回文档数量、模型名称和持久化路径等状态。"""  # 方法说明
+        chroma_n = self.slots["chroma"].count() if "chroma" in self.slots else 0
+        qdrant_n = self.slots["qdrant"].count() if self.qdrant_ready else 0
         return {  # 供 /stats、/health 展示
-            "total_documents": self.collection.count(),  # 集合条数
+            "total_documents": self.collection.count(),  # 当前选中后端条数
+            "chroma_documents": chroma_n,
+            "qdrant_documents": qdrant_n,
+            "qdrant_ready": self.qdrant_ready,
+            "qdrant_error": self.qdrant_error,
+            "active_backend": self.backend_name,
             "dimension": "auto",  # 维度由 Embedding 模型决定
             "model_name": self.model_name,  # Embedding 模型
             "embedding_provider": EMBEDDING_PROVIDER,  # Embedding 提供方
             "llm_provider": LLM_PROVIDER,  # LLM 提供方
             "llm_model": self.llm_model,  # LLM 模型名
             "persist_dir": self.persist_dir,  # Chroma 持久化目录
+            "qdrant_path": QDRANT_PATH,
             "collection_name": self.collection_name,  # 集合名
-            "index_type": "LlamaIndex + ChromaDB",  # 索引类型说明
+            "index_type": f"LlamaIndex + {self.backend_name}",
             "chunk_size": CHUNK_SIZE,  # 分块大小
             "chunk_overlap": CHUNK_OVERLAP,  # 分块重叠
             "data_dir": DATA_DIR,  # 默认数据目录
@@ -419,12 +465,8 @@ class SemanticSearchEngine:  # Native RAG 引擎主体
             "reorder_enabled": REORDER_ENABLED,  # 长上下文重排是否开启
         }  # return 结束
 
-    def clear_documents(self) -> None:  # 清空知识库
-        """删除并重建集合，清空全部文档。"""  # 方法说明
-        self.client.delete_collection(self.collection_name)  # 删掉旧集合
-        self.collection = self.client.get_or_create_collection(name=self.collection_name)  # 重建空集合
-        self.vector_store = ChromaVectorStore(chroma_collection=self.collection)  # 重新绑定向量存储
-        self.storage_context = StorageContext.from_defaults(vector_store=self.vector_store)  # 新存储上下文
-        self.index = VectorStoreIndex(nodes=[], storage_context=self.storage_context)  # 空索引
+    def clear_documents(self) -> None:  # 清空当前后端知识库
+        """删除并重建当前向量后端的集合。"""  # 方法说明
+        self.index = self._slot().rebuild_empty_index()
         self._memories.clear()  # 清对话记忆
         self._invalidate_retrieval_cache()  # 清 BM25 / chat_engine 缓存

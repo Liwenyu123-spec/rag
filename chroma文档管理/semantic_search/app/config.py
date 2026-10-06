@@ -140,7 +140,15 @@ SELF_RAG_VERBOSE = _env_bool("SELF_RAG_VERBOSE", True)  # Self-RAG 过程日志
 # RAG 评估（飞书 01-RAG评估）：生成侧 Faithfulness/Relevancy/Correctness
 EVAL_VERBOSE = _env_bool("EVAL_VERBOSE", True)  # 评估过程日志
 
-HOST = os.getenv("SEARCH_HOST", "127.0.0.1")  # Web 服务监听地址
+QDRANT_PATH = os.getenv("QDRANT_PATH", str(PACKAGE_DIR / "qdrant_db"))
+DEFAULT_VECTOR_BACKEND = os.getenv("VECTOR_BACKEND", "chroma").strip().lower() or "chroma"
+
+
+def normalize_vector_backend(name: str | None) -> str:
+    raw = (name or DEFAULT_VECTOR_BACKEND or "chroma").strip().lower()
+    if raw in {"qdrant", "qd", "qdrant_client"}:
+        return "qdrant"
+    return "chroma"
 PORT = int(os.getenv("SEARCH_PORT", "8003"))  # 默认 8003，避免和「带安全校验的聊天机器人」8001 冲突
 
 # ----- GraphRAG（PropertyGraphIndex + Neo4j；LLM 可用 DeepSeek / 千问）-----

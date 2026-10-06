@@ -27,10 +27,13 @@ from semantic_search.app.config import (
     IMAGE_DIR,
     IMAGE_EXTS,
     LLM_MODEL,
+    QDRANT_PATH,
     SIMILARITY_TOP_K,
     VL_MODEL,
     _DEFAULT_CHINESE_CLIP,
+    normalize_vector_backend,
 )
+from semantic_search.app.vector_backends import ChromaSlot, open_qdrant_slot
 
 
 def is_image_path(path: str | Path) -> bool:
@@ -43,14 +46,37 @@ class MultimodalRagService:
         self.image_dir = Path(IMAGE_DIR)
         self.image_dir.mkdir(parents=True, exist_ok=True)
         self.clip = self._init_clip()
+        self.image_slots = {}
+        chroma_client = getattr(engine, "chroma_client", None) or engine.client
         try:
-            self.collection = engine.client.get_collection(name=IMAGE_COLLECTION_NAME)
+            img_col = chroma_client.get_collection(name=IMAGE_COLLECTION_NAME)
         except Exception:
-            self.collection = engine.client.get_or_create_collection(
+            img_col = chroma_client.get_or_create_collection(
                 name=IMAGE_COLLECTION_NAME,
                 metadata={"hnsw:space": "cosine"},
             )
+        dummy_index = getattr(engine.slots["chroma"], "index", None)
+        self.image_slots["chroma"] = ChromaSlot(img_col, dummy_index, persist_label=persist_dir)
+        self.image_slots["chroma"].raw_client = chroma_client
+        if getattr(engine, "qdrant_ready", False) and engine.qdrant_client is not None:
+            try:
+                self.image_slots["qdrant"] = open_qdrant_slot(
+                    QDRANT_PATH, IMAGE_COLLECTION_NAME, client=engine.qdrant_client
+                )
+            except Exception as exc:  # noqa: BLE001
+                print(f"警告: Qdrant 图库初始化失败: {exc}")
         self.persist_dir = persist_dir
+        self.collection = self.image_slots["chroma"]
+
+    def _img(self, backend: str | None = None):
+        name = normalize_vector_backend(backend)
+        slot = self.image_slots.get(name)
+        if slot is None:
+            raise RuntimeError(f"图库后端不可用: {name}")
+        return slot
+
+    def _text_slot(self, backend: str | None = None):
+        return self.engine.bind(backend).collection
 
     def _init_clip(self):
         current = None
@@ -70,10 +96,16 @@ class MultimodalRagService:
         print(f"多模态：加载 Chinese-CLIP 图像塔 {path}")
         return ChineseCLIPEmbedding(model_path=path)
 
-    def status(self) -> dict:
+    def status(self, backend: str | None = None) -> dict:
+        slot = self._img(backend)
+        chroma_n = self.image_slots["chroma"].count() if "chroma" in self.image_slots else 0
+        qdrant_n = self.image_slots["qdrant"].count() if "qdrant" in self.image_slots else 0
         return {
             "ready": True,
-            "image_count": self.collection.count(),
+            "image_count": slot.count(),
+            "chroma_images": chroma_n,
+            "qdrant_images": qdrant_n,
+            "active_backend": normalize_vector_backend(backend),
             "image_dir": str(self.image_dir),
             "collection": IMAGE_COLLECTION_NAME,
             "clip_model": getattr(self.clip, "model_name", None) or str(self.clip.model_path),
@@ -81,7 +113,7 @@ class MultimodalRagService:
             "vl_ready": bool(DASHSCOPE_API_KEY),
             "vl_model": VL_MODEL if DASHSCOPE_API_KEY else None,
             "message": (
-                f"图库 {self.collection.count()} 张；"
+                f"当前图库 {slot.count()} 张（Chroma {chroma_n} / Qdrant {qdrant_n}）；"
                 + ("千问 VL 可看图作答" if DASHSCOPE_API_KEY else "未配置 DASHSCOPE_API_KEY，看图作答将退回纯文本 LLM")
             ),
         }
@@ -95,7 +127,7 @@ class MultimodalRagService:
             raise FileNotFoundError(name)
         return path
 
-    def ingest_paths(self, paths: list[str]) -> dict:
+    def ingest_paths(self, paths: list[str], backend: str | None = None) -> dict:
         saved: list[str] = []
         skipped: list[str] = []
         for raw in paths:
@@ -109,28 +141,29 @@ class MultimodalRagService:
             saved.append(str(dest))
         indexed = 0
         if saved:
-            indexed = self._index_files(saved)
+            indexed = self._index_files(saved, backend=backend)
         return {
             "saved_images": [Path(p).name for p in saved],
             "skipped_files": skipped,
             "indexed": indexed,
-            "total_images": self.collection.count(),
+            "total_images": self._img(backend).count(),
+            "backend": normalize_vector_backend(backend),
         }
 
-    def ingest_data_dir(self, root: str | None = None) -> dict:
+    def ingest_data_dir(self, root: str | None = None, backend: str | None = None) -> dict:
         base = Path(root or DATA_DIR)
         if not base.is_dir():
-            return {"indexed": 0, "total_images": self.collection.count()}
+            return {"indexed": 0, "total_images": self._img(backend).count()}
         files = [
             str(p)
             for p in base.rglob("*")
             if p.is_file() and is_image_path(p) and not p.name.startswith("_query")
         ]
         if not files:
-            return {"indexed": 0, "total_images": self.collection.count()}
-        return self.ingest_paths(files)
+            return {"indexed": 0, "total_images": self._img(backend).count()}
+        return self.ingest_paths(files, backend=backend)
 
-    def _index_files(self, paths: list[str]) -> int:
+    def _index_files(self, paths: list[str], backend: str | None = None) -> int:
         ids, embeddings, documents, metadatas = [], [], [], []
         for path in paths:
             p = Path(path)
@@ -146,13 +179,13 @@ class MultimodalRagService:
                     "kind": "image",
                 }
             )
-        self.collection.upsert(
+        self._img(backend).upsert(
             ids=ids,
             embeddings=embeddings,
             documents=documents,
             metadatas=metadatas,
         )
-        print(f"多模态：写入 {len(ids)} 张图片，图库共 {self.collection.count()} 张")
+        print(f"多模态：写入 {len(ids)} 张图片到 {normalize_vector_backend(backend)}，图库共 {self._img(backend).count()} 张")
         return len(ids)
 
     def _format_image_hits(self, raw: dict) -> list[dict]:
@@ -180,34 +213,35 @@ class MultimodalRagService:
             )
         return hits
 
-    def search_images_by_text(self, query: str, k: int = SIMILARITY_TOP_K) -> list[dict]:
-        total = self.collection.count()
+    def search_images_by_text(self, query: str, k: int = SIMILARITY_TOP_K, backend: str | None = None) -> list[dict]:
+        total = self._img(backend).count()
         if total == 0 or not (query or "").strip():
             return []
         k = min(max(k, 1), total)
         emb = self.clip.get_text_embedding(query.strip())
-        raw = self.collection.query(query_embeddings=[emb], n_results=k)
+        raw = self._img(backend).query(query_embeddings=[emb], n_results=k)
         return self._format_image_hits(raw)
 
-    def search_images_by_image(self, image_path: str, k: int = SIMILARITY_TOP_K) -> list[dict]:
-        total = self.collection.count()
+    def search_images_by_image(self, image_path: str, k: int = SIMILARITY_TOP_K, backend: str | None = None) -> list[dict]:
+        total = self._img(backend).count()
         if total == 0:
             return []
         k = min(max(k, 1), total)
         emb = self.clip.get_image_embedding(image_path)
-        raw = self.collection.query(query_embeddings=[emb], n_results=k)
+        raw = self._img(backend).query(query_embeddings=[emb], n_results=k)
         return self._format_image_hits(raw)
 
-    def search_texts_by_image(self, image_path: str, k: int = SIMILARITY_TOP_K) -> list[dict]:
+    def search_texts_by_image(self, image_path: str, k: int = SIMILARITY_TOP_K, backend: str | None = None) -> list[dict]:
         """以图搜文：仅当文本库也是同一套 CLIP 向量时有效。"""
         if EMBEDDING_PROVIDER not in {"chinese_clip", "cn_clip", "chinese-clip"}:
             return []
-        total = self.engine.collection.count()
+        text_slot = self._text_slot(backend)
+        total = text_slot.count()
         if total == 0:
             return []
         k = min(max(k, 1), total)
         emb = self.clip.get_image_embedding(image_path)
-        raw = self.engine.collection.query(query_embeddings=[emb], n_results=k)
+        raw = text_slot.query(query_embeddings=[emb], n_results=k)
         ids = (raw.get("ids") or [[]])[0]
         docs = (raw.get("documents") or [[]])[0]
         dists = (raw.get("distances") or [[]])[0]
@@ -290,15 +324,16 @@ class MultimodalRagService:
         *,
         query_image_path: str | None = None,
         k: int = SIMILARITY_TOP_K,
+        backend: str | None = None,
     ) -> dict:
         q = (question or "").strip() or "请描述这些图片"
         image_hits: list[dict] = []
         text_hits: list[dict] = []
         if query_image_path:
-            image_hits = self.search_images_by_image(query_image_path, k=k)
-            text_hits = self.search_texts_by_image(query_image_path, k=k)
+            image_hits = self.search_images_by_image(query_image_path, k=k, backend=backend)
+            text_hits = self.search_texts_by_image(query_image_path, k=k, backend=backend)
         if q:
-            by_text = self.search_images_by_text(q, k=k)
+            by_text = self.search_images_by_text(q, k=k, backend=backend)
             seen = {h["file_name"] for h in image_hits}
             for hit in by_text:
                 if hit["file_name"] not in seen:
