@@ -479,11 +479,24 @@
       grid-template-columns: 1fr;
       grid-template-rows: auto minmax(0, 1fr);
     }
-    .ds-shell:not(.not-rag) {
-      grid-template-rows: minmax(0, 1fr);
+    .module-bar {
+      display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+      padding: 10px 20px; z-index: 20;
+      border-bottom: 1px solid #ebebeb;
+      background: #fff;
+      box-shadow: 0 1px 0 rgba(0,0,0,.04);
     }
-    .ds-shell:not(.not-rag) > .module-bar {
-      display: none;
+    .module-bar strong {
+      font-size: 13px; color: #1a1a1a; margin-right: 4px;
+    }
+    .mod-btn {
+      padding: 8px 16px; border-radius: 999px; cursor: pointer;
+      border: 1px solid #e5e5e5; background: #f7f7f7; color: #333; font-size: 13px; font-weight: 600;
+    }
+    .mod-btn:hover { background: #efefef; }
+    .mod-btn.active {
+      color: #fff; border-color: transparent;
+      background: #4d6bfe;
     }
     .rag-workspace {
       grid-template-columns: 268px minmax(0, 1fr);
@@ -632,11 +645,6 @@
     .send-btn { display: none; }
     .input-hint { color: #b0b0b0; }
     .fold { border: 0; background: transparent; color: #4d6bfe; font-size: 12px; cursor: pointer; text-align: left; padding: 6px; }
-    .ds-mods { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
-    .ds-mods button {
-      border: 0; background: transparent; color: #8b8b8b; font-size: 11px; cursor: pointer;
-    }
-    .ds-mods button.active { color: #4d6bfe; font-weight: 600; }
     .ds-shell.not-rag .module-bar { display: flex; }
     @media (max-width: 760px) {
       .rag-workspace { grid-template-columns: 1fr; }
@@ -1029,12 +1037,6 @@
         Enter 发送 · Shift+Enter 换行<br>
         支持 pdf / txt / md / docx / pptx / csv / html / ipynb / 图片
         <a href="/docs" target="_blank">打开 API 文档</a>
-      </div>
-      <div class="ds-mods">
-        <button :class="{active: appModule==='basic'}" @click="appModule='basic'">基础聊天</button>
-        <button :class="{active: appModule==='secure'}" @click="appModule='secure'">安全聊天</button>
-        <button :class="{active: appModule==='content'}" @click="appModule='content'">文案电商</button>
-        <button :class="{active: appModule==='rag'}" @click="appModule='rag'">知识库</button>
       </div>
     </aside>
 
