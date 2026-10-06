@@ -646,6 +646,21 @@
     .input-hint { color: #b0b0b0; }
     .fold { border: 0; background: transparent; color: #4d6bfe; font-size: 12px; cursor: pointer; text-align: left; padding: 6px; }
     .ds-shell.not-rag .module-bar { display: flex; }
+    .extra-workspace {
+      min-height: 0; height: 100%; overflow: hidden;
+      padding: 0; background: #fff;
+      display: grid;
+    }
+    .ds-fields {
+      display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin-bottom: 8px;
+    }
+    .ds-fields input {
+      width: 100%; border: 1px solid #eee; border-radius: 10px;
+      padding: 8px 10px; font-size: 13px; background: #f7f7f7; color: #1a1a1a;
+    }
+    @media (max-width: 760px) {
+      .ds-fields { grid-template-columns: 1fr; }
+    }
     @media (max-width: 760px) {
       .rag-workspace { grid-template-columns: 1fr; }
     }
