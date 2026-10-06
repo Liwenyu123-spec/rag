@@ -113,7 +113,13 @@ class SemanticSearchEngine:  # Native RAG 引擎主体
         )  # 优化开关日志结束
 
     def _init_embed_model(self):  # 按配置选择 Embedding 实现
-        """DeepSeek 不做向量化；优先本地 HuggingFace，有千问 Key 时仍可用千问。"""  # 方法说明
+        """DeepSeek 不做向量化；支持 Chinese-CLIP / HuggingFace / 千问。"""  # 方法说明
+        if EMBEDDING_PROVIDER in {"chinese_clip", "cn_clip", "chinese-clip"}:  # 本地 Chinese-CLIP
+            from semantic_search.app.chinese_clip_embedding import ChineseCLIPEmbedding  # 文本塔封装
+
+            print(f"使用本地 Chinese-CLIP Embedding: {self.model_name}")  # 启动日志
+            return ChineseCLIPEmbedding(model_path=self.model_name)  # 目录含 pytorch_model.bin
+
         if EMBEDDING_PROVIDER == "dashscope":  # 云端千问 Embedding
             from semantic_search.app.safe_embedding import SafeDashScopeEmbedding  # 分批安全封装
 

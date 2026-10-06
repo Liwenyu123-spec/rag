@@ -10,7 +10,8 @@ from dotenv import load_dotenv
 
 PLATFORM_ROOT = Path(__file__).resolve().parents[1]
 REPO_ROOT = PLATFORM_ROOT.parent
-CHROMA_APP_ROOT = PLATFORM_ROOT / "apps" / "chroma文档管理"
+# 直接复用仓库主搜索引擎，避免 apps/ 下旧副本缺模块
+CHROMA_APP_ROOT = REPO_ROOT / "chroma文档管理"
 
 load_dotenv(REPO_ROOT / ".env", override=True)
 load_dotenv(PLATFORM_ROOT / ".env", override=True)

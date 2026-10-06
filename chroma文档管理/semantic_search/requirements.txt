@@ -16,6 +16,8 @@ llama-index-readers-file
 llama-index-retrievers-bm25
 llama-index-postprocessor-dashscope-rerank
 sentence-transformers
+transformers
+torch
 jieba
 rank-bm25
 neo4j

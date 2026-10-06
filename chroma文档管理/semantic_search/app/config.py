@@ -62,18 +62,29 @@ LLM_MODEL = os.getenv(  # 大模型名称
     "deepseek-v4-flash" if LLM_PROVIDER == "deepseek" else "qwen-plus",  # 按提供方给默认模型名
 )  # LLM_MODEL 赋值结束
 
-# DeepSeek 没有公开 Embedding 接口；没有千问 Key 时用本地 HuggingFace。
+# DeepSeek 没有公开 Embedding 接口；没有千问 Key 时用本地 HuggingFace / Chinese-CLIP。
+_DEFAULT_CHINESE_CLIP = r"H:\二阶段\chinese-clip-vit-base-patch16"  # Bandizip 解压目标
 if os.getenv("EMBEDDING_PROVIDER"):  # 若显式配置了向量化提供方
     EMBEDDING_PROVIDER = os.getenv("EMBEDDING_PROVIDER", "").strip().lower()  # 用用户配置
+elif Path(_DEFAULT_CHINESE_CLIP).is_dir() and (  # 本地已有 Chinese-CLIP 权重
+    Path(_DEFAULT_CHINESE_CLIP) / "pytorch_model.bin"
+).is_file():
+    EMBEDDING_PROVIDER = "chinese_clip"  # 优先本地 Chinese-CLIP
 elif DASHSCOPE_API_KEY:  # 有千问 Key 时默认走云端 Embedding
     EMBEDDING_PROVIDER = "dashscope"  # 云端千问向量化
 else:  # 否则用本地 HuggingFace 模型
     EMBEDDING_PROVIDER = "huggingface"  # 本地 bge 等模型
 
-if EMBEDDING_PROVIDER == "huggingface":  # 本地向量模型默认名
+if EMBEDDING_PROVIDER == "chinese_clip":  # Chinese-CLIP 本地目录
+    EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", _DEFAULT_CHINESE_CLIP)  # 默认二阶段目录
+elif EMBEDDING_PROVIDER == "huggingface":  # 本地向量模型默认名
     EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "BAAI/bge-small-zh-v1.5")  # 中文小模型，体积小
 else:  # 千问向量模型默认名
     EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "text-embedding-v3")  # 阿里云默认 embedding
+
+# Chinese-CLIP 维度与 bge/千问不同，默认换独立集合，避免旧向量混用
+if EMBEDDING_PROVIDER == "chinese_clip" and not os.getenv("CHROMA_COLLECTION"):
+    COLLECTION_NAME = "native_rag_chinese_clip"  # 仅在未显式配置集合名时生效
 
 EMBEDDING_API_BASE = os.getenv(  # OpenAI 兼容的 Embedding 接口地址（千问兼容模式）
     "EMBEDDING_API_BASE",  # 环境变量名
@@ -85,7 +96,9 @@ RAG_SYSTEM_PROMPT = os.getenv(  # 多轮 RAG 对话的系统提示词
     "你是一个知识库助手，根据检索的内容，用简体中文回答问题",  # 默认中文助手人设
 )  # 括号结束
 
-COLLECTION_NAME = os.getenv("CHROMA_COLLECTION", "native_rag")  # Chroma 集合名
+# 集合名：chinese_clip 已在上方可能改写；其余默认 native_rag
+if "COLLECTION_NAME" not in globals():
+    COLLECTION_NAME = os.getenv("CHROMA_COLLECTION", "native_rag")  # Chroma 集合名
 CHROMA_PERSIST_DIR = os.getenv(  # Chroma 持久化目录
     "CHROMA_PERSIST_DIR",  # 环境变量名
     str(PACKAGE_DIR / "chroma_db"),  # 默认在包内 chroma_db/

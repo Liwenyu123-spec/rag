@@ -35,7 +35,7 @@ async def lifespan(app: FastAPI):
         total = app.state.rag_engine.seed_if_empty()
         print(f"RAG 引擎就绪，文档数: {total}")
     else:
-        print("警告: RAG 引擎未启动（检查 DEEPSEEK_API_KEY 或 apps/chroma文档管理）")
+        print("警告: RAG 引擎未启动（检查 DEEPSEEK_API_KEY 或 chroma文档管理）")
     print(f"统一入口: http://{HOST}:{PORT}/")
     print("=" * 56)
     yield
