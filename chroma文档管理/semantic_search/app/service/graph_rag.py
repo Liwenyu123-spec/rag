@@ -1,6 +1,7 @@
-"""GraphRAG：LlamaIndex PropertyGraphIndex + Neo4j + 千问（对齐飞书 02_GraphRag的使用）。
+"""GraphRAG：LlamaIndex PropertyGraphIndex + Neo4j。
 
-流程：Documents → kg_extractors 抽三元组 → Neo4jPropertyGraphStore → as_query_engine。
+飞书默认千问；本仓库支持 DeepSeek 做抽取/生成。
+Embedding：DeepSeek 无接口，默认 Chinese-CLIP / HuggingFace，也可千问。
 """
 
 from __future__ import annotations
@@ -14,21 +15,22 @@ from llama_index.core.indices.property_graph import (
     SimpleLLMPathExtractor,
 )
 from llama_index.core.types import PydanticProgramMode
-from llama_index.embeddings.dashscope import DashScopeEmbedding
 from llama_index.graph_stores.neo4j import Neo4jPropertyGraphStore
-from llama_index.llms.dashscope import DashScope
 
 from semantic_search.app.config import (
     DASHSCOPE_API_KEY,
+    DEEPSEEK_API_KEY,
+    DEEPSEEK_BASE_URL,
     GRAPH_EMBED_MODEL,
+    GRAPH_EMBED_PROVIDER,
     GRAPH_EXTRACTOR,
     GRAPH_LLM_MODEL,
+    GRAPH_LLM_PROVIDER,
     NEO4J_PASSWORD,
     NEO4J_URI,
     NEO4J_USERNAME,
 )
 
-# 飞书文档推荐的演示 Schema（方式二）
 DEFAULT_ENTITIES = Literal["PERSON", "COMPANY", "SCHOOL", "LOCATION"]
 DEFAULT_RELATIONS = Literal["CO_FOUNDED", "STUDIED_AT", "LOCATED_AT"]
 DEFAULT_VALIDATION_SCHEMA: List[Tuple[str, str, str]] = [
@@ -47,17 +49,11 @@ class GraphRagService:
     """封装 Neo4j 连接、图谱构建与自然语言问答。"""
 
     def __init__(self) -> None:
-        if not DASHSCOPE_API_KEY:
-            raise RuntimeError(
-                "GraphRAG 需要 DASHSCOPE_API_KEY（飞书要求千问抽取/生成）。"
-                "请在仓库根目录 .env 或 Windows 用户环境变量中配置。"
-            )
         if not NEO4J_PASSWORD:
             raise RuntimeError(
-                "未配置 NEO4J_PASSWORD。请在 .env 写入 Neo4j 密码（首次登录后改过的密码）。"
+                "未配置 NEO4J_PASSWORD。请在 .env 写入 Neo4j 密码。"
             )
-
-        self._configure_dashscope()
+        self._configure_models()
         self.graph_store = Neo4jPropertyGraphStore(
             username=NEO4J_USERNAME,
             password=NEO4J_PASSWORD,
@@ -65,22 +61,65 @@ class GraphRagService:
         )
         self._index: PropertyGraphIndex | None = None
 
-    def _configure_dashscope(self) -> None:
-        """对齐讲义：LLM=qwen-plus，Embedding=text-embedding-v4。"""
-        llm = DashScope(
-            model_name=GRAPH_LLM_MODEL,
-            api_key=DASHSCOPE_API_KEY,
-            temperature=0,
-            timeout=60,
-            max_tokens=4096,
-        )
-        # SchemaLLMPathExtractor 在新版需走 LLM 模式，避免默认 program 不兼容
-        llm.pydantic_program_mode = PydanticProgramMode.LLM
-        Settings.llm = llm
-        Settings.embed_model = DashScopeEmbedding(
-            model_name=GRAPH_EMBED_MODEL,
-            api_key=DASHSCOPE_API_KEY,
-        )
+    def _configure_models(self) -> None:
+        """配置 GraphRAG 用的 LLM + Embedding。"""
+        Settings.llm = self._init_llm()
+        Settings.embed_model = self._init_embed()
+
+    def _init_llm(self):
+        provider = GRAPH_LLM_PROVIDER
+        if provider == "dashscope":
+            if not DASHSCOPE_API_KEY:
+                raise RuntimeError("GRAPH_LLM_PROVIDER=dashscope 但未配置 DASHSCOPE_API_KEY")
+            from llama_index.llms.dashscope import DashScope
+
+            llm = DashScope(
+                model_name=GRAPH_LLM_MODEL,
+                api_key=DASHSCOPE_API_KEY,
+                temperature=0,
+                timeout=60,
+                max_tokens=4096,
+            )
+        else:
+            if not DEEPSEEK_API_KEY:
+                raise RuntimeError(
+                    "GraphRAG 使用 DeepSeek，但未找到 DEEPSEEK_API_KEY。"
+                    "也可设 GRAPH_LLM_PROVIDER=dashscope 改用千问。"
+                )
+            from llama_index.llms.deepseek import DeepSeek
+
+            llm = DeepSeek(
+                model=GRAPH_LLM_MODEL,
+                api_key=DEEPSEEK_API_KEY,
+                api_base=DEEPSEEK_BASE_URL,
+                temperature=0,
+                max_tokens=4096,
+            )
+        # Schema 抽取走纯 LLM JSON，避免默认 program 模式不兼容
+        try:
+            llm.pydantic_program_mode = PydanticProgramMode.LLM
+        except Exception:  # noqa: BLE001
+            pass
+        return llm
+
+    def _init_embed(self):
+        provider = GRAPH_EMBED_PROVIDER
+        if provider in {"chinese_clip", "cn_clip", "chinese-clip"}:
+            from semantic_search.app.chinese_clip_embedding import ChineseCLIPEmbedding
+
+            return ChineseCLIPEmbedding(model_path=GRAPH_EMBED_MODEL)
+        if provider == "dashscope":
+            if not DASHSCOPE_API_KEY:
+                raise RuntimeError("GRAPH_EMBED_PROVIDER=dashscope 但未配置 DASHSCOPE_API_KEY")
+            from llama_index.embeddings.dashscope import DashScopeEmbedding
+
+            return DashScopeEmbedding(
+                model_name=GRAPH_EMBED_MODEL,
+                api_key=DASHSCOPE_API_KEY,
+            )
+        from llama_index.embeddings.huggingface import HuggingFaceEmbedding
+
+        return HuggingFaceEmbedding(model_name=GRAPH_EMBED_MODEL)
 
     def status(self) -> dict:
         """连通性与配置摘要（不回显密码）。"""
@@ -94,7 +133,7 @@ class GraphRagService:
             )
             driver.verify_connectivity()
             driver.close()
-        except Exception as exc:  # noqa: BLE001 — 状态接口要吞掉并回报
+        except Exception as exc:  # noqa: BLE001
             ok = False
             message = f"{type(exc).__name__}: {exc}"
         return {
@@ -102,10 +141,13 @@ class GraphRagService:
             "message": message,
             "neo4j_uri": NEO4J_URI,
             "neo4j_username": NEO4J_USERNAME,
+            "llm_provider": GRAPH_LLM_PROVIDER,
             "llm_model": GRAPH_LLM_MODEL,
+            "embed_provider": GRAPH_EMBED_PROVIDER,
             "embed_model": GRAPH_EMBED_MODEL,
             "extractor": GRAPH_EXTRACTOR,
             "has_index": self._index is not None,
+            "deepseek_configured": bool(DEEPSEEK_API_KEY),
             "dashscope_configured": bool(DASHSCOPE_API_KEY),
         }
 
@@ -124,7 +166,7 @@ class GraphRagService:
             SimpleLLMPathExtractor(
                 llm=Settings.llm,
                 max_paths_per_chunk=10,
-                num_workers=4,
+                num_workers=2,
             ),
             "simple",
         )
@@ -152,6 +194,8 @@ class GraphRagService:
             "message": "图谱构建完成，数据已写入 Neo4j",
             "documents": len(docs),
             "extractor": mode,
+            "llm_provider": GRAPH_LLM_PROVIDER,
+            "embed_provider": GRAPH_EMBED_PROVIDER,
             "neo4j_uri": NEO4J_URI,
         }
 
@@ -179,6 +223,7 @@ class GraphRagService:
             "answer": str(response),
             "k": k,
             "mode": "graph_rag",
+            "llm_provider": GRAPH_LLM_PROVIDER,
         }
 
     def retrieve(self, question: str, *, k: int = 5) -> dict:
@@ -190,11 +235,5 @@ class GraphRagService:
         for i, node in enumerate(nodes):
             score = float(getattr(node, "score", 0.0) or 0.0)
             text = getattr(node, "text", None) or getattr(node.node, "text", "")
-            items.append(
-                {
-                    "rank": i + 1,
-                    "text": text,
-                    "score": score,
-                }
-            )
+            items.append({"rank": i + 1, "text": text, "score": score})
         return {"question": question, "results": items, "total": len(items)}

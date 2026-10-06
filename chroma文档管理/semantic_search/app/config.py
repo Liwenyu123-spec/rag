@@ -143,13 +143,42 @@ EVAL_VERBOSE = _env_bool("EVAL_VERBOSE", True)  # 评估过程日志
 HOST = os.getenv("SEARCH_HOST", "127.0.0.1")  # Web 服务监听地址
 PORT = int(os.getenv("SEARCH_PORT", "8003"))  # 默认 8003，避免和「带安全校验的聊天机器人」8001 冲突
 
-# ----- GraphRAG（飞书 02_GraphRag的使用：PropertyGraphIndex + Neo4j + 千问）-----
+# ----- GraphRAG（PropertyGraphIndex + Neo4j；LLM 可用 DeepSeek / 千问）-----
 NEO4J_URI = os.getenv("NEO4J_URI", "bolt://localhost:7687").strip()  # Bolt，不是 7474
 NEO4J_USERNAME = (
     os.getenv("NEO4J_USERNAME") or os.getenv("NEO4J_USER") or "neo4j"
 ).strip()  # 默认 neo4j
 NEO4J_PASSWORD = os.getenv("NEO4J_PASSWORD", "").strip()  # 必填：首次改密后的密码
-GRAPH_LLM_MODEL = os.getenv("GRAPH_LLM_MODEL", "qwen-plus").strip()  # 抽取/生成建议 qwen-plus
-GRAPH_EMBED_MODEL = os.getenv("GRAPH_EMBED_MODEL", "text-embedding-v4").strip()  # 实体向量
+# Graph LLM：有 DeepSeek 默认用 deepseek；显式设 GRAPH_LLM_PROVIDER=dashscope 才用千问
+if os.getenv("GRAPH_LLM_PROVIDER"):
+    GRAPH_LLM_PROVIDER = os.getenv("GRAPH_LLM_PROVIDER", "").strip().lower()
+elif DEEPSEEK_API_KEY:
+    GRAPH_LLM_PROVIDER = "deepseek"
+elif DASHSCOPE_API_KEY:
+    GRAPH_LLM_PROVIDER = "dashscope"
+else:
+    GRAPH_LLM_PROVIDER = "deepseek"
+GRAPH_LLM_MODEL = os.getenv(
+    "GRAPH_LLM_MODEL",
+    "deepseek-v4-flash" if GRAPH_LLM_PROVIDER == "deepseek" else "qwen-plus",
+).strip()
+# Graph Embedding：DeepSeek 无向量接口；默认本地 Chinese-CLIP / HF，有千问也可用 dashscope
+_DEFAULT_CHINESE_CLIP_GRAPH = r"H:\二阶段\chinese-clip-vit-base-patch16"
+if os.getenv("GRAPH_EMBED_PROVIDER"):
+    GRAPH_EMBED_PROVIDER = os.getenv("GRAPH_EMBED_PROVIDER", "").strip().lower()
+elif Path(_DEFAULT_CHINESE_CLIP_GRAPH).is_dir() and (
+    Path(_DEFAULT_CHINESE_CLIP_GRAPH) / "pytorch_model.bin"
+).is_file():
+    GRAPH_EMBED_PROVIDER = "chinese_clip"
+elif DASHSCOPE_API_KEY:
+    GRAPH_EMBED_PROVIDER = "dashscope"
+else:
+    GRAPH_EMBED_PROVIDER = "huggingface"
+if GRAPH_EMBED_PROVIDER == "chinese_clip":
+    GRAPH_EMBED_MODEL = os.getenv("GRAPH_EMBED_MODEL", _DEFAULT_CHINESE_CLIP_GRAPH).strip()
+elif GRAPH_EMBED_PROVIDER == "dashscope":
+    GRAPH_EMBED_MODEL = os.getenv("GRAPH_EMBED_MODEL", "text-embedding-v4").strip()
+else:
+    GRAPH_EMBED_MODEL = os.getenv("GRAPH_EMBED_MODEL", "BAAI/bge-small-zh-v1.5").strip()
 GRAPH_EXTRACTOR = os.getenv("GRAPH_EXTRACTOR", "simple").strip().lower()  # simple | schema
 GRAPH_RAG_ENABLED = _env_bool("GRAPH_RAG_ENABLED", True)  # 总开关：缺依赖时可关

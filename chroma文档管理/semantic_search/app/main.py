@@ -84,8 +84,8 @@ def _require_graph_rag(app: FastAPI) -> GraphRagService:
         raise HTTPException(
             status_code=503,
             detail=(
-                "GraphRAG 未初始化。请配置 DASHSCOPE_API_KEY、NEO4J_PASSWORD，"
-                "并启动 Neo4j（bolt://localhost:7687，需 APOC）。"
+                "GraphRAG 未初始化。请配置 NEO4J_PASSWORD，以及 DEEPSEEK_API_KEY"
+                "（或 DASHSCOPE_API_KEY），并启动 Neo4j（bolt://localhost:7687，需 APOC）。"
             ),
         )
     return service
@@ -111,20 +111,21 @@ async def lifespan(app: FastAPI):  # FastAPI 启动和关闭时都会走到这�
         else:  # 当前是 dashscope 提供方
             print("错误: 未找到 DASHSCOPE_API_KEY")  # 千问密钥缺失提示
 
-    # GraphRAG：需要千问 Key + Neo4j 密码；缺配时接口返回 503，不影响向量 RAG
+    # GraphRAG：需要 Neo4j 密码 +（DeepSeek 或 千问）；缺配时不影响向量 RAG
     app.state.graph_rag = None
-    if GRAPH_RAG_ENABLED and DASHSCOPE_API_KEY and NEO4J_PASSWORD:
+    graph_llm_ready = bool(DEEPSEEK_API_KEY or DASHSCOPE_API_KEY)
+    if GRAPH_RAG_ENABLED and NEO4J_PASSWORD and graph_llm_ready:
         try:
             app.state.graph_rag = GraphRagService()
-            print("GraphRAG 已就绪（Neo4jPropertyGraphStore + 千问）")
+            print("GraphRAG 已就绪（Neo4j + DeepSeek/千问可配）")
         except Exception as exc:  # noqa: BLE001
             print(f"警告: GraphRAG 初始化失败: {exc}")
     elif GRAPH_RAG_ENABLED:
         missing = []
-        if not DASHSCOPE_API_KEY:
-            missing.append("DASHSCOPE_API_KEY")
         if not NEO4J_PASSWORD:
             missing.append("NEO4J_PASSWORD")
+        if not graph_llm_ready:
+            missing.append("DEEPSEEK_API_KEY 或 DASHSCOPE_API_KEY")
         print(f"提示: GraphRAG 未启用，缺少 {', '.join(missing)}")
 
     print("=" * 50)  # 启动阶段结束分隔线
@@ -486,7 +487,8 @@ async def graph_status():
     if service is None:
         return {
             "ready": False,
-            "message": "GraphRAG 未初始化（需 DASHSCOPE_API_KEY + NEO4J_PASSWORD + Neo4j）",
+            "message": "GraphRAG 未初始化（需 NEO4J_PASSWORD + DeepSeek/千问 Key + Neo4j）",
+            "deepseek_configured": bool(DEEPSEEK_API_KEY),
             "dashscope_configured": bool(DASHSCOPE_API_KEY),
             "neo4j_password_configured": bool(NEO4J_PASSWORD),
         }
