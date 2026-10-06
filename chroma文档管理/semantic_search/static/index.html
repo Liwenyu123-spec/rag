@@ -1457,11 +1457,17 @@
               const graphHint = data.graph
                 ? `；图谱 ${data.graph.chunks || data.graph.documents || 0} 段`
                 : '';
+              const dupHint = data.skipped_duplicates?.length
+                ? `；重复跳过 ${data.skipped_duplicates.join(', ')}`
+                : (data.multimodal?.skipped_duplicates?.length
+                  ? `；重复图片跳过 ${data.multimodal.skipped_duplicates.join(', ')}`
+                  : '');
               uploadMessage.value =
                 `${data.message}` +
                 (data.nodes ? `：向量分块 ${data.nodes}，知识库 ${data.total_documents || 0} 条` : '') +
                 (data.multimodal ? `；图库 ${data.multimodal.indexed || 0} 张` : '') +
                 graphHint +
+                dupHint +
                 (data.skipped_files?.length ? `；跳过 ${data.skipped_files.join(', ')}` : '');
               pickedFiles.value = [];
               refreshHealth();

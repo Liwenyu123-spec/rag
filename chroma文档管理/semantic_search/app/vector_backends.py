@@ -42,8 +42,8 @@ class VectorSlot:
     collection_name: str = ""
     extra: dict = field(default_factory=dict)
 
-    def count(self) -> int:
-        raise NotImplementedError
+    def has_metadata(self, key: str, value: str) -> bool:
+        return False
 
     def get(self, include: list | None = None) -> dict:
         raise NotImplementedError
@@ -74,6 +74,15 @@ class ChromaSlot(VectorSlot):
 
     def count(self) -> int:
         return int(self.collection.count() or 0)
+
+    def has_metadata(self, key: str, value: str) -> bool:
+        if not value:
+            return False
+        try:
+            data = self.collection.get(where={key: str(value)}, limit=1, include=[])
+            return bool(data.get("ids"))
+        except Exception:
+            return False
 
     def get(self, include: list | None = None) -> dict:
         return self.collection.get(include=include or ["documents", "metadatas"])
@@ -133,6 +142,25 @@ class QdrantSlot(VectorSlot):
             return int(self.client.count(self.collection_name, exact=True).count)
         except Exception:
             return 0
+
+    def has_metadata(self, key: str, value: str) -> bool:
+        if not value or not self._exists():
+            return False
+        try:
+            from qdrant_client.http.models import FieldCondition, Filter, MatchValue
+
+            records, _ = self.client.scroll(
+                collection_name=self.collection_name,
+                scroll_filter=Filter(
+                    must=[FieldCondition(key=key, match=MatchValue(value=str(value)))]
+                ),
+                limit=1,
+                with_payload=False,
+                with_vectors=False,
+            )
+            return bool(records)
+        except Exception:
+            return False
 
     def get(self, include: list | None = None) -> dict:
         ids, documents, metadatas = [], [], []

@@ -4,6 +4,7 @@
 加载文档 → SentenceSplitter 分块 → Embedding → Chroma 存储 → DeepSeek 检索生成。
 """  # 模块说明：Native RAG 核心引擎实现
 
+import hashlib
 import re  # 正则：中文分句
 from pathlib import Path  # 检查 data 目录、创建持久化路径
 from typing import List  # 类型注解
@@ -56,6 +57,18 @@ SAMPLE_DOCUMENTS = [  # 空库时写入的示例知识，方便一启动就能�
 ]  # SAMPLE_DOCUMENTS 结束
 
 SUPPORTED_EXTS = [".pdf", ".txt", ".md", ".csv", ".docx", ".html", ".ipynb"]  # SimpleDirectoryReader 允许的扩展名
+
+
+def file_sha256(path: str | Path) -> str:
+    digest = hashlib.sha256()
+    with Path(path).open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def text_sha256(text: str) -> str:
+    return hashlib.sha256((text or "").encode("utf-8")).hexdigest()
 
 
 def clean_empty_text(documents: List[Document]) -> List[Document]:  # 过滤空文档
@@ -281,22 +294,57 @@ class SemanticSearchEngine:  # Native RAG 引擎主体
         if Settings.llm is None:  # 全局 LLM 未初始化
             raise RuntimeError("大模型未初始化，请检查 LLM_PROVIDER 与对应 API Key")  # 交给路由转 503
 
+    def _is_duplicate_file(self, path: Path, seen: set[str] | None = None) -> bool:
+        digest = file_sha256(path)
+        name = path.name
+        if seen is not None:
+            if digest in seen or name in seen:
+                return True
+            seen.add(digest)
+            seen.add(name)
+        slot = self._slot()
+        return slot.has_metadata("file_hash", digest) or slot.has_metadata("file_name", name)
+
+    def _stamp_file_meta(self, doc: Document, path: Path) -> Document:
+        meta = dict(doc.metadata or {})
+        meta["file_hash"] = file_sha256(path)
+        meta["file_name"] = path.name
+        meta["file_path"] = str(path.resolve())
+        return Document(text=doc.text, metadata=meta)
+
     def add_documents(self, texts: List[str], splitter: str = "sentence") -> int:  # 追加纯文本并索引
         """把纯文本写成 Document，切分后写入向量库。"""  # 方法说明
         if not texts:  # 空列表直接返回
             print("没有文档需要添加")  # 提示跳过
             return 0  # 当前不做写入
 
-        documents = clean_empty_text([Document(text=text) for text in texts])  # 文本 → Document 并去空
+        slot = self._slot()
+        fresh: List[Document] = []
+        for text in texts:
+            digest = text_sha256(text)
+            if slot.has_metadata("file_hash", digest):
+                print(f"跳过重复文本 {digest[:8]}…")
+                continue
+            fresh.append(
+                Document(
+                    text=text,
+                    metadata={"file_hash": digest, "file_name": f"text-{digest[:12]}"},
+                )
+            )
+        documents = clean_empty_text(fresh)
+        if not documents:
+            print("没有新文档需要添加（均已存在）")
+            return self.collection.count()
+
         nodes = self._splitter(splitter).get_nodes_from_documents(documents)  # 切成节点（chunk）
         if not nodes:  # 切完没有内容
             print("切分后没有节点，跳过写入")  # 提示跳过
             return self.collection.count()  # 返回当前总量
 
-        self.index.insert_nodes(nodes)  # 向量化并写入 Chroma
+        self.index.insert_nodes(nodes)  # 向量化并写入
         self._invalidate_retrieval_cache()  # 索引变了，重建 BM25 / 对话引擎
         total = self.collection.count()  # 当前总量
-        print(f"成功添加 {len(texts)} 个文档 / {len(nodes)} 个节点，总计 {total} 个")  # 写入成功日志
+        print(f"成功添加 {len(documents)} 个文档 / {len(nodes)} 个节点，总计 {total} 个")  # 写入成功日志
         return total  # 返回总量
 
     def ingest_files(  # 对应讲义 SimpleDirectoryReader
@@ -305,35 +353,64 @@ class SemanticSearchEngine:  # Native RAG 引擎主体
         input_dir: str | None = None,  # 或指定目录
         splitter: str = "sentence",  # 分块模式
     ) -> dict:  # 返回统计字典
-        """用 SimpleDirectoryReader 加载本地文件或目录后建索引。"""  # 方法说明
-        kwargs: dict = {"required_exts": SUPPORTED_EXTS, "recursive": True}  # 目录模式默认参数
-        if input_files:  # 有文件列表时只用文件列表（讲义 input_files 写法）
-            text_files = [
-                p for p in input_files if Path(p).suffix.lower() in SUPPORTED_EXTS
-            ]
-            if not text_files:
-                return {"loaded_documents": 0, "nodes": 0, "total_documents": self.collection.count()}
-            kwargs = {"input_files": text_files}  # 覆盖为仅文件列表
-        elif input_dir:  # 指定目录
-            kwargs["input_dir"] = input_dir  # 追加目录参数
-        else:  # 都没传则用配置里的 DATA_DIR
-            kwargs["input_dir"] = DATA_DIR  # 默认数据目录
+        """用 SimpleDirectoryReader 加载本地文件或目录后建索引；内容或文件名已存在则跳过。"""  # 方法说明
+        candidates: list[Path] = []
+        if input_files:
+            candidates = [Path(p) for p in input_files if Path(p).suffix.lower() in SUPPORTED_EXTS]
+        else:
+            root = Path(input_dir or DATA_DIR)
+            if root.is_dir():
+                candidates = [
+                    p for p in root.rglob("*") if p.is_file() and p.suffix.lower() in SUPPORTED_EXTS
+                ]
+            elif root.is_file() and root.suffix.lower() in SUPPORTED_EXTS:
+                candidates = [root]
 
-        reader = SimpleDirectoryReader(**kwargs)  # 创建加载器
-        documents = clean_empty_text(reader.load_data())  # 读文件成 Document 列表
-        print(f"加载了 {len(documents)} 个文档")  # 加载日志
-        nodes = self._splitter(splitter).get_nodes_from_documents(documents)  # 分块
-        print(f"切分为 {len(nodes)} 个节点")  # 分块日志
-        if nodes:  # 有节点才写入
-            self.index.insert_nodes(nodes)  # Embedding + 存 Chroma
-            self._invalidate_retrieval_cache()  # 清 BM25 / chat 缓存
-        total = self.collection.count()  # 写入后总量
-        print(f"向量化和存储完成，文档数: {total}")  # 完成日志
-        return {  # 返回统计给 API
-            "loaded_documents": len(documents),  # 本次加载文档数
-            "nodes": len(nodes),  # 本次切出的节点数
-            "total_documents": total,  # 写入后集合总量
-        }  # return 结束
+        seen: set[str] = set()
+        fresh_files: list[str] = []
+        skipped_duplicates: list[str] = []
+        for path in candidates:
+            if not path.is_file():
+                continue
+            if self._is_duplicate_file(path, seen):
+                skipped_duplicates.append(path.name)
+                print(f"跳过重复文档: {path.name}")
+                continue
+            fresh_files.append(str(path.resolve()))
+
+        if not fresh_files:
+            return {
+                "loaded_documents": 0,
+                "nodes": 0,
+                "total_documents": self.collection.count(),
+                "skipped_duplicates": skipped_duplicates,
+            }
+
+        reader = SimpleDirectoryReader(input_files=fresh_files)
+        documents = clean_empty_text(reader.load_data())
+        stamped: List[Document] = []
+        for doc in documents:
+            raw_path = (doc.metadata or {}).get("file_path") or (doc.metadata or {}).get("file_name")
+            path = Path(str(raw_path)) if raw_path else None
+            if path and path.is_file():
+                stamped.append(self._stamp_file_meta(doc, path))
+            else:
+                stamped.append(doc)
+        documents = stamped
+        print(f"加载了 {len(documents)} 个文档（跳过重复 {len(skipped_duplicates)} 个）")
+        nodes = self._splitter(splitter).get_nodes_from_documents(documents)
+        print(f"切分为 {len(nodes)} 个节点")
+        if nodes:
+            self.index.insert_nodes(nodes)
+            self._invalidate_retrieval_cache()
+        total = self.collection.count()
+        print(f"向量化和存储完成，文档数: {total}")
+        return {
+            "loaded_documents": len(documents),
+            "nodes": len(nodes),
+            "total_documents": total,
+            "skipped_duplicates": skipped_duplicates,
+        }
 
     def seed_if_empty(self, texts: List[str] | None = None) -> int:  # 启动时若库空则灌入示例 + data
         """集合为空时写入示例文档，并加载 data 目录中的本地文件。"""  # 方法说明
