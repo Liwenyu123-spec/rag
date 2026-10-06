@@ -4,7 +4,7 @@
       "id": "web-rst95m3f",
       "title": "机器学习有什么相关知识",
       "mode": "ask",
-      "updated_at": 1791283287814,
+      "updated_at": 1791283858781,
       "messages": [
         {
           "role": "user",
@@ -40,6 +40,50 @@
           "content": "知识库中没有足够相关信息回答该问题（Corrective RAG / ISREL 过滤后为空）。",
           "imageUrl": "",
           "sources": []
+        },
+        {
+          "role": "bot",
+          "content": "检索评估完成：当前 Hit=1 MRR=0.74 P@K=0.48 R@K=0.7367；相对基础 ΔHit=0.0000 ΔMRR=0.0000（5 题）",
+          "imageUrl": "",
+          "sources": []
+        },
+        {
+          "role": "user",
+          "content": "机器学习有些什么",
+          "imageUrl": "",
+          "sources": []
+        },
+        {
+          "role": "bot",
+          "content": "根据给定上下文，能知道的是：机器学习/PyTorch 实战中提到了三类监督学习任务：\n\n1. **线性回归**  \n   - 经典方法：`LinearRegression`  \n   - PyTorch 写法：`nn.Linear` + `MSELoss`\n\n2. **二分类**  \n   - 经典方法：`LogisticRegression`  \n   - PyTorch 写法：`nn.Linear` + `BCEWithLogitsLoss`  \n   - 流程：线性打分 → Sigmoid 成概率 → 阈值分类\n\n3. **多分类**  \n   - 经典方法：Softmax 回归 / MLP  \n   - PyTorch 写法：`nn.Linear` + `CrossEntropyLoss`，也可用 `nn.Sequential` 加隐藏层和 `ReLU`\n\n还提到了：\n- 损失函数：`MSELoss`、`BCEWithLogitsLoss`、`CrossEntropyLoss`\n- 优化器：`SGD`、`Adam`\n- 训练循环：前向、损失、清梯度、反向传播、更新参数\n- 易错点：回归用 CE、分类用 MSE 是任务-损失配错；多分类 CE 前不应再 Softmax\n\n但上下文没有给出“机器学习完整包含哪些内容/分类体系”的信息，所以更全面的机器学习范围我无法根据该上下文回答，属于不知道。",
+          "imageUrl": "",
+          "sources": [
+            {
+              "rank": 1,
+              "similarity": 0.0328,
+              "document": "PyTorch线性回归与分类实战详细复习笔记.md"
+            },
+            {
+              "rank": 2,
+              "similarity": 0.0323,
+              "document": "PyTorch线性回归与分类实战详细复习笔记.md"
+            },
+            {
+              "rank": 3,
+              "similarity": 0.0317,
+              "document": "PyTorch线性回归与分类实战详细复习笔记.md"
+            },
+            {
+              "rank": 4,
+              "similarity": 0.0312,
+              "document": "PyTorch线性回归与分类实战详细复习笔记.md"
+            },
+            {
+              "rank": 5,
+              "similarity": 0.0308,
+              "document": "PyTorch线性回归与分类实战详细复习笔记.md"
+            }
+          ]
         }
       ]
     },
