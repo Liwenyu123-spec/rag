@@ -182,3 +182,13 @@ else:
     GRAPH_EMBED_MODEL = os.getenv("GRAPH_EMBED_MODEL", "BAAI/bge-small-zh-v1.5").strip()
 GRAPH_EXTRACTOR = os.getenv("GRAPH_EXTRACTOR", "simple").strip().lower()  # simple | schema
 GRAPH_RAG_ENABLED = _env_bool("GRAPH_RAG_ENABLED", True)  # 总开关：缺依赖时可关
+
+# ----- 多模态 RAG（Chinese-CLIP 图像塔 + 可选千问 VL 看图）-----
+IMAGE_COLLECTION_NAME = os.getenv("CHROMA_IMAGE_COLLECTION", "native_rag_clip_images")
+IMAGE_DIR = os.getenv("RAG_IMAGE_DIR", str(Path(DATA_DIR) / "images"))
+VL_MODEL = os.getenv("VL_MODEL", "qwen-vl-plus").strip()
+DASHSCOPE_COMPAT_BASE = os.getenv(
+    "DASHSCOPE_COMPAT_BASE",
+    "https://dashscope.aliyuncs.com/compatible-mode/v1",
+).strip()
+IMAGE_EXTS = (".jpg", ".jpeg", ".png", ".webp", ".bmp", ".gif")
