@@ -148,8 +148,14 @@ def build_hybrid_retriever(  # 构建混合 / Multi-Query 检索器
         return vector_retriever  # 回退纯向量
 
 
+_local_reranker = None
+_local_reranker_key: tuple | None = None
+
+
 def _build_reranker(top_n: int) -> Any | None:  # 按配置构建重排器
     """构建重排器：默认本地 bge；仅 RERANK_PROVIDER=dashscope 时用千问。"""  # 本地优先，省 Key
+    from pathlib import Path
+
     provider = (RERANK_PROVIDER or "local").strip().lower()  # 规范化提供方名
 
     if provider in {"dashscope", "qwen", "aliyun"}:  # 走云侧重排
@@ -165,20 +171,44 @@ def _build_reranker(top_n: int) -> Any | None:  # 按配置构建重排器
                 top_n=top_n,  # 保留条数
                 api_key=DASHSCOPE_API_KEY,  # API Key
             )  # 括号结束
-        except Exception as exc:  # noqa: BLE001  # 初始化失败
-            print(f"警告: 初始化 DashScopeRerank 失败，跳过重排: {exc}")  # 打警告
+        except Exception as ext:  # noqa: BLE001  # 初始化失败
+            print(f"警告: 初始化 DashScopeRerank 失败，跳过重排: {ext}")  # 打警告
             return None  # 跳过重排
 
-    # 默认：本地 Cross-Encoder，不需要千问 Key
-    try:  # 本地 SentenceTransformer 重排
-        from llama_index.core.postprocessor import SentenceTransformerRerank  # 本地 Cross-Encoder
+    global _local_reranker, _local_reranker_key
+    model_name = RERANK_MODEL or r"H:\二阶段\bge-reranker-base"
+    model_path = Path(model_name)
+    cache_key = (str(model_path.resolve()) if model_path.exists() else model_name, int(top_n))
+    if _local_reranker is not None and _local_reranker_key and _local_reranker_key[0] == cache_key[0]:
+        _local_reranker.top_n = top_n
+        return _local_reranker
 
-        model_name = RERANK_MODEL or "BAAI/bge-reranker-base"  # 默认 bge-reranker
-        print(f"重排: 本地 SentenceTransformerRerank({model_name}), top_n={top_n}")  # 日志
-        return SentenceTransformerRerank(model=model_name, top_n=top_n)  # 返回本地重排器
-    except Exception as exc:  # noqa: BLE001  # 常见原因：缺 sentence-transformers
-        print(f"警告: 本地重排初始化失败（可 pip install sentence-transformers）: {exc}")  # 提示安装
-        return None  # 跳过重排
+    if not model_path.is_dir():
+        print(
+            f"警告: 本地重排模型不存在（{model_path}），跳过重排。"
+            "请将 bge-reranker-base 放到该目录，避免运行时访问 Hugging Face。"
+        )
+        return None
+
+    try:
+        from llama_index.core.postprocessor import SentenceTransformerRerank
+        from sentence_transformers import CrossEncoder
+
+        print(f"重排: 本地 SentenceTransformerRerank({model_path}), top_n={top_n}")
+        reranker = SentenceTransformerRerank(model=str(model_path.resolve()), top_n=top_n)
+        reranker._model = CrossEncoder(
+            str(model_path.resolve()),
+            max_length=getattr(reranker._model, "max_length", 512),
+            device=reranker.device,
+            trust_remote_code=True,
+            local_files_only=True,
+        )
+        _local_reranker = reranker
+        _local_reranker_key = cache_key
+        return reranker
+    except Exception as exc:  # noqa: BLE001
+        print(f"警告: 本地重排初始化失败（可 pip install sentence-transformers）: {exc}")
+        return None
 
 
 def build_node_postprocessors(  # 组装后处理器流水线

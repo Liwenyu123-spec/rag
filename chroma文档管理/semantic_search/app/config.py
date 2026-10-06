@@ -123,10 +123,35 @@ RETRIEVE_CANDIDATES = int(os.getenv("RETRIEVE_CANDIDATES", "20"))  # 粗排候�
 # 重排：默认本地 bge，不依赖千问；provider=dashscope 才需要 DASHSCOPE_API_KEY
 RERANK_ENABLED = _env_bool("RERANK_ENABLED", True)  # 是否启用重排序
 RERANK_PROVIDER = os.getenv("RERANK_PROVIDER", "local").strip().lower()  # local | dashscope | none
-RERANK_MODEL = os.getenv(  # 重排模型名
-    "RERANK_MODEL",  # 环境变量名
-    "BAAI/bge-reranker-base" if os.getenv("RERANK_PROVIDER", "local").strip().lower() != "dashscope" else "qwen3-rerank",  # 本地 bge 或云端千问
-).strip()  # 去掉首尾空白
+_DEFAULT_BGE_RERANKER = r"H:\二阶段\bge-reranker-base"
+_PACKAGED_BGE_RERANKER = PACKAGE_DIR / "models" / "bge-reranker-base"
+
+
+def _looks_like_hf_model_dir(path: Path) -> bool:
+    if not path.is_dir():
+        return False
+    return any(
+        (path / name).is_file()
+        for name in ("config.json", "modules.json", "pytorch_model.bin", "model.safetensors")
+    )
+
+
+def _resolve_rerank_model() -> str:
+    if (RERANK_PROVIDER or "local").strip().lower() in {"dashscope", "qwen", "aliyun"}:
+        return os.getenv("RERANK_MODEL", "qwen3-rerank").strip()
+    configured = (os.getenv("RERANK_MODEL") or "").strip()
+    candidates = [
+        Path(configured) if configured else None,
+        Path(_DEFAULT_BGE_RERANKER),
+        _PACKAGED_BGE_RERANKER,
+    ]
+    for item in candidates:
+        if item is not None and _looks_like_hf_model_dir(item):
+            return str(item.resolve())
+    return configured or _DEFAULT_BGE_RERANKER
+
+
+RERANK_MODEL = _resolve_rerank_model()
 RERANK_TOP_N = int(os.getenv("RERANK_TOP_N", "0"))  # 0 表示跟 SIMILARITY_TOP_K / 请求 k 一致
 COMPRESS_ENABLED = _env_bool("COMPRESS_ENABLED", True)  # 句子级上下文压缩
 COMPRESS_PERCENTILE = float(os.getenv("COMPRESS_PERCENTILE", "0.5"))  # 每片段保留相关句比例
