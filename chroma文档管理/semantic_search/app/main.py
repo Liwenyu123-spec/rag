@@ -329,6 +329,7 @@ async def ask(request: AskRequest, backend: str = Depends(vector_backend_dep)): 
             use_graph=request.use_graph,
             use_eval=request.use_eval,  # 生成评估
             reference=request.reference,  # 标准答案（Correctness）
+            doc_scope=request.doc_scope,
         )  # ask 调用结束
     except ValueError as exc:  # 参数/策略非法
         raise HTTPException(status_code=400, detail=str(exc)) from exc  # 转成 400
@@ -445,10 +446,11 @@ async def eval_retrieval(request: RetrievalEvalRequest, backend: str = Depends(v
 async def search_get(  # 适合浏览器地址栏直接试
     q: str = Query(..., description="搜索查询", min_length=1),  # 必填查询词，至少 1 个字符
     k: int = Query(5, description="返回结果数量", ge=1, le=100),  # 返回条数，默认 5，范围 1~100
+    doc_scope: str = Query("business", description="检索范围 business/course/all/.txt/.pdf/.md"),
     backend: str = Depends(vector_backend_dep),
 ):  # 参数列表结束
     """GET 搜索，只检索相似文档，不调用大模型。"""  # OpenAPI 接口说明
-    results = _bound_engine(app, backend).search(q, k)  # 调用引擎做向量检索
+    results = _bound_engine(app, backend).search(q, k, doc_scope=doc_scope)
     return SearchResponse(  # 包装成统一响应结构
         query=q,  # 回显用户查询
         results=[DocumentResponse(**item) for item in results],  # 把每条 dict 转成 DocumentResponse
@@ -459,7 +461,7 @@ async def search_get(  # 适合浏览器地址栏直接试
 @app.post("/search", response_model=SearchResponse)  # POST 语义搜索，适合前端 / 程序化调用
 async def search_post(request: SearchRequest, backend: str = Depends(vector_backend_dep)):  # 请求体是 JSON：{"query":"...","k":5}
     """POST 搜索，适合程序化调用。"""  # OpenAPI 接口说明
-    results = _bound_engine(app, backend).search(request.query, request.k)  # 用请求体里的参数检索
+    results = _bound_engine(app, backend).search(request.query, request.k, doc_scope=request.doc_scope)
     return SearchResponse(  # 返回检索结果列表
         query=request.query,  # 回显查询文本
         results=[DocumentResponse(**item) for item in results],  # 结构化结果
@@ -489,7 +491,7 @@ async def query_get(  # 检索后交给大模型生成答案，并带来源
 async def query_post(request: QueryRequest, backend: str = Depends(vector_backend_dep)):  # JSON 体：question + k
     """一次性 RAG 问答。"""  # OpenAPI 接口说明
     try:  # 引擎缺 LLM 时会抛 RuntimeError
-        payload = _bound_engine(app, backend).query(request.question, request.k)  # 用请求体参数问答
+        payload = _bound_engine(app, backend).query(request.question, request.k, doc_scope=request.doc_scope)
     except RuntimeError as exc:  # 捕获引擎层业务错误
         raise HTTPException(status_code=503, detail=str(exc)) from exc  # LLM 不可用时返回 503
     return QueryResponse(  # 返回问题、答案、来源
@@ -825,6 +827,8 @@ async def health_check():  # 健康检查接口
         "chroma_images": mm_status_data.get("chroma_images", 0),
         "qdrant_images": mm_status_data.get("qdrant_images", 0),
         "vl_ready": bool(mm_status_data.get("vl_ready")),
+        "type_counts": stats.get("type_counts") or {},
+        "class_counts": stats.get("class_counts") or {},
     }  # 字典/集合结束
 
 

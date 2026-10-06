@@ -10,7 +10,12 @@ from pathlib import Path  # 检查 data 目录、创建持久化路径
 from typing import List  # 类型注解
 
 from semantic_search.app.file_loaders import SUPPORTED_EXTS, make_directory_reader
-from semantic_search.app.knowledge_scope import drop_course_note_nodes, is_course_note_path
+from semantic_search.app.knowledge_scope import (
+    DEFAULT_SCOPE,
+    classify_file,
+    filter_nodes_by_scope,
+    normalize_scope,
+)
 from llama_index.core import Document, Settings  # 文档、全局设置
 from llama_index.core.memory import ChatMemoryBuffer  # 多轮对话记忆缓冲区
 from llama_index.core.node_parser import SemanticSplitterNodeParser, SentenceSplitter, TokenTextSplitter  # 三种分块器
@@ -134,9 +139,6 @@ class SemanticSearchEngine:  # Native RAG 引擎主体
             f"compress={COMPRESS_ENABLED}, reorder={REORDER_ENABLED}, "  # 压缩与重排版
             f"crag={CRAG_ENABLED}, self_rag={SELF_RAG_ENABLED}"  # CRAG 与 Self-RAG
         )  # 优化开关日志结束
-        removed = self.purge_course_notes()
-        if removed:
-            print(f"已从向量库移除讲义/复习笔记 {removed} 条，避免示范问句干扰考勤检索")
 
     def bind(self, backend: str | None) -> "SemanticSearchEngine":
         name = normalize_vector_backend(backend)
@@ -263,14 +265,19 @@ class SemanticSearchEngine:  # Native RAG 引擎主体
         hybrid_enabled: bool | None = None,  # None 跟全局配置
         num_queries: int | None = None,  # Multi-Query 数
         fusion_mode: str | None = None,  # 融合策略名
+        doc_scope: str | None = None,
     ):  # 签名结束
         """检索中：按配置（可被请求覆盖）构建纯向量或 向量+BM25 融合检索器。"""  # 方法说明
         use_hybrid = HYBRID_ENABLED if hybrid_enabled is None else bool(hybrid_enabled)  # 解析实际开关
+        scope = normalize_scope(doc_scope)
+        nodes = None
+        if use_hybrid:
+            nodes = filter_nodes_by_scope(self._bm25_nodes(), scope)
         return build_hybrid_retriever(  # 委托给 retrieval_optimize
             self.index,  # 向量索引
             final_k=k,  # 最终条数
             collection=self.collection,  # 当前向量后端（Duck typing: .get）
-            nodes_cache=self._bm25_nodes() if use_hybrid else None,  # 混合时才喂 BM25 语料
+            nodes_cache=nodes,  # 混合时才喂 BM25 语料
             hybrid_enabled=use_hybrid,  # 是否混合
             num_queries=num_queries,  # Multi-Query
             fusion_mode=fusion_mode,  # 融合策略
@@ -327,6 +334,7 @@ class SemanticSearchEngine:  # Native RAG 引擎主体
         meta["file_hash"] = file_sha256(path)
         meta["file_name"] = path.name
         meta["file_path"] = str(path.resolve())
+        meta.update(classify_file(path))
         return Document(text=doc.text, metadata=meta)
 
     def add_documents(self, texts: List[str], splitter: str = "sentence") -> int:  # 追加纯文本并索引
@@ -345,7 +353,12 @@ class SemanticSearchEngine:  # Native RAG 引擎主体
             fresh.append(
                 Document(
                     text=text,
-                    metadata={"file_hash": digest, "file_name": f"text-{digest[:12]}"},
+                    metadata={
+                        "file_hash": digest,
+                        "file_name": f"text-{digest[:12]}",
+                        "file_type": ".txt",
+                        "doc_class": "sample",
+                    },
                 )
             )
         documents = clean_empty_text(fresh)
@@ -388,9 +401,6 @@ class SemanticSearchEngine:  # Native RAG 引擎主体
         skipped_duplicates: list[str] = []
         for path in candidates:
             if not path.is_file():
-                continue
-            if is_course_note_path(path):
-                print(f"跳过讲义/笔记（不进入检索库）: {path.name}")
                 continue
             if self._is_duplicate_file(path, seen):
                 skipped_duplicates.append(path.name)
@@ -448,7 +458,7 @@ class SemanticSearchEngine:  # Native RAG 引擎主体
             self.ingest_files(input_dir=str(data_dir))  # 导入 data 目录
         return self.collection.count()  # 返回最终总量
 
-    def search(self, query: str, k: int = SIMILARITY_TOP_K) -> List[dict]:  # 只检索，不调用大模型
+    def search(self, query: str, k: int = SIMILARITY_TOP_K, doc_scope: str | None = None) -> List[dict]:  # 只检索，不调用大模型
         """只检索：混合召回 + 可选检索后处理，不调用大模型。"""  # 方法说明
         total = self.collection.count()  # 库里有多少条
         if total == 0 or not query or not query.strip():  # 空库或空查询
@@ -458,8 +468,9 @@ class SemanticSearchEngine:  # Native RAG 引擎主体
         if k == 0:  # 极端兜底
             return []  # 无结果
 
-        retriever = self._build_retriever(candidate_top_k(k))  # 检索中：向量 / 混合
-        results = drop_course_note_nodes(list(retriever.retrieve(query)))  # 粗排候选
+        scope = normalize_scope(doc_scope)
+        retriever = self._build_retriever(candidate_top_k(k), doc_scope=scope)
+        results = filter_nodes_by_scope(list(retriever.retrieve(query)), scope)
         results = apply_postprocessors(results, query, k)  # 检索后：重排/压缩/排版
         formatted_results = []  # 转成 API 友好结构
         for i, item in enumerate(results):  # 逐条格式化
@@ -477,7 +488,7 @@ class SemanticSearchEngine:  # Native RAG 引擎主体
             )  # append 结束
         return formatted_results  # 返回格式化列表
 
-    def query(self, question: str, k: int = SIMILARITY_TOP_K) -> dict:  # 一次性 RAG：检索 + 生成
+    def query(self, question: str, k: int = SIMILARITY_TOP_K, doc_scope: str | None = None) -> dict:  # 一次性 RAG：检索 + 生成
         """一次性问答：走与 /ask 相同的 AskPipeline，预设 basic。"""
         self._require_llm()
         from semantic_search.app.service.rag_service import RagAskService
@@ -489,6 +500,7 @@ class SemanticSearchEngine:  # Native RAG 引擎主体
             use_graph=False,
             use_eval=False,
             use_self_rag=False,
+            doc_scope=doc_scope or DEFAULT_SCOPE,
         )
         return {
             "question": payload["question"],
@@ -536,10 +548,32 @@ class SemanticSearchEngine:  # Native RAG 引擎主体
         """返回文档数量、模型名称和持久化路径等状态。"""  # 方法说明
         chroma_n = self.slots["chroma"].count() if "chroma" in self.slots else 0
         qdrant_n = self.slots["qdrant"].count() if self.qdrant_ready else 0
+        type_counts: dict[str, int] = {}
+        class_counts: dict[str, int] = {}
+        try:
+            data = self.collection.get(include=["metadatas", "documents"])
+            metas = data.get("metadatas") or []
+            docs = data.get("documents") or []
+            from semantic_search.app.knowledge_scope import infer_file_type, is_course_note
+
+            for i, meta in enumerate(metas):
+                meta = meta if isinstance(meta, dict) else {}
+                text = docs[i] if i < len(docs) else ""
+                suffix = infer_file_type(metadata=meta)
+                type_counts[suffix] = type_counts.get(suffix, 0) + 1
+                kind = str(meta.get("doc_class") or "")
+                if not kind:
+                    kind = "course" if is_course_note(metadata=meta, text=text or "") else "business"
+                class_counts[kind] = class_counts.get(kind, 0) + 1
+        except Exception:
+            pass
         return {  # 供 /stats、/health 展示
             "total_documents": self.collection.count(),  # 当前选中后端条数
             "chroma_documents": chroma_n,
             "qdrant_documents": qdrant_n,
+            "type_counts": type_counts,
+            "class_counts": class_counts,
+            "doc_scope": DEFAULT_SCOPE,
             "qdrant_ready": self.qdrant_ready,
             "qdrant_error": self.qdrant_error,
             "active_backend": self.backend_name,

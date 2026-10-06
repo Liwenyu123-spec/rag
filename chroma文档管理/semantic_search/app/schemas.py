@@ -8,6 +8,10 @@ from pydantic import BaseModel, Field  # BaseModel 定义结构；Field 加约�
 class SearchRequest(BaseModel):  # POST /search 的请求体
     query: str = Field(..., description="搜索查询文本", min_length=1)  # 必填查询词，至少 1 字
     k: int = Field(5, description="返回结果数量", ge=1, le=100)  # Top-K，默认 5
+    doc_scope: str | None = Field(
+        "business",
+        description="检索范围: business / course / all / .txt / .pdf / .md / .docx / .pptx",
+    )
 
 
 class DocumentResponse(BaseModel):  # 单条检索命中结果
@@ -38,6 +42,7 @@ class IngestRequest(BaseModel):  # POST /ingest：SimpleDirectoryReader 导入�
 class QueryRequest(BaseModel):  # POST /query：一次性 RAG 问答
     question: str = Field(..., description="用户问题", min_length=1)  # 必填问题
     k: int = Field(5, description="检索条数", ge=1, le=100)  # 检索 Top-K
+    doc_scope: str | None = Field("business", description="检索范围，同 /ask")
 
 
 class QueryResponse(BaseModel):  # /query 的响应体
@@ -50,6 +55,7 @@ class ChatRequest(BaseModel):  # POST /chat：多轮对话
     question: str = Field(..., description="用户问题", min_length=1)  # 本轮问题
     session_id: str = Field("default", description="会话 ID，相同 ID 会保留多轮记忆")  # 会话标识
     k: int = Field(5, description="检索条数", ge=1, le=100)  # 每轮检索条数
+    doc_scope: str | None = Field("business", description="检索范围，同 /ask")
 
 
 class ChatResponse(BaseModel):  # /chat 的响应体
@@ -81,6 +87,10 @@ class CragInfo(BaseModel):  # Corrective RAG 过程信息
 class AskRequest(BaseModel):  # POST /ask：基础 RAG + 可选优化链路
     question: str = Field(..., description="用户问题", min_length=1)  # 必填用户问题
     k: int = Field(5, description="检索条数", ge=1, le=100)  # 最终返回来源条数
+    doc_scope: str | None = Field(
+        "business",
+        description="检索范围: business=制度与业务 / course=讲义 / all=全部 / .txt .pdf .md .docx .pptx",
+    )
     # ----- ModularRAG 风格预设（basic / hybrid_search / advanced / full_optimization）-----
     preset: str | None = Field(  # 一键预设名，可空
         None,  # 默认不指定预设
@@ -141,6 +151,7 @@ class OptimizeFlags(BaseModel):  # 本次实际生效的优化开关（回显给
     use_self_rag: bool = False  # 是否 Self-RAG
     use_graph: bool = False  # 是否向量+图谱双通道
     use_eval: bool = False  # 是否做了生成评估
+    doc_scope: str = "business"
     ran_modules: List[str] = Field(default_factory=list)  # 本次实际跑过的管线模块名
 
 

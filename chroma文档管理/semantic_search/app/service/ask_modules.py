@@ -7,7 +7,7 @@ from llama_index.core.response_synthesizers import get_response_synthesizer
 from llama_index.core.schema import NodeWithScore
 
 from semantic_search.app.config import RAG_SYSTEM_PROMPT, SELF_RAG_VERBOSE
-from semantic_search.app.knowledge_scope import drop_course_note_nodes
+from semantic_search.app.knowledge_scope import DEFAULT_SCOPE, filter_nodes_by_scope, normalize_scope
 from semantic_search.app.service.crag import apply_crag, filter_relevant_nodes
 from semantic_search.app.service.pipeline import (
     AskContext,
@@ -104,9 +104,11 @@ class VectorRetrieveModule(AskModule):
             hybrid_enabled=bool(flags.get("use_hybrid")),
             num_queries=max(1, int(flags.get("num_queries") or 1)),
             fusion_mode=flags.get("fusion_mode"),
+            doc_scope=flags.get("doc_scope"),
         )
         ranked: list[list[NodeWithScore]] = [
-            drop_course_note_nodes(list(retriever.retrieve(q))) for q in queries
+            filter_nodes_by_scope(list(retriever.retrieve(q)), flags.get("doc_scope"))
+            for q in queries
         ]
         fuse_k = max(ctx.k, min(ctx.corpus_size, ctx.k * 2))
         ctx.nodes = (

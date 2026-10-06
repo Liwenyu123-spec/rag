@@ -537,6 +537,22 @@
             <option value="qdrant" :disabled="health && health.qdrant_ready === false">Qdrant</option>
           </select>
         </div>
+        <div class="stat-item">
+          <span>文件类型</span>
+          <select v-model="docScope">
+            <option value="business">制度与业务</option>
+            <option value="course">讲义课件</option>
+            <option value="all">全部类型</option>
+            <option value=".txt">TXT</option>
+            <option value=".pdf">PDF</option>
+            <option value=".md">Markdown</option>
+            <option value=".docx">Word</option>
+            <option value=".pptx">PPT</option>
+            <option value=".csv">CSV</option>
+            <option value=".html">HTML</option>
+            <option value=".ipynb">Notebook</option>
+          </select>
+        </div>
         <div class="stat-item"><span>文档数</span><strong>{{ currentDocCount }}</strong></div>
         <div class="stat-item"><span>Embedding</span><strong>{{ shortModel }}</strong></div>
         <div class="stat-item">
@@ -548,7 +564,9 @@
           <strong>{{ currentImageCount }}</strong>
         </div>
         <div class="stat-note">
-          Chroma {{ health?.chroma_documents ?? '-' }} 条 · Qdrant {{ health?.qdrant_documents ?? '-' }} 条。两库互不影响，空库需重新上传。
+          Chroma {{ health?.chroma_documents ?? '-' }} 条 · Qdrant {{ health?.qdrant_documents ?? '-' }} 条。
+          当前范围只检索所选类型；汇报请假扣钱请用「制度与业务」。
+          <span v-if="typeCountHint"> {{ typeCountHint }}</span>
         </div>
       </div>
 
@@ -1036,6 +1054,7 @@
         const manualObjectLabel = ref('COMPANY');
         const graphError = ref(false);
         const vectorBackend = ref(localStorage.getItem('ragVectorBackend') || 'chroma');
+        const docScope = ref('business');
         const mmTask = ref('qa');
         const mmQueryFile = ref(null);
         const mmQueryPreview = ref('');
@@ -1136,9 +1155,11 @@
           if (vectorBackend.value === 'qdrant') return health.value?.qdrant_documents ?? '-';
           return health.value?.chroma_documents ?? health.value?.total_documents ?? '-';
         });
-        const currentImageCount = computed(() => {
-          if (vectorBackend.value === 'qdrant') return health.value?.qdrant_images ?? '-';
-          return health.value?.chroma_images ?? health.value?.image_count ?? '-';
+        const typeCountHint = computed(() => {
+          const counts = health.value?.type_counts || {};
+          const keys = Object.keys(counts);
+          if (!keys.length) return '';
+          return keys.sort().map((k) => `${k} ${counts[k]}`).join(' · ');
         });
 
         const ragFetch = (url, opts = {}) => {
@@ -1670,7 +1691,7 @@
               res = await ragFetch('/search', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ query: question, k: topK.value }),
+                body: JSON.stringify({ query: question, k: topK.value, doc_scope: docScope.value }),
               });
             } else if (mode.value === 'graph') {
               res = await fetch('/graph/query', {
@@ -1685,6 +1706,7 @@
                 body: JSON.stringify({
                   question,
                   k: topK.value,
+                  doc_scope: docScope.value,
                   preset: askPreset.value === 'custom' ? null : askPreset.value,
                   use_pre: optUsePre.value,
                   strategy: optUsePre.value ? askStrategy.value : 'none',
@@ -1707,7 +1729,7 @@
               res = await ragFetch('/query', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ question, k: topK.value }),
+                body: JSON.stringify({ question, k: topK.value, doc_scope: docScope.value }),
               });
             } else {
               res = await ragFetch('/chat', {
@@ -1717,6 +1739,7 @@
                   question,
                   session_id: sessionId.value,
                   k: topK.value,
+                  doc_scope: docScope.value,
                 }),
               });
             }
@@ -1767,6 +1790,8 @@
           secureMsgs, secureInput, secureMode, sendSecure, resetSecure,
           product, socialTopic, sloganTask, contentOut, genProduct, genSocial, genSlogan,
           vectorBackend,
+          docScope,
+          typeCountHint,
           onVectorBackendChange,
           currentDocCount,
           currentImageCount,

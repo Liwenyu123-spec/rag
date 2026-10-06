@@ -343,9 +343,5 @@ def nodes_from_slot(slot: VectorSlot) -> list[TextNode]:
         if not text:
             continue
         meta = metadatas[i] if i < len(metadatas) and isinstance(metadatas[i], dict) else {}
-        from semantic_search.app.knowledge_scope import is_course_note
-
-        if is_course_note(metadata=meta, text=text):
-            continue
         nodes.append(TextNode(text=text, id_=str(doc_id), metadata=meta or {}))
     return nodes

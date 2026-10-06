@@ -17,7 +17,7 @@ from semantic_search.app.config import (
     SELF_RAG_ENABLED,
     SIMILARITY_TOP_K,
 )
-from semantic_search.app.knowledge_scope import drop_course_note_nodes
+from semantic_search.app.knowledge_scope import DEFAULT_SCOPE, filter_nodes_by_scope, normalize_scope
 from semantic_search.app.service.ask_modules import default_ask_modules
 from semantic_search.app.service.crag import apply_crag
 from semantic_search.app.modular_config import yaml_as_ask_defaults
@@ -81,14 +81,17 @@ class RagAskService:
         use_reorder: bool,
         num_queries: int = 1,
         fusion_mode: str | None = None,
+        doc_scope: str | None = None,
     ) -> list[NodeWithScore]:
+        scope = normalize_scope(doc_scope)
         retriever = self.engine._build_retriever(
             max(k * 4, 20),
             hybrid_enabled=use_hybrid,
             num_queries=num_queries,
             fusion_mode=fusion_mode,
+            doc_scope=scope,
         )
-        nodes = drop_course_note_nodes(list(retriever.retrieve(query)))
+        nodes = filter_nodes_by_scope(list(retriever.retrieve(query)), scope)
         return apply_postprocessors(
             nodes,
             query,
@@ -134,9 +137,10 @@ class RagAskService:
             hybrid_enabled=use_hybrid,
             num_queries=max(1, int(num_queries or 1)),
             fusion_mode=fusion_mode,
+            doc_scope=DEFAULT_SCOPE,
         )
         for q in queries:
-            ranked_lists.append(drop_course_note_nodes(list(retriever.retrieve(q))))
+            ranked_lists.append(filter_nodes_by_scope(list(retriever.retrieve(q)), DEFAULT_SCOPE))
         fuse_k = max(k, min(total, k * 2))
         fused = (
             merge_nodes_rrf(ranked_lists, k=fuse_k)
@@ -188,6 +192,7 @@ class RagAskService:
         use_self_rag: Optional[bool],
         use_graph: Optional[bool],
         use_eval: Optional[bool],
+        doc_scope: Optional[str] = None,
     ) -> dict:
         resolved = apply_preset(
             preset,
@@ -246,6 +251,7 @@ class RagAskService:
             "use_self_rag": _resolve_flag(resolved.get("use_self_rag", use_self_rag), SELF_RAG_ENABLED),
             "use_graph": _resolve_flag(resolved.get("use_graph", use_graph), False),
             "use_eval": bool(resolved.get("use_eval", use_eval) or False),
+            "doc_scope": normalize_scope(doc_scope or resolved.get("doc_scope")),
         }
 
     def ask(
@@ -267,6 +273,7 @@ class RagAskService:
         use_graph: Optional[bool] = None,
         use_eval: Optional[bool] = False,
         reference: Optional[str] = None,
+        doc_scope: Optional[str] = None,
     ) -> dict:
         """解析开关后跑默认 AskPipeline。"""
         self.engine._require_llm()
@@ -290,6 +297,7 @@ class RagAskService:
             use_self_rag=use_self_rag,
             use_graph=use_graph,
             use_eval=use_eval,
+            doc_scope=doc_scope,
         )
         total = self.engine.collection.count()
         if total > 0:
@@ -321,6 +329,7 @@ class RagAskService:
             use_reorder=bool(flags["use_reorder"]),
             num_queries=int(flags["num_queries"]),
             fusion_mode=flags.get("fusion_mode"),
+            doc_scope=flags.get("doc_scope"),
         )
         self.pipeline.run(ctx)
         return ctx.to_response()

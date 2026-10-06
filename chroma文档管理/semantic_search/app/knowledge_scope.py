@@ -1,4 +1,4 @@
-"""把飞书讲义/复习笔记排除出检索库，避免示范问句抢走考勤制度。"""
+"""知识库分类：文件后缀 + 制度/讲义，检索时按范围过滤。"""
 
 from __future__ import annotations
 
@@ -7,7 +7,7 @@ from pathlib import Path
 
 _COURSE_NAME_RE = re.compile(
     r"(?:"
-    r"^\d{2}[-_]"  # 00-Native / 02-提示词工程
+    r"^\d{2}[-_]"
     r"|RAG入门课"
     r"|详细复习笔记"
     r"|综合课件"
@@ -30,6 +30,22 @@ _COURSE_TEXT_RE = re.compile(
 )
 
 _KEEP_NAMES = {"kq.txt", "company_info.txt"}
+
+SCOPE_OPTIONS = [
+    ("business", "制度与业务"),
+    ("course", "讲义课件"),
+    ("all", "全部类型"),
+    (".txt", "TXT"),
+    (".pdf", "PDF"),
+    (".md", "Markdown"),
+    (".docx", "Word"),
+    (".pptx", "PPT"),
+    (".csv", "CSV"),
+    (".html", "HTML"),
+    (".ipynb", "Notebook"),
+]
+
+DEFAULT_SCOPE = "business"
 
 
 def _source_blob(path: str | Path | None = None, metadata: dict | None = None) -> str:
@@ -56,7 +72,12 @@ def is_course_note_path(path: str | Path) -> bool:
 
 
 def is_course_note(*, path: str | Path | None = None, metadata: dict | None = None, text: str = "") -> bool:
-    blob = _source_blob(path, metadata)
+    meta = metadata or {}
+    if str(meta.get("doc_class") or "").lower() == "course":
+        return True
+    if str(meta.get("doc_class") or "").lower() in {"policy", "upload", "sample"}:
+        return False
+    blob = _source_blob(path, meta)
     names = {Path(line.replace("\\", "/")).name.lower() for line in blob.splitlines() if line.strip()}
     if names & _KEEP_NAMES:
         return False
@@ -64,13 +85,85 @@ def is_course_note(*, path: str | Path | None = None, metadata: dict | None = No
         return True
     if any(_COURSE_NAME_RE.search(name) for name in names):
         return True
-    if blob and _COURSE_NAME_RE.search(blob):
-        return True
     snippet = (text or "")[:1200]
     return bool(snippet and _COURSE_TEXT_RE.search(snippet))
 
 
-def drop_course_note_nodes(nodes: list) -> list:
+def infer_file_type(*, path: str | Path | None = None, metadata: dict | None = None) -> str:
+    meta = metadata or {}
+    raw = str(meta.get("file_type") or "").strip().lower()
+    if raw.startswith(".") and len(raw) <= 8:
+        return ".html" if raw == ".htm" else raw
+    blob = _source_blob(path, meta)
+    for line in blob.splitlines():
+        suffix = Path(line.replace("\\", "/")).suffix.lower()
+        if suffix:
+            return ".html" if suffix == ".htm" else suffix
+    return ".txt"
+
+
+def classify_file(path: str | Path) -> dict[str, str]:
+    p = Path(str(path))
+    suffix = p.suffix.lower() or ".txt"
+    if suffix == ".htm":
+        suffix = ".html"
+    name = p.name.lower()
+    if name in _KEEP_NAMES:
+        doc_class = "policy"
+    elif is_course_note_path(p):
+        doc_class = "course"
+    else:
+        doc_class = "upload"
+    return {"file_type": suffix, "doc_class": doc_class}
+
+
+def normalize_scope(scope: str | None) -> str:
+    raw = (scope or DEFAULT_SCOPE).strip().lower() or DEFAULT_SCOPE
+    aliases = {
+        "policy": "business",
+        "知识": "business",
+        "制度": "business",
+        "讲义": "course",
+        "课件": "course",
+        "*": "all",
+        "any": "all",
+        "md": ".md",
+        "pdf": ".pdf",
+        "txt": ".txt",
+        "docx": ".docx",
+        "pptx": ".pptx",
+        "ppt": ".pptx",
+        "csv": ".csv",
+        "html": ".html",
+        "htm": ".html",
+        "ipynb": ".ipynb",
+    }
+    raw = aliases.get(raw, raw)
+    if raw not in {"business", "course", "all"} and not raw.startswith("."):
+        raw = "." + raw
+    return raw
+
+
+def node_matches_scope(
+    *,
+    metadata: dict | None = None,
+    text: str = "",
+    path: str | Path | None = None,
+    scope: str | None = None,
+) -> bool:
+    scope = normalize_scope(scope)
+    meta = metadata or {}
+    if scope == "all":
+        return True
+    if scope == "business":
+        return not is_course_note(path=path, metadata=meta, text=text)
+    if scope == "course":
+        return is_course_note(path=path, metadata=meta, text=text)
+    want = ".html" if scope == ".htm" else scope
+    return infer_file_type(path=path, metadata=meta) == want
+
+
+def filter_nodes_by_scope(nodes: list, scope: str | None = None) -> list:
     kept = []
     for item in nodes:
         node = getattr(item, "node", item)
@@ -80,7 +173,10 @@ def drop_course_note_nodes(nodes: list) -> list:
             text = node.get_content() if hasattr(node, "get_content") else getattr(node, "text", "") or ""
         except Exception:
             text = str(getattr(node, "text", "") or "")
-        if is_course_note(metadata=meta, text=text):
-            continue
-        kept.append(item)
+        if node_matches_scope(metadata=meta, text=text, scope=scope):
+            kept.append(item)
     return kept
+
+
+def drop_course_note_nodes(nodes: list) -> list:
+    return filter_nodes_by_scope(nodes, "business")
