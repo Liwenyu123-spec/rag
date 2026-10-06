@@ -12,7 +12,8 @@ if str(_PACKAGE_PARENT) not in sys.path:  # 路径尚未加入时
     sys.path.insert(0, str(_PACKAGE_PARENT))  # 插到最前，保证能 import semantic_search
 
 from fastapi import FastAPI, File, Form, HTTPException, Query, UploadFile  # FastAPI 应用、上传、查询参数
-from fastapi.responses import FileResponse  # 直接把本地文件（前端 HTML）作为响应返回
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 
 from semantic_search.app.config import (  # 从配置模块导入密钥、模型、主机端口等常量
     DASHSCOPE_API_KEY,  # 阿里云百炼 / 千问 API Key
@@ -646,6 +647,9 @@ async def clear_documents():  # 清空接口
     """清空集合中的全部文档。"""  # 接口说明
     _require_engine(app).clear_documents()  # 删除集合内全部向量与文档
     return {"message": "所有文档已清空"}  # 确认清空成功
+
+
+app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
 
 if __name__ == "__main__":  # 只有直接运行本文件时才进入（python -m 也会走到 __main__.py）

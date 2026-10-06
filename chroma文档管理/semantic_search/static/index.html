@@ -4,8 +4,9 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
       <title>RAG 四合一平台</title>
-  <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+  <script src="/static/vue.global.prod.js"></script>
   <style>
+    [v-cloak] { display: none !important; }
     :root {
       --ink: #18212f;
       --muted: #738095;
@@ -382,7 +383,7 @@
   </style>
 </head>
 <body>
-  <div id="app">
+  <div id="app" v-cloak>
     <nav class="module-bar">
       <strong>四合一</strong>
       <button class="mod-btn" :class="{active: appModule==='basic'}" @click="appModule='basic'">基础聊天</button>
@@ -391,7 +392,7 @@
       <button class="mod-btn" :class="{active: appModule==='rag'}" @click="appModule='rag'">知识库 RAG</button>
     </nav>
 
-    <div class="extra-workspace" v-show="appModule==='basic'">
+    <div class="extra-workspace" v-if="appModule==='basic'">
       <div class="extra-panel">
         <h2>基础聊天</h2>
         <p class="header-subtitle">通用流式多轮，不走知识库</p>
@@ -406,7 +407,7 @@
       </div>
     </div>
 
-    <div class="extra-workspace" v-show="appModule==='secure'">
+    <div class="extra-workspace" v-if="appModule==='secure'">
       <div class="extra-panel">
         <h2>安全校验聊天</h2>
         <p class="header-subtitle">输入净化 + 零样本 / 少样本 / CoT / ToT</p>
@@ -434,7 +435,7 @@
       </div>
     </div>
 
-    <div class="extra-workspace" v-show="appModule==='content'">
+    <div class="extra-workspace" v-if="appModule==='content'">
       <div class="extra-panel">
         <h2>社交媒体文案与电商内容</h2>
         <p class="header-subtitle">产品描述、ToT 策划、自我一致性口号</p>
@@ -461,7 +462,7 @@
       </div>
     </div>
 
-    <div class="rag-workspace" v-show="appModule==='rag'">
+    <div class="rag-workspace" v-if="appModule==='rag'">
     <aside class="sidebar">
       <div class="brand">
         <div class="brand-mark">⌕</div>
@@ -870,6 +871,12 @@
   </div>
 
   <script>
+    if (typeof Vue === 'undefined') {
+      document.body.insertAdjacentHTML(
+        'afterbegin',
+        '<p style="padding:24px;font-family:sans-serif">页面脚本未加载。请重启 run.py 后打开 http://127.0.0.1:8003/ ，不要用本地文件直接打开 HTML。</p>'
+      );
+    } else {
     const { createApp, ref, computed, nextTick, onMounted } = Vue;
 
     createApp({
@@ -1599,6 +1606,7 @@
         };
       },
     }).mount('#app');
+    }
   </script>
 </body>
 </html>
