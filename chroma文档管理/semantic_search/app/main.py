@@ -334,6 +334,7 @@ async def ask(request: AskRequest, backend: str = Depends(vector_backend_dep)): 
             reference=request.reference,  # 标准答案（Correctness）
             doc_scope=request.doc_scope,
             compare_baseline=request.compare_baseline,
+            use_think=request.use_think,
         )  # ask 调用结束
     except ValueError as exc:  # 参数/策略非法
         raise HTTPException(status_code=400, detail=str(exc)) from exc  # 转成 400
@@ -353,6 +354,7 @@ async def ask(request: AskRequest, backend: str = Depends(vector_backend_dep)): 
         generation_eval=GenerationEvalInfo(**gen_eval) if gen_eval else None,  # 有评估才包装
         optimizations=OptimizeFlags(**opts) if opts else None,  # 有开关回显才包装
         comparison=payload.get("comparison"),
+        thinking=payload.get("thinking") or "",
     )  # AskResponse 结束
 
 

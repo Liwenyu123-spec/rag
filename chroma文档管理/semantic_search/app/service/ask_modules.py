@@ -230,12 +230,19 @@ class GenerateModule(AskModule):
             )
             ctx.sources = []
             return
-        synthesizer = get_response_synthesizer(
-            response_mode="compact",
-            text_qa_template=ASK_QA_PROMPT,
-            llm=ctx.llm,
-        )
-        ctx.answer = str(synthesizer.synthesize(query=ctx.question, nodes=ctx.nodes)).strip()
+        if ctx.flags.get("use_think"):
+            from semantic_search.app.service.deep_think import run_deep_think
+
+            answer, thinking = run_deep_think(ctx.question, ctx.nodes, ctx.llm)
+            ctx.answer = answer
+            ctx.thinking = thinking
+        else:
+            synthesizer = get_response_synthesizer(
+                response_mode="compact",
+                text_qa_template=ASK_QA_PROMPT,
+                llm=ctx.llm,
+            )
+            ctx.answer = str(synthesizer.synthesize(query=ctx.question, nodes=ctx.nodes)).strip()
         ctx.sources = [format_source(i + 1, item) for i, item in enumerate(ctx.nodes)]
 
 

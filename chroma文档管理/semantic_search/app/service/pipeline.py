@@ -167,12 +167,14 @@ class AskContext:
     self_rag: dict = field(default_factory=dict)
     graph: dict = field(default_factory=dict)
     generation_eval: dict = field(default_factory=dict)
+    thinking: str = ""
     ran_modules: list[str] = field(default_factory=list)
 
     def to_response(self) -> dict:
         return {
             "question": self.question,
             "answer": self.answer,
+            "thinking": self.thinking,
             "sources": self.sources,
             "pre_retrieval": self.pre_retrieval,
             "crag": self.crag,

@@ -151,6 +151,10 @@ class AskRequest(BaseModel):  # POST /ask：基础 RAG + 可选优化链路
         True,
         description="同时跑一遍基础 RAG（关闭检索前/后优化），对照查询、召回与答案差别",
     )
+    use_think: bool | None = Field(
+        False,
+        description="深度思考：先推理再作答，前端展示思考过程",
+    )
     reference: str | None = Field(  # 标准答案（算 Correctness 用）
         None,  # 默认不提供
         description="标准答案；提供时额外算 Correctness（1~5）",  # OpenAPI 字段说明
@@ -173,6 +177,7 @@ class OptimizeFlags(BaseModel):  # 本次实际生效的优化开关（回显给
     use_eval: bool = False  # 是否做了生成评估
     doc_scope: str = "business"
     scope_note: str = ""
+    use_think: bool = False
     ran_modules: List[str] = Field(default_factory=list)  # 本次实际跑过的管线模块名
 
 
@@ -221,6 +226,7 @@ class AskResponse(BaseModel):  # /ask 的响应体
     generation_eval: GenerationEvalInfo | None = None  # 生成质量评估
     optimizations: OptimizeFlags | None = None  # 本次实际开启的优化项
     comparison: dict | None = None  # 优化前基础 RAG vs 当前优化对照
+    thinking: str = ""  # 深度思考过程；未开启则为空
 
 
 class RetrievalEvalCase(BaseModel):  # 单条检索评测样例

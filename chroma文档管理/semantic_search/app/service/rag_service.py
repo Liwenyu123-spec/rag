@@ -198,6 +198,7 @@ class RagAskService:
         use_graph: Optional[bool],
         use_eval: Optional[bool],
         doc_scope: Optional[str] = None,
+        use_think: Optional[bool] = None,
     ) -> dict:
         resolved = apply_preset(
             preset,
@@ -260,6 +261,7 @@ class RagAskService:
             "use_eval": bool(resolved.get("use_eval", use_eval) or False),
             "doc_scope": effective_scope,
             "scope_note": scope_note,
+            "use_think": bool(use_think) if use_think is not None else bool(resolved.get("use_think") or False),
         }
 
     def ask(
@@ -283,6 +285,7 @@ class RagAskService:
         reference: Optional[str] = None,
         doc_scope: Optional[str] = None,
         compare_baseline: bool | None = True,
+        use_think: Optional[bool] = None,
     ) -> dict:
         """解析开关后跑默认 AskPipeline。"""
         self.engine._require_llm()
@@ -307,6 +310,7 @@ class RagAskService:
             use_graph=use_graph,
             use_eval=use_eval,
             doc_scope=doc_scope,
+            use_think=use_think,
         )
         total = self.engine.collection.count()
         if total > 0:
@@ -410,6 +414,7 @@ class RagAskService:
             reference=None,
             doc_scope=flags.get("doc_scope"),
             compare_baseline=False,
+            use_think=False,
         )
         return _diff_ask_runs(baseline, current, flags)
 
