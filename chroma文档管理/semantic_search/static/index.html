@@ -266,11 +266,11 @@
       overflow: hidden;
     }
     .header {
-      height: 76px; padding: 0 28px;
+      min-height: 76px; height: auto; padding: 10px 28px;
       border-bottom: 1px solid var(--line);
       background: rgba(255,255,255,.82);
       display: flex; justify-content: space-between; align-items: center;
-      flex-shrink: 0; gap: 16px;
+      flex-shrink: 0; gap: 10px; flex-wrap: wrap;
     }
     .header h2 { font-size: 17px; font-weight: 650; }
     .header-subtitle { margin-top: 4px; color: var(--muted); font-size: 12px; }
@@ -282,6 +282,34 @@
     .k-control select {
       border: 0; outline: 0; background: transparent; color: var(--ink); cursor: pointer;
     }
+    .header-btn {
+      border: 1px solid var(--line); background: #fff; color: #3d4a5c;
+      border-radius: 99px; padding: 6px 12px; font-size: 12px; cursor: pointer;
+    }
+    .header-btn:hover { background: #f3f6fb; }
+    .header-btn.danger { color: #b42318; border-color: #f5c2c0; }
+    .header-btn.danger:hover { background: #fff1f0; }
+    .chat-shell { position: relative; }
+    .hist-mask {
+      position: absolute; inset: 0; background: rgba(15,23,42,.28);
+      z-index: 8;
+    }
+    .hist-drawer {
+      position: absolute; top: 0; right: 0; bottom: 0; width: min(360px, 92%);
+      background: #fff; border-left: 1px solid var(--line); z-index: 9;
+      display: flex; flex-direction: column; padding: 16px;
+    }
+    .hist-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+    .hist-head h3 { font-size: 14px; }
+    .hist-list { overflow: auto; display: grid; gap: 8px; }
+    .hist-item {
+      text-align: left; padding: 10px 12px; border-radius: 12px; cursor: pointer;
+      border: 1px solid var(--line); background: #f7f9fc; color: #243044;
+    }
+    .hist-item:hover { border-color: #9bb8ff; background: #eef4ff; }
+    .hist-item strong { display: block; font-size: 13px; }
+    .hist-item span { display: block; margin-top: 4px; color: #8090a8; font-size: 11px; }
+    .hist-empty { color: #8090a8; font-size: 13px; padding: 24px 8px; }
     .messages {
       min-height: 0;
       overflow-y: auto; overflow-x: hidden;
@@ -817,6 +845,9 @@
             <option :value="10">10</option>
           </select>
         </div>
+        <button class="header-btn" @click="newConversation">新对话</button>
+        <button class="header-btn" @click="openHistory">对话历史</button>
+        <button class="header-btn danger" @click="clearAllConversations">清空全部对话</button>
       </header>
 
       <div class="messages" ref="messagesEl">
@@ -961,6 +992,21 @@
         </div>
       </div>
 
+      <div class="hist-mask" v-if="showHistory" @click="showHistory=false"></div>
+      <aside class="hist-drawer" v-if="showHistory">
+        <div class="hist-head">
+          <h3>对话历史（{{ historyList.length }}）</h3>
+          <button class="header-btn" @click="showHistory=false">关闭</button>
+        </div>
+        <div class="hist-empty" v-if="!historyList.length">还没有保存的对话</div>
+        <div class="hist-list" v-else>
+          <div class="hist-item" v-for="item in historyList" :key="item.id" @click="loadConversation(item.id)">
+            <strong>{{ item.title }}</strong>
+            <span>{{ item.turns || 0 }} 条 · {{ item.mode }} · {{ formatTime(item.updated_at) }}</span>
+          </div>
+        </div>
+      </aside>
+
       <div class="input-area">
         <div class="composer">
           <textarea
@@ -1037,6 +1083,9 @@
         const health = ref(null);
         const messagesEl = ref(null);
         const sessionId = ref('web-' + Math.random().toString(36).slice(2, 10));
+        const showHistory = ref(false);
+        const historyList = ref([]);
+        const historyHint = ref('');
         const pickedFiles = ref([]);
         const uploadSplitter = ref('sentence');
         const uploadTarget = ref('chroma');
@@ -1170,7 +1219,8 @@
 
         const onVectorBackendChange = () => {
           localStorage.setItem('ragVectorBackend', vectorBackend.value);
-          messages.value = [];
+          persistCurrentSession();
+          startFreshConversation();
         };
 
         const strategyLabel = (s) => strategyNames[s] || s;
@@ -1328,10 +1378,108 @@
           msg.expanded[index] = !msg.expanded[index];
         };
 
+        const formatTime = (ts) => {
+          if (!ts) return '';
+          const d = new Date(Number(ts));
+          if (Number.isNaN(d.getTime())) return '';
+          const p = (n) => String(n).padStart(2, '0');
+          return `${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
+        };
+
+        const snapshotMessages = () => messages.value.map((m) => ({
+          role: m.role,
+          content: m.content || '',
+          imageUrl: m.imageUrl || '',
+          sources: (m.sources || []).slice(0, 5).map((s) => ({
+            rank: s.rank,
+            similarity: s.similarity,
+            document: String(s.document || '').slice(0, 400),
+          })),
+        }));
+
+        const persistCurrentSession = () => {
+          if (!messages.value.length) return;
+          const firstUser = messages.value.find((m) => m.role === 'user');
+          const payload = {
+            id: sessionId.value,
+            mode: mode.value,
+            title: String(firstUser?.content || '未命名对话').slice(0, 40),
+            updated_at: Date.now(),
+            messages: snapshotMessages(),
+          };
+          ragFetch('/conversations', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+          }).catch(() => {});
+        };
+
+        const startFreshConversation = () => {
+          messages.value = [];
+          sessionId.value = 'web-' + Math.random().toString(36).slice(2, 10);
+        };
+
+        const newConversation = () => {
+          persistCurrentSession();
+          startFreshConversation();
+          historyHint.value = '已开启新对话';
+        };
+
+        const openHistory = async () => {
+          showHistory.value = true;
+          try {
+            const res = await ragFetch('/conversations');
+            const data = await res.json().catch(() => ({}));
+            historyList.value = data.sessions || [];
+          } catch (err) {
+            historyList.value = [];
+            historyHint.value = '加载历史失败：' + (err.message || String(err));
+          }
+        };
+
+        const loadConversation = async (id) => {
+          try {
+            persistCurrentSession();
+            const res = await ragFetch('/conversations/' + encodeURIComponent(id));
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok) {
+              historyHint.value = data.detail || '打开对话失败';
+              return;
+            }
+            sessionId.value = data.id || id;
+            if (data.mode) mode.value = data.mode;
+            messages.value = (data.messages || []).map((m) => ({
+              role: m.role,
+              content: m.content || '',
+              imageUrl: m.imageUrl || '',
+              sources: m.sources || [],
+              expanded: {},
+            }));
+            showHistory.value = false;
+            scrollToBottom();
+          } catch (err) {
+            historyHint.value = '打开对话失败：' + (err.message || String(err));
+          }
+        };
+
+        const clearAllConversations = async () => {
+          persistCurrentSession();
+          try {
+            await ragFetch('/conversations', { method: 'DELETE' });
+          } catch (err) {
+            historyHint.value = '清空失败：' + (err.message || String(err));
+          }
+          historyList.value = [];
+          showHistory.value = false;
+          startFreshConversation();
+          historyHint.value = '已清空全部对话';
+        };
+
         const setMode = (next) => {
           if (mode.value === next) return;
+          persistCurrentSession();
           mode.value = next;
-          messages.value = [];
+          startFreshConversation();
           inputText.value = '';
           mmQueryFile.value = null;
           if (mmQueryPreview.value) URL.revokeObjectURL(mmQueryPreview.value);
@@ -1775,6 +1923,7 @@
             loading.value = false;
             scrollToBottom();
             refreshHealth();
+            persistCurrentSession();
           }
         };
 
@@ -1801,6 +1950,14 @@
           mmTask,
           onPickQueryImage,
           messages,
+          showHistory,
+          historyList,
+          historyHint,
+          newConversation,
+          openHistory,
+          loadConversation,
+          clearAllConversations,
+          formatTime,
           loading,
           topK,
           askStrategy,

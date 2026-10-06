@@ -58,9 +58,11 @@ from semantic_search.app.schemas import (  # Pydantic 请求/响应模型，给�
     SelfRagInfo,  # Self-RAG 过程信息
     QueryRequest,  # 一次性问答请求体
     QueryResponse,  # 一次性问答响应体（含来源）
+    ConversationSaveRequest,
     SearchRequest,  # 语义搜索请求体
     SearchResponse,  # 语义搜索响应体
 )  # 括号结束
+from semantic_search.app import conversation_store
 from semantic_search.app.modular_config import describe_module_graph, yaml_as_ask_defaults
 from semantic_search.app.service.rag_service import RagAskService
 from semantic_search.app.service.presets import PRESETS
@@ -830,6 +832,58 @@ async def health_check():  # 健康检查接口
         "type_counts": stats.get("type_counts") or {},
         "class_counts": stats.get("class_counts") or {},
     }  # 字典/集合结束
+
+
+@app.put("/conversations")
+async def save_conversation(request: ConversationSaveRequest):
+    """保存或更新一轮对话历史。"""
+    try:
+        return conversation_store.upsert_session(request.model_dump())
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.get("/conversations")
+async def list_conversations():
+    """列出已保存的对话历史。"""
+    return conversation_store.list_sessions()
+
+
+@app.get("/conversations/{session_id}")
+async def get_conversation(session_id: str):
+    """按会话 ID 查询完整对话。"""
+    data = conversation_store.get_session(session_id)
+    if not data:
+        raise HTTPException(status_code=404, detail="找不到该对话")
+    return data
+
+
+@app.delete("/conversations/{session_id}")
+async def delete_conversation(session_id: str, backend: str = Depends(vector_backend_dep)):
+    """删除一条对话，并清掉对应的多轮记忆。"""
+    engine = getattr(app.state, "search_engine", None)
+    if engine is not None:
+        try:
+            _bound_engine(app, backend).clear_chat_memory(session_id)
+        except Exception:
+            engine.clear_chat_memory(session_id)
+    ok = conversation_store.delete_session(session_id)
+    if not ok:
+        raise HTTPException(status_code=404, detail="找不到该对话")
+    return {"ok": True, "id": session_id}
+
+
+@app.delete("/conversations")
+async def clear_conversations(backend: str = Depends(vector_backend_dep)):
+    """一键清空全部对话历史与多轮记忆。"""
+    engine = getattr(app.state, "search_engine", None)
+    if engine is not None:
+        try:
+            _bound_engine(app, backend).clear_chat_memory()
+        except Exception:
+            engine.clear_chat_memory()
+    n = conversation_store.clear_all()
+    return {"ok": True, "cleared": n, "message": f"已清空 {n} 段对话"}
 
 
 @app.delete("/documents")  # 清空向量集合（危险操作，调试用）

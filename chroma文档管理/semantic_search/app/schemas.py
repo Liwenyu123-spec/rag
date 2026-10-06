@@ -64,6 +64,21 @@ class ChatResponse(BaseModel):  # /chat 的响应体
     answer: str  # 本轮回答
 
 
+class ConversationTurn(BaseModel):
+    role: str = "user"
+    content: str = ""
+    imageUrl: str = ""
+    sources: List[dict] = Field(default_factory=list)
+
+
+class ConversationSaveRequest(BaseModel):
+    id: str = Field(..., min_length=1, description="会话 ID")
+    title: str | None = None
+    mode: str | None = "ask"
+    updated_at: int | None = None
+    messages: List[ConversationTurn] = Field(default_factory=list)
+
+
 class PreRetrievalInfo(BaseModel):  # 检索前优化中间产物（便于作业演示）
     strategy: str  # none / clean / rewrite / hyde / step_back
     original_query: str  # 用户原问题

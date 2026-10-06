@@ -595,6 +595,17 @@ class SemanticSearchEngine:  # Native RAG 引擎主体
             "reorder_enabled": REORDER_ENABLED,  # 长上下文重排是否开启
         }  # return 结束
 
+    def clear_chat_memory(self, session_id: str | None = None) -> None:
+        """清空 LlamaIndex 多轮记忆；不传 id 则清空全部会话记忆。"""
+        if session_id:
+            self._memories.pop(session_id, None)
+            prefix = f"{self.backend_name}:{session_id}:"
+            for key in [k for k in list(self._chat_engines) if str(k).startswith(prefix)]:
+                self._chat_engines.pop(key, None)
+            return
+        self._memories.clear()
+        self._chat_engines.clear()
+
     def clear_documents(self) -> None:  # 清空当前后端知识库
         """删除并重建当前向量后端的集合。"""  # 方法说明
         self.index = self._slot().rebuild_empty_index()
