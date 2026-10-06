@@ -4,7 +4,7 @@
       "id": "web-rst95m3f",
       "title": "机器学习有什么相关知识",
       "mode": "ask",
-      "updated_at": 1791283224599,
+      "updated_at": 1791283287814,
       "messages": [
         {
           "role": "user",
@@ -28,6 +28,18 @@
               "document": "未知文档"
             }
           ]
+        },
+        {
+          "role": "user",
+          "content": "机器学习的相关知识有什么",
+          "imageUrl": "",
+          "sources": []
+        },
+        {
+          "role": "bot",
+          "content": "知识库中没有足够相关信息回答该问题（Corrective RAG / ISREL 过滤后为空）。",
+          "imageUrl": "",
+          "sources": []
         }
       ]
     },
