@@ -335,6 +335,28 @@
         <div class="stat-item"><span>文档数</span><strong>{{ health?.total_documents ?? '-' }}</strong></div>
         <div class="stat-item"><span>Embedding</span><strong>{{ shortModel }}</strong></div>
         <div class="stat-item"><span>索引</span><strong>{{ health?.index_type ? 'Chroma' : '-' }}</strong></div>
+        <div class="stat-item">
+          <span>知识图谱</span>
+          <strong>{{ graphStatus?.ready ? 'Neo4j 已连' : '未连接' }}</strong>
+        </div>
+      </div>
+
+      <div class="side-label">知识图谱</div>
+      <div class="upload-card">
+        <div class="upload-msg" :class="{ err: !graphStatus?.ready }">
+          {{ graphStatus?.ready ? ('图谱就绪 · ' + (graphStatus.llm_provider || 'deepseek')) : (graphStatus?.message || '请先执行 neo4j console') }}
+        </div>
+        <select v-model="graphExtractor">
+          <option value="simple">抽取：Simple 开放式</option>
+          <option value="schema">抽取：Schema 约束（人物/公司/学校）</option>
+        </select>
+        <button class="upload-btn" :disabled="graphBusy" @click="buildGraphDemo">
+          {{ graphBusy ? '构建中...' : '用示例构建图谱（乔布斯/苹果）' }}
+        </button>
+        <button class="upload-btn" :disabled="graphBusy" @click="loadGraph" style="opacity:.92">
+          加载已有 Neo4j 图谱
+        </button>
+        <div class="upload-msg" :class="{ err: graphError }">{{ graphMsg }}</div>
       </div>
 
       <div class="side-label">工作模式</div>
@@ -371,6 +393,14 @@
           语义搜索
           <small>只检索相似文档，不调用大模型</small>
         </button>
+        <button
+          class="mode-btn"
+          :class="{ active: mode === 'graph' }"
+          @click="setMode('graph')"
+        >
+          图谱问答
+          <small>只走 Neo4j GraphRAG，多跳关系</small>
+        </button>
       </div>
 
       <div class="side-label" v-if="mode === 'ask'">优化方向（可勾选）</div>
@@ -382,6 +412,7 @@
           <option value="advanced">预设 · advanced 进阶</option>
           <option value="full_optimization">预设 · full_optimization 全优化</option>
           <option value="step_back">预设 · step_back 上位问题</option>
+          <option value="graph_hybrid">预设 · graph_hybrid 向量+图谱</option>
         </select>
         <div class="opt-list">
           <label class="opt-item">
@@ -426,6 +457,10 @@
           <label class="opt-item">
             <input type="checkbox" v-model="optUseSelfRag" @change="askPreset='custom'" />
             <span>Self-RAG<small>Retrieve 门控 · ISSUP 验据 · ISUSE 打分</small></span>
+          </label>
+          <label class="opt-item">
+            <input type="checkbox" v-model="optUseGraph" @change="askPreset='custom'" />
+            <span>知识图谱双通道<small>Neo4j 子图 + 向量库拼接生成</small></span>
           </label>
           <label class="opt-item">
             <input type="checkbox" v-model="optUseEval" @change="askPreset='custom'" />
@@ -545,6 +580,7 @@
                 <span class="opt-tag" :class="{ off: !msg.optimizations.use_reorder }">长上下文{{ msg.optimizations.use_reorder ? '' : '关' }}</span>
                 <span class="opt-tag" :class="{ off: !msg.optimizations.use_crag }">CRAG{{ msg.optimizations.use_crag ? '' : '关' }}</span>
                 <span class="opt-tag" :class="{ off: !msg.optimizations.use_self_rag }">Self-RAG{{ msg.optimizations.use_self_rag ? '' : '关' }}</span>
+                <span class="opt-tag" :class="{ off: !msg.optimizations.use_graph }">图谱{{ msg.optimizations.use_graph ? '' : '关' }}</span>
                 <span class="opt-tag" :class="{ off: !msg.optimizations.use_eval }">生成评估{{ msg.optimizations.use_eval ? '' : '关' }}</span>
               </div>
             </div>
@@ -562,6 +598,13 @@
               <strong>{{ msg.crag.enabled ? 'Corrective RAG' : 'Self-RAG · ISREL' }}</strong>
               <div class="pre-line">过滤：{{ msg.crag.before_count }} → {{ msg.crag.after_count }} 篇 · {{ msg.crag.message }}</div>
               <div class="pre-line" v-if="msg.crag.retried && msg.crag.rewritten_query">纠错改写：{{ msg.crag.rewritten_query }}</div>
+            </div>
+            <div class="pre-box" v-if="msg.graph && msg.graph.enabled">
+              <strong>知识图谱通道</strong>
+              <div class="pre-line">{{ msg.graph.message }}（{{ msg.graph.total || 0 }} 条）</div>
+              <div class="pre-line" v-for="(g, gi) in (msg.graph.results || []).slice(0, 4)" :key="'g'+gi">
+                · {{ (g.text || '').slice(0, 160) }}
+              </div>
             </div>
             <div class="pre-box" v-if="msg.selfRag && msg.selfRag.enabled">
               <strong>Self-RAG</strong>
@@ -675,6 +718,7 @@
         const optUseReorder = ref(true);
         const optUseCrag = ref(true);
         const optUseSelfRag = ref(false);
+        const optUseGraph = ref(false);
         const optUseEval = ref(false);
         const evalReference = ref('');
         const evalLoading = ref(false);
@@ -687,6 +731,11 @@
         const uploading = ref(false);
         const uploadMessage = ref('可选多个文件，上传后自动分块入库');
         const uploadError = ref(false);
+        const graphStatus = ref(null);
+        const graphExtractor = ref('simple');
+        const graphBusy = ref(false);
+        const graphMsg = ref('先 neo4j console，再用示例建图');
+        const graphError = ref(false);
 
         const modeMeta = {
           ask: {
@@ -717,6 +766,13 @@
             emptyDesc: '用自然语言找最相关的文档内容。',
             placeholder: '输入关键词或一句话，例如：向量数据库',
           },
+          graph: {
+            title: '图谱问答',
+            subtitle: '只走 Neo4j GraphRAG：实体检索 + 图遍历 + 生成',
+            emptyTitle: '向知识图谱提问',
+            emptyDesc: '先启动 Neo4j，再在左侧构建示例图谱，然后问多跳关系问题。',
+            placeholder: '例如：沃兹尼亚克的母校是哪里？他和谁一起创立了苹果？',
+          },
         };
 
         const strategyNames = {
@@ -727,12 +783,21 @@
           step_back: '清洗+Step-Back',
         };
 
-        const suggestions = [
-          '贝壳科技总部在哪里？',
-          '公司上班和下班时间分别是几点？',
-          '嗯那个帮我看看请假咋扣钱啊???',
-          '什么是向量数据库',
-        ];
+        const suggestions = computed(() => {
+          if (mode.value === 'graph') {
+            return [
+              '沃兹尼亚克的母校是哪里？他和谁一起创立了苹果？',
+              '乔布斯创立了哪家公司？总部在哪？',
+              '苹果公司和库比蒂诺是什么关系？',
+            ];
+          }
+          return [
+            '贝壳科技总部在哪里？',
+            '公司上班和下班时间分别是几点？',
+            '嗯那个帮我看看请假咋扣钱啊???',
+            '什么是向量数据库',
+          ];
+        });
 
         const modeTitle = computed(() => modeMeta[mode.value].title);
         const modeSubtitle = computed(() => modeMeta[mode.value].subtitle);
@@ -766,31 +831,37 @@
             use_pre: false, strategy: 'rewrite', use_hybrid: true, multi: false,
             fusion: 'simple',
             use_rerank: false, use_compress: false, use_reorder: false,
-            use_crag: false, use_self_rag: false, use_eval: false,
+            use_crag: false, use_self_rag: false, use_graph: false, use_eval: false,
           },
           hybrid_search: {
             use_pre: false, strategy: 'rewrite', use_hybrid: true, multi: false,
             fusion: 'reciprocal_rerank',
             use_rerank: false, use_compress: false, use_reorder: false,
-            use_crag: false, use_self_rag: false, use_eval: false,
+            use_crag: false, use_self_rag: false, use_graph: false, use_eval: false,
           },
           advanced: {
             use_pre: true, strategy: 'rewrite', use_hybrid: true, multi: true,
             fusion: 'reciprocal_rerank',
             use_rerank: true, use_compress: true, use_reorder: true,
-            use_crag: false, use_self_rag: false, use_eval: false,
+            use_crag: false, use_self_rag: false, use_graph: false, use_eval: false,
           },
           full_optimization: {
             use_pre: true, strategy: 'hyde', use_hybrid: true, multi: true,
             fusion: 'reciprocal_rerank',
             use_rerank: true, use_compress: true, use_reorder: true,
-            use_crag: true, use_self_rag: false, use_eval: false,
+            use_crag: true, use_self_rag: false, use_graph: false, use_eval: false,
           },
           step_back: {
             use_pre: true, strategy: 'step_back', use_hybrid: true, multi: false,
             fusion: 'reciprocal_rerank',
             use_rerank: true, use_compress: true, use_reorder: true,
-            use_crag: false, use_self_rag: false, use_eval: false,
+            use_crag: false, use_self_rag: false, use_graph: false, use_eval: false,
+          },
+          graph_hybrid: {
+            use_pre: true, strategy: 'rewrite', use_hybrid: true, multi: false,
+            fusion: 'reciprocal_rerank',
+            use_rerank: true, use_compress: false, use_reorder: true,
+            use_crag: false, use_self_rag: false, use_graph: true, use_eval: false,
           },
         };
 
@@ -809,6 +880,7 @@
           optUseReorder.value = p.use_reorder;
           optUseCrag.value = p.use_crag;
           optUseSelfRag.value = p.use_self_rag;
+          optUseGraph.value = !!p.use_graph;
           optUseEval.value = p.use_eval;
         };
 
@@ -850,12 +922,71 @@
           sendMessage();
         };
 
+        const refreshGraphStatus = async () => {
+          try {
+            const res = await fetch('/graph/status');
+            graphStatus.value = await res.json();
+          } catch (err) {
+            graphStatus.value = { ready: false, message: '无法连接图谱接口' };
+          }
+        };
+
         const refreshHealth = async () => {
           try {
             const res = await fetch('/health');
             health.value = await res.json();
           } catch (err) {
             health.value = { status: 'error', message: '无法连接后端' };
+          }
+          refreshGraphStatus();
+        };
+
+        const graphApi = async (path, body) => {
+          const res = await fetch(path, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body || {}),
+          });
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok) {
+            const detail = data.detail;
+            const msg = typeof detail === 'string' ? detail : (detail && JSON.stringify(detail)) || ('HTTP ' + res.status);
+            throw new Error(msg);
+          }
+          return data;
+        };
+
+        const buildGraphDemo = async () => {
+          if (graphBusy.value) return;
+          graphBusy.value = true;
+          graphError.value = false;
+          graphMsg.value = '正在用 DeepSeek 抽三元组写入 Neo4j…';
+          try {
+            const data = await graphApi('/graph/build', { extractor: graphExtractor.value, texts: null });
+            graphMsg.value = data.message + '（' + (data.documents || 0) + ' 段文本，抽取器 ' + (data.extractor || '') + '）';
+            refreshGraphStatus();
+          } catch (err) {
+            graphError.value = true;
+            graphMsg.value = err.message || String(err);
+          } finally {
+            graphBusy.value = false;
+          }
+        };
+
+        const loadGraph = async () => {
+          if (graphBusy.value) return;
+          graphBusy.value = true;
+          graphError.value = false;
+          graphMsg.value = '正在从 Neo4j 加载…';
+          try {
+            const data = await graphApi('/graph/load', {});
+            graphMsg.value = data.message || '已加载';
+            refreshGraphStatus();
+          } catch (err) {
+            graphError.value = true;
+            graphMsg.value = err.message || String(err);
+          } finally {
+            graphBusy.value = false;
           }
         };
 
@@ -973,6 +1104,12 @@
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ query: question, k: topK.value }),
               });
+            } else if (mode.value === 'graph') {
+              res = await fetch('/graph/query', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ question, k: topK.value }),
+              });
             } else if (mode.value === 'ask') {
               res = await fetch('/ask', {
                 method: 'POST',
@@ -991,6 +1128,7 @@
                   use_reorder: optUseReorder.value,
                   use_crag: optUseCrag.value,
                   use_self_rag: optUseSelfRag.value,
+                  use_graph: optUseGraph.value,
                   use_eval: optUseEval.value,
                   reference: optUseEval.value && evalReference.value.trim()
                     ? evalReference.value.trim()
@@ -1032,6 +1170,7 @@
               botMsg.selfRag = data.self_rag || null;
               botMsg.generationEval = data.generation_eval || null;
               botMsg.optimizations = data.optimizations || null;
+              botMsg.graph = data.graph || null;
             }
           } catch (err) {
             botMsg.content = '请求失败：' + (err.message || String(err));
@@ -1076,6 +1215,7 @@
           optUseReorder,
           optUseCrag,
           optUseSelfRag,
+          optUseGraph,
           optUseEval,
           evalReference,
           evalLoading,
@@ -1107,6 +1247,13 @@
           uploadError,
           onPickFiles,
           uploadFiles,
+          graphStatus,
+          graphExtractor,
+          graphBusy,
+          graphMsg,
+          graphError,
+          buildGraphDemo,
+          loadGraph,
         };
       },
     }).mount('#app');

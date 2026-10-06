@@ -13,6 +13,7 @@ retrieval:
   # simple | reciprocal_rerank | relative_score
   fusion_mode: reciprocal_rerank
   num_queries: 1
+  graph: false
 
 post_retrieval:
   rerank: true

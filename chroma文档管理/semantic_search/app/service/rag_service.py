@@ -447,7 +447,7 @@ class RagAskService:  # RAG 问答编排服务
                 }  # 早退返回结束
 
         total = self.engine.collection.count()  # 知识库文档/块数量
-        if total == 0:  # 空库无法检索
+        if total == 0 and not flag_graph:  # 空库且未开图谱
             empty_ans = "知识库为空，请先上传或导入文档后再提问。"  # 友好提示文案
             return {  # 早退：空库响应
                 "question": question,  # 原问题
@@ -456,80 +456,103 @@ class RagAskService:  # RAG 问答编排服务
                 "pre_retrieval": empty_pre,  # 空检索前
                 "crag": _empty_crag(),  # 未跑 CRAG
                 "self_rag": self_info,  # Self-RAG 状态
+                "graph": _empty_graph(),
                 "generation_eval": _empty_eval(),  # 不评估空库提示
                 "optimizations": optimizations,  # 生效开关
             }  # 空库返回结束
 
-        k = max(1, min(k, total))  # Top-K 夹在 [1, total]
-        prep = prepare_retrieval_queries(question, effective_strategy, llm=Settings.llm)  # 检索前处理得到多查询等
-        queries = prep["retrieval_queries"] or [question]  # 实际用于召回的查询列表
+        if total > 0:
+            k = max(1, min(k, total))  # Top-K 夹在 [1, total]
+        else:
+            k = max(1, k)
+        prep = empty_pre
+        fused: list[NodeWithScore] = []
+        crag_info = _empty_crag()
+        if total > 0:
+            prep = prepare_retrieval_queries(question, effective_strategy, llm=Settings.llm)  # 检索前处理得到多查询等
+            queries = prep["retrieval_queries"] or [question]  # 实际用于召回的查询列表
 
-        ranked_lists: list[list[NodeWithScore]] = []  # 收集每路召回结果
-        retriever = self.engine._build_retriever(  # 构建本轮检索器
-            k,  # Top-K
-            hybrid_enabled=flag_hybrid,  # 混合开关
-            num_queries=flag_num_queries,  # 多查询数
-            fusion_mode=flag_fusion,  # 融合模式
-        )  # 检索器就绪
-        for q in queries:  # 对每个检索查询各召回一路
-            ranked_lists.append(list(retriever.retrieve(q)))  # 追加该路节点列表
+            ranked_lists: list[list[NodeWithScore]] = []  # 收集每路召回结果
+            retriever = self.engine._build_retriever(  # 构建本轮检索器
+                k,  # Top-K
+                hybrid_enabled=flag_hybrid,  # 混合开关
+                num_queries=flag_num_queries,  # 多查询数
+                fusion_mode=flag_fusion,  # 融合模式
+            )  # 检索器就绪
+            for q in queries:  # 对每个检索查询各召回一路
+                ranked_lists.append(list(retriever.retrieve(q)))  # 追加该路节点列表
 
-        fuse_k = max(k, min(total, k * 2))  # 融合候选池略大于最终 k，给后处理留余量
-        fused = (  # 多路则 RRF，单路则截断，空则 []
-            merge_nodes_rrf(ranked_lists, k=fuse_k)  # 多路 RRF 融合
-            if len(ranked_lists) > 1  # 是否多于一路
-            else (ranked_lists[0][:fuse_k] if ranked_lists else [])  # 单路截断或空
-        )  # 得到融合候选
+            fuse_k = max(k, min(total, k * 2))  # 融合候选池略大于最终 k，给后处理留余量
+            fused = (  # 多路则 RRF，单路则截断，空则 []
+                merge_nodes_rrf(ranked_lists, k=fuse_k)  # 多路 RRF 融合
+                if len(ranked_lists) > 1  # 是否多于一路
+                else (ranked_lists[0][:fuse_k] if ranked_lists else [])  # 单路截断或空
+            )  # 得到融合候选
 
-        fused = apply_postprocessors(  # 检索后：重排 / 压缩 / 重排序
-            fused,  # 融合后的节点
-            question,  # 用原问题做后处理查询
-            k,  # 最终条数
-            rerank_enabled=flag_rerank,  # 重排
-            compress_enabled=flag_compress,  # 压缩
-            reorder_enabled=flag_reorder,  # 重排序
-        )  # 后处理完成
+            fused = apply_postprocessors(  # 检索后：重排 / 压缩 / 重排序
+                fused,  # 融合后的节点
+                question,  # 用原问题做后处理查询
+                k,  # 最终条数
+                rerank_enabled=flag_rerank,  # 重排
+                compress_enabled=flag_compress,  # 压缩
+                reorder_enabled=flag_reorder,  # 重排序
+            )  # 后处理完成
 
-        if flag_crag:  # 启用 Corrective RAG
-            fused, crag_info = apply_crag(  # 评估相关性，必要时改写重试
-                question,  # 原问题
-                fused,  # 当前节点
-                retrieve_fn=lambda q: self._retrieve_pipeline(  # 重试检索回调
-                    q,  # 改写后的查询
-                    k,  # Top-K
-                    use_hybrid=flag_hybrid,  # 同主流程混合开关
-                    use_rerank=flag_rerank,  # 同重排
-                    use_compress=flag_compress,  # 同压缩
-                    use_reorder=flag_reorder,  # 同重排序
-                    num_queries=flag_num_queries,  # 同多查询
-                    fusion_mode=flag_fusion,  # 同融合
-                ),  # lambda 结束
-                llm=Settings.llm,  # 评估用 LLM
-                enabled=True,  # 显式启用
-            )  # 得到过滤后节点与 CRAG 元信息
-            if flag_self:  # 同时开 Self-RAG 时标记相关性已共用
-                self_info["isrel_shared_with_crag"] = True  # CRAG 的评估≈ISREL
-        else:  # 未开 CRAG
-            crag_info = _empty_crag()  # 先用空结构
-            if flag_self and fused:  # Self-RAG 单独做 ISREL 过滤
-                fused, details = filter_relevant_nodes(  # 过滤不相关节点
-                    question, fused, llm=Settings.llm, verbose=SELF_RAG_VERBOSE  # 问、节点、LLM
-                )  # 得到过滤结果与明细
-                crag_info = {  # 借用 crag 字段回传 ISREL 明细（未真正跑 CRAG）
-                    "enabled": False,  # CRAG 本身未开
-                    "rewritten_query": None,  # 无改写
-                    "retried": False,  # 无重试
-                    "before_count": len(details),  # 过滤前条数（明细长度）
-                    "after_count": len(fused),  # 过滤后条数
-                    "eval": details,  # 逐条相关性明细
-                    "message": "self_rag_isrel_only",  # 说明仅做了 ISREL
-                }  # 自定义 crag_info 结束
+            if flag_crag:  # 启用 Corrective RAG
+                fused, crag_info = apply_crag(  # 评估相关性，必要时改写重试
+                    question,  # 原问题
+                    fused,  # 当前节点
+                    retrieve_fn=lambda q: self._retrieve_pipeline(  # 重试检索回调
+                        q,  # 改写后的查询
+                        k,  # Top-K
+                        use_hybrid=flag_hybrid,  # 同主流程混合开关
+                        use_rerank=flag_rerank,  # 同重排
+                        use_compress=flag_compress,  # 同压缩
+                        use_reorder=flag_reorder,  # 同重排序
+                        num_queries=flag_num_queries,  # 同多查询
+                        fusion_mode=flag_fusion,  # 同融合
+                    ),  # lambda 结束
+                    llm=Settings.llm,  # 评估用 LLM
+                    enabled=True,  # 显式启用
+                )  # 得到过滤后节点与 CRAG 元信息
+                if flag_self:  # 同时开 Self-RAG 时标记相关性已共用
+                    self_info["isrel_shared_with_crag"] = True  # CRAG 的评估≈ISREL
+            else:  # 未开 CRAG
+                crag_info = _empty_crag()  # 先用空结构
+                if flag_self and fused:  # Self-RAG 单独做 ISREL 过滤
+                    fused, details = filter_relevant_nodes(  # 过滤不相关节点
+                        question, fused, llm=Settings.llm, verbose=SELF_RAG_VERBOSE  # 问、节点、LLM
+                    )  # 得到过滤结果与明细
+                    crag_info = {  # 借用 crag 字段回传 ISREL 明细（未真正跑 CRAG）
+                        "enabled": False,  # CRAG 本身未开
+                        "rewritten_query": None,  # 无改写
+                        "retried": False,  # 无重试
+                        "before_count": len(details),  # 过滤前条数（明细长度）
+                        "after_count": len(fused),  # 过滤后条数
+                        "eval": details,  # 逐条相关性明细
+                        "message": "self_rag_isrel_only",  # 说明仅做了 ISREL
+                    }  # 自定义 crag_info 结束
+
+        graph_info = _empty_graph()
+        if flag_graph:
+            if self.graph_rag is None:
+                graph_info = {
+                    "enabled": True,
+                    "ok": False,
+                    "message": "图谱未就绪：请先 neo4j console，并在侧栏构建/加载图谱",
+                    "total": 0,
+                    "results": [],
+                }
+            else:
+                graph_nodes, graph_info = self.graph_rag.retrieve_as_nodes(question, k=k)
+                if graph_nodes:
+                    fused = list(graph_nodes) + list(fused)
 
         if not fused:  # 过滤后无可用上下文
             no_hit = (  # 按是否做过纠错/相关性过滤选择提示文案
                 "知识库中没有足够相关信息回答该问题（Corrective RAG / ISREL 过滤后为空）。"  # CRAG/Self-RAG 过滤空
                 if (flag_crag or flag_self)  # 走过相关性过滤
-                else "知识库中没有检索到相关信息，请换个问法或先导入文档。"  # 普通未命中
+                else "知识库中没有检索到相关信息，请换个问法、先导入文档，或先构建知识图谱。"  # 普通未命中
             )  # no_hit 文案确定
             return {  # 早退：无命中
                 "question": question,  # 原问题
@@ -538,6 +561,7 @@ class RagAskService:  # RAG 问答编排服务
                 "pre_retrieval": prep,  # 真实检索前信息
                 "crag": crag_info,  # CRAG/ISREL 元信息
                 "self_rag": self_info,  # Self-RAG 状态
+                "graph": graph_info,
                 "generation_eval": _maybe_generation_eval(  # 可对提示文案做评估
                     enabled=flag_eval,  # 是否评估
                     question=question,  # 问题
@@ -577,6 +601,7 @@ class RagAskService:  # RAG 问答编排服务
             "pre_retrieval": prep,  # 检索前元信息
             "crag": crag_info,  # CRAG 元信息
             "self_rag": self_info,  # Self-RAG 元信息
+            "graph": graph_info,
             "generation_eval": _maybe_generation_eval(  # 按需评估最终答案
                 enabled=flag_eval,  # 是否评估
                 question=question,  # 问题

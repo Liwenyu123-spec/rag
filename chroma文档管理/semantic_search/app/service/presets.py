@@ -15,6 +15,7 @@ PRESETS: dict[str, dict] = {  # 预设名 → 开关字典
         "use_reorder": False,  # 不长上下文重排
         "use_crag": False,  # 不开 CRAG
         "use_self_rag": False,  # 不开 Self-RAG
+        "use_graph": False,
         "use_eval": False,  # 不做生成评估
     },  # basic 结束
     "hybrid_search": {  # 混合检索预设：RRF 融合
@@ -28,6 +29,7 @@ PRESETS: dict[str, dict] = {  # 预设名 → 开关字典
         "use_reorder": False,  # 无重排版
         "use_crag": False,  # 无 CRAG
         "use_self_rag": False,  # 无 Self-RAG
+        "use_graph": False,
         "use_eval": False,  # 无评估
     },  # hybrid_search 结束
     "advanced": {  # 进阶：多查询 + 重排 + 压缩
@@ -41,6 +43,7 @@ PRESETS: dict[str, dict] = {  # 预设名 → 开关字典
         "use_reorder": True,  # 开长上下文重排
         "use_crag": False,  # 本档默认关 CRAG
         "use_self_rag": False,  # 关 Self-RAG
+        "use_graph": False,
         "use_eval": False,  # 关评估
     },  # advanced 结束
     "step_back": {
@@ -54,6 +57,7 @@ PRESETS: dict[str, dict] = {  # 预设名 → 开关字典
         "use_reorder": True,
         "use_crag": False,
         "use_self_rag": False,
+        "use_graph": False,
         "use_eval": False,
     },
     "full_optimization": {  # 全优化：HyDE + 多查询 + 后处理 + CRAG
@@ -67,8 +71,23 @@ PRESETS: dict[str, dict] = {  # 预设名 → 开关字典
         "use_reorder": True,  # 长上下文重排
         "use_crag": True,  # 开 CRAG
         "use_self_rag": False,  # Self-RAG 仍默认关（可前端勾）
+        "use_graph": False,
         "use_eval": False,  # 评估默认关
     },  # full_optimization 结束
+    "graph_hybrid": {
+        "use_pre": True,
+        "strategy": "rewrite",
+        "use_hybrid": True,
+        "fusion_mode": "reciprocal_rerank",
+        "num_queries": 1,
+        "use_rerank": True,
+        "use_compress": False,
+        "use_reorder": True,
+        "use_crag": False,
+        "use_self_rag": False,
+        "use_graph": True,
+        "use_eval": False,
+    },
 }  # PRESETS 结束
 
 PRESET_LABELS = {  # 前端展示用中文标签
@@ -77,6 +96,7 @@ PRESET_LABELS = {  # 前端展示用中文标签
     "advanced": "进阶（多查询+重排+压缩）",  # advanced 文案
     "full_optimization": "全优化（HyDE+多查询+后处理+CRAG）",  # full 文案
     "step_back": "Step-Back（上位问题+混合检索+后处理）",
+    "graph_hybrid": "图谱双通道（向量 RAG + Neo4j GraphRAG）",
     "custom": "自定义（下方勾选）",  # 自定义档
 }  # PRESET_LABELS 结束
 

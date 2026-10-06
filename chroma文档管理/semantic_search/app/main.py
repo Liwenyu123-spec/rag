@@ -38,6 +38,7 @@ from semantic_search.app.schemas import (  # Pydantic 请求/响应模型，给�
     DocumentResponse,  # 单条检索结果（文档片段 + 相似度）
     GenerationEvalInfo,  # 生成质量评估
     GraphBuildRequest,  # GraphRAG 构建请求
+    GraphInfo,  # 图谱通道过程
     GraphQueryRequest,  # GraphRAG 问答请求
     GraphRetrieveRequest,  # GraphRAG 仅检索请求
     IngestRequest,  # 从本地文件/目录导入的请求体
@@ -78,14 +79,37 @@ def _require_engine(app: FastAPI) -> SemanticSearchEngine:  # 从 app 取出已�
     return engine  # 引擎可用，返回给路由函数继续用
 
 
+def _try_init_graph_rag(app: FastAPI) -> GraphRagService | None:
+    """启动时或 Neo4j 后开时尝试连接图谱；失败不拖垮向量 RAG。"""
+    existing = getattr(app.state, "graph_rag", None)
+    if existing is not None:
+        return existing
+    if not GRAPH_RAG_ENABLED or not NEO4J_PASSWORD:
+        return None
+    if not (DEEPSEEK_API_KEY or DASHSCOPE_API_KEY):
+        return None
+    try:
+        app.state.graph_rag = GraphRagService()
+        app.state.graph_rag_error = None
+        print("GraphRAG 已就绪（Neo4j + DeepSeek/千问可配）")
+        return app.state.graph_rag
+    except Exception as exc:  # noqa: BLE001
+        app.state.graph_rag = None
+        app.state.graph_rag_error = str(exc)
+        print(f"警告: GraphRAG 初始化失败: {exc}")
+        return None
+
+
 def _require_graph_rag(app: FastAPI) -> GraphRagService:
-    service = getattr(app.state, "graph_rag", None)
+    service = _try_init_graph_rag(app)
     if service is None:
+        extra = getattr(app.state, "graph_rag_error", None)
         raise HTTPException(
             status_code=503,
             detail=(
-                "GraphRAG 未初始化。请配置 NEO4J_PASSWORD，以及 DEEPSEEK_API_KEY"
-                "（或 DASHSCOPE_API_KEY），并启动 Neo4j（bolt://localhost:7687，需 APOC）。"
+                "GraphRAG 未初始化。请先启动 Neo4j（neo4j console），配置 NEO4J_PASSWORD"
+                " 与 DEEPSEEK_API_KEY。"
+                + (f" 原因: {extra}" if extra else "")
             ),
         )
     return service
@@ -111,22 +135,10 @@ async def lifespan(app: FastAPI):  # FastAPI 启动和关闭时都会走到这�
         else:  # 当前是 dashscope 提供方
             print("错误: 未找到 DASHSCOPE_API_KEY")  # 千问密钥缺失提示
 
-    # GraphRAG：需要 Neo4j 密码 +（DeepSeek 或 千问）；缺配时不影响向量 RAG
+    # GraphRAG：Neo4j 未开时稍后可在请求里重试连接
     app.state.graph_rag = None
-    graph_llm_ready = bool(DEEPSEEK_API_KEY or DASHSCOPE_API_KEY)
-    if GRAPH_RAG_ENABLED and NEO4J_PASSWORD and graph_llm_ready:
-        try:
-            app.state.graph_rag = GraphRagService()
-            print("GraphRAG 已就绪（Neo4j + DeepSeek/千问可配）")
-        except Exception as exc:  # noqa: BLE001
-            print(f"警告: GraphRAG 初始化失败: {exc}")
-    elif GRAPH_RAG_ENABLED:
-        missing = []
-        if not NEO4J_PASSWORD:
-            missing.append("NEO4J_PASSWORD")
-        if not graph_llm_ready:
-            missing.append("DEEPSEEK_API_KEY 或 DASHSCOPE_API_KEY")
-        print(f"提示: GraphRAG 未启用，缺少 {', '.join(missing)}")
+    app.state.graph_rag_error = None
+    _try_init_graph_rag(app)
 
     print("=" * 50)  # 启动阶段结束分隔线
     yield  # 这里之后应用正式对外提供请求；yield 返回后进入关闭阶段
@@ -204,13 +216,17 @@ async def ask(request: AskRequest):  # 请求体含 question / k / 各优化开�
         "full_optimization",
         "custom",
         "step_back",
+        "graph_hybrid",
     }:
         raise HTTPException(
             status_code=400,
-            detail="preset 只能是 basic / hybrid_search / advanced / full_optimization / custom / step_back",
+            detail="preset 只能是 basic / hybrid_search / advanced / full_optimization / custom / step_back / graph_hybrid",
         )
     try:  # 业务层可能抛 ValueError / RuntimeError
-        payload = RagAskService(_require_engine(app)).ask(  # 编排：检索前→检索→生成→可选评估
+        payload = RagAskService(
+            _require_engine(app),
+            graph_rag=_try_init_graph_rag(app),
+        ).ask(  # 编排：检索前→检索→生成→可选评估
             request.question,  # 用户问题
             k=request.k,  # Top-K
             strategy=strategy,  # 检索前策略
@@ -224,6 +240,7 @@ async def ask(request: AskRequest):  # 请求体含 question / k / 各优化开�
             use_reorder=request.use_reorder,  # 长上下文重排
             use_crag=request.use_crag,  # CRAG
             use_self_rag=request.use_self_rag,  # Self-RAG
+            use_graph=request.use_graph,
             use_eval=request.use_eval,  # 生成评估
             reference=request.reference,  # 标准答案（Correctness）
         )  # ask 调用结束
@@ -241,6 +258,7 @@ async def ask(request: AskRequest):  # 请求体含 question / k / 各优化开�
         pre_retrieval=PreRetrievalInfo(**payload["pre_retrieval"]),  # 检索前过程
         crag=CragInfo(**(payload.get("crag") or {})),  # CRAG 过程；缺省空字典
         self_rag=SelfRagInfo(**(payload.get("self_rag") or {})),  # Self-RAG 过程
+        graph=GraphInfo(**(payload.get("graph") or {})),
         generation_eval=GenerationEvalInfo(**gen_eval) if gen_eval else None,  # 有评估才包装
         optimizations=OptimizeFlags(**opts) if opts else None,  # 有开关回显才包装
     )  # AskResponse 结束
@@ -483,11 +501,12 @@ async def get_stats():  # 统计接口
 @app.get("/graph/status")
 async def graph_status():
     """GraphRAG / Neo4j 连通性与配置摘要。"""
-    service = getattr(app.state, "graph_rag", None)
+    service = _try_init_graph_rag(app)
     if service is None:
         return {
             "ready": False,
-            "message": "GraphRAG 未初始化（需 NEO4J_PASSWORD + DeepSeek/千问 Key + Neo4j）",
+            "message": getattr(app.state, "graph_rag_error", None)
+            or "GraphRAG 未初始化（需 NEO4J_PASSWORD + DeepSeek/千问 Key + Neo4j）",
             "deepseek_configured": bool(DEEPSEEK_API_KEY),
             "dashscope_configured": bool(DASHSCOPE_API_KEY),
             "neo4j_password_configured": bool(NEO4J_PASSWORD),
@@ -539,7 +558,7 @@ async def graph_retrieve(request: GraphRetrieveRequest):
 async def health_check():  # 健康检查接口
     """健康检查，用于确认服务与配置是否可用。"""  # 接口说明
     engine = getattr(app.state, "search_engine", None)  # 不强制抛错，方便前端显示状态
-    graph = getattr(app.state, "graph_rag", None)
+    graph = _try_init_graph_rag(app)
     if engine is None:  # 引擎没起来
         return {  # 返回 error 状态而不是抛异常
             "status": "error",  # 前端侧栏显示红点

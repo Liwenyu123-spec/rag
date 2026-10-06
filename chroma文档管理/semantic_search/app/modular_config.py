@@ -101,6 +101,7 @@ def yaml_as_ask_defaults() -> dict[str, Any]:
         "use_hybrid": bool(mid.get("hybrid", HYBRID_ENABLED)),
         "fusion_mode": str(mid.get("fusion_mode") or HYBRID_FUSION_MODE or "reciprocal_rerank"),
         "num_queries": int(mid.get("num_queries") or 1),
+        "use_graph": bool(mid.get("graph", False)),
         "use_rerank": bool(post.get("rerank", RERANK_ENABLED)),
         "use_compress": bool(post.get("compress", COMPRESS_ENABLED)),
         "use_reorder": bool(post.get("reorder", REORDER_ENABLED)),
@@ -142,6 +143,12 @@ def describe_module_graph(flags: dict[str, Any] | None = None) -> dict[str, Any]
             "enabled": True,
         },
         {
+            "module_type": "Retrieval",
+            "module": "GraphRAG",
+            "operator": "Neo4j 子图召回，优先拼接在向量结果前",
+            "enabled": bool(f.get("use_graph")),
+        },
+        {
             "module_type": "Post-Retrieval",
             "module": "Rerank",
             "operator": "Cross-Encoder / DashScopeRerank",
@@ -173,8 +180,8 @@ def describe_module_graph(flags: dict[str, Any] | None = None) -> dict[str, Any]
         },
     ]
     flows = ["Linear（改写→检索→融合→后处理→生成）"]
-    if hybrid:
-        flows.append("Branching（向量 ∥ BM25 再融合）")
+    if f.get("use_graph"):
+        flows.append("Branching（向量通道 ∥ 图谱通道再拼接）")
     if f.get("use_self_rag"):
         flows.append("Conditional（Retrieve 决定是否查库）")
     if f.get("use_crag") or f.get("use_self_rag"):
