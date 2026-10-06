@@ -203,6 +203,41 @@
     .opt-item small { display: block; margin-top: 2px; color: #8090a8; font-size: 11px; }
     .opt-item.on small { color: #c5d6f5; }
     .opt-item.disabled { opacity: .45; pointer-events: none; }
+    .pipe-box {
+      margin-top: 4px; padding-top: 10px;
+      border-top: 1px solid rgba(255,255,255,.1);
+    }
+    .pipe-head {
+      display: flex; align-items: center; justify-content: space-between;
+      color: #9bb8ff; font-size: 11px; font-weight: 700; letter-spacing: .4px;
+      cursor: pointer; user-select: none;
+    }
+    .pipe-head span { color: #718097; font-weight: 500; }
+    .pipe-group { margin-top: 8px; }
+    .pipe-title {
+      color: #718097; font-size: 10px; font-weight: 700; letter-spacing: 1px;
+      margin-bottom: 4px;
+    }
+    .pipe-row {
+      display: flex; align-items: baseline; justify-content: space-between; gap: 8px;
+      padding: 4px 0; font-size: 11px; line-height: 1.4;
+      border-bottom: 1px solid rgba(255,255,255,.06);
+    }
+    .pipe-row:last-child { border-bottom: 0; }
+    .pipe-name { color: #dce3ef; }
+    .pipe-row.off .pipe-name { color: #6d7a90; }
+    .pipe-tag {
+      flex-shrink: 0; font-size: 10px; padding: 1px 7px; border-radius: 999px;
+    }
+    .pipe-tag.on { color: #b8f0d4; background: rgba(62,228,154,.16); }
+    .pipe-tag.off { color: #8b98ac; background: rgba(255,255,255,.06); }
+    .pipe-detail { color: #8090a8; font-size: 10px; margin-top: 1px; }
+    .pipe-chips { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 8px; }
+    .pipe-chip {
+      font-size: 10px; color: #c5d6f5; padding: 2px 8px; border-radius: 999px;
+      background: rgba(36,107,253,.22); border: 1px solid rgba(93,145,255,.28);
+    }
+    .eval-hint { color: #718097; font-size: 10px; line-height: 1.5; }
     .upload-card select {
       color: #fff;
       background: #1a2740;
@@ -667,23 +702,40 @@
             style="width:100%;resize:vertical;color:#dce3ef;font-size:12px;border:1px solid rgba(255,255,255,.12);border-radius:10px;background:rgba(0,0,0,.2);padding:8px 10px;"
           ></textarea>
         </div>
-        <div class="upload-msg" v-if="moduleLayers.length" style="margin-top:8px;text-align:left;opacity:.9;">
-          <strong>编排（YAML 默认）</strong>
-          <div v-for="(layer, i) in moduleLayers" :key="i" class="pre-line" style="margin-top:4px;">
-            {{ layer.module_type }} · {{ layer.module }} · {{ layer.enabled ? layer.operator : '关' }}
+        <div class="pipe-box" v-if="mode === 'ask'">
+          <div class="pipe-head" @click="pipeOpen = !pipeOpen">
+            Modular 编排
+            <span>{{ pipeOpen ? '收起' : '展开对照讲义' }}</span>
           </div>
-          <div class="pre-line" v-if="moduleFlows.length" style="margin-top:6px;">
-            流程：{{ moduleFlows.join('；') }}
+          <div v-show="pipeOpen">
+            <div class="pipe-group" v-for="group in pipelineGroups" :key="group.title">
+              <div class="pipe-title">{{ group.title }}</div>
+              <div
+                class="pipe-row"
+                :class="{ off: !item.on }"
+                v-for="item in group.items"
+                :key="item.name"
+              >
+                <div>
+                  <div class="pipe-name">{{ item.name }}</div>
+                  <div class="pipe-detail" v-if="item.detail">{{ item.detail }}</div>
+                </div>
+                <span class="pipe-tag" :class="item.on ? 'on' : 'off'">{{ item.on ? '开' : '关' }}</span>
+              </div>
+            </div>
+            <div class="pipe-chips">
+              <span class="pipe-chip" v-for="chip in pipelineChips" :key="chip">{{ chip }}</span>
+            </div>
           </div>
         </div>
         <button
           class="upload-btn"
-          style="margin-top:2px"
+          style="margin-top:8px"
           :disabled="evalLoading"
           @click="runRetrievalEval"
         >{{ evalLoading ? '检索评估中...' : '跑检索评估（基础 vs 当前）' }}</button>
         <div class="upload-msg" v-if="evalRetrievalMsg">{{ evalRetrievalMsg }}</div>
-        <div class="upload-msg">同一套 company_info 题：基础 RAG 对照当前勾选；含 Hit/MRR/P@K/R@K。开 CRAG 会较慢。</div>
+        <div class="eval-hint">company_info 题：基础 RAG 对照当前勾选。开 CRAG 会较慢。</div>
       </div>
 
       <div class="upload-card" v-if="mode === 'mmrag'">
@@ -1151,6 +1203,62 @@
         };
 
         const fusionMode = ref('reciprocal_rerank');
+        const pipeOpen = ref(false);
+
+        const pipelineGroups = computed(() => [
+          {
+            title: '检索前',
+            items: [{
+              name: '查询变换',
+              on: optUsePre.value,
+              detail: optUsePre.value ? (strategyNames[askStrategy.value] || askStrategy.value) : '原句检索',
+            }],
+          },
+          {
+            title: '检索中',
+            items: [
+              {
+                name: '混合检索',
+                on: optUseHybrid.value,
+                detail: optUseHybrid.value ? ('向量+BM25 · ' + fusionMode.value) : '仅向量',
+              },
+              {
+                name: 'Multi-Query',
+                on: optUseMultiQuery.value,
+                detail: optUseMultiQuery.value ? '多查询变体再融合' : '',
+              },
+              {
+                name: 'GraphRAG',
+                on: optUseGraph.value,
+                detail: optUseGraph.value ? 'Neo4j 子图拼接' : '',
+              },
+            ],
+          },
+          {
+            title: '检索后',
+            items: [
+              { name: '重排序', on: optUseRerank.value, detail: optUseRerank.value ? 'Cross-Encoder' : '' },
+              { name: '上下文压缩', on: optUseCompress.value, detail: '' },
+              { name: '长上下文重排', on: optUseReorder.value, detail: optUseReorder.value ? 'Lost in the Middle' : '' },
+            ],
+          },
+          {
+            title: '生成',
+            items: [
+              { name: 'CRAG', on: optUseCrag.value, detail: optUseCrag.value ? '过滤 / 改写重检' : '' },
+              { name: 'Self-RAG', on: optUseSelfRag.value, detail: optUseSelfRag.value ? 'Retrieve / ISSUP / ISUSE' : '' },
+              { name: '生成评估', on: optUseEval.value, detail: '' },
+            ],
+          },
+        ]);
+
+        const pipelineChips = computed(() => {
+          const chips = ['直线流水线'];
+          if (optUseGraph.value) chips.push('分支：向量∥图谱');
+          if (optUseSelfRag.value) chips.push('条件：是否检索');
+          if (optUseCrag.value || optUseSelfRag.value) chips.push('循环：重检/验据');
+          return chips;
+        });
 
         const applyPreset = () => {
           const p = PRESET_MAP[askPreset.value];
@@ -1637,19 +1745,9 @@
           }
         };
 
-        const moduleLayers = ref([]);
-        const moduleFlows = ref([]);
-
         onMounted(() => {
           refreshHealth();
           setInterval(refreshHealth, 15000);
-          fetch('/modules')
-            .then((r) => r.json())
-            .then((d) => {
-              moduleLayers.value = d.layers || [];
-              moduleFlows.value = d.flow_patterns || [];
-            })
-            .catch(() => {});
         });
 
         return {
@@ -1673,8 +1771,9 @@
           askStrategy,
           askPreset,
           fusionMode,
-          moduleLayers,
-          moduleFlows,
+          pipeOpen,
+          pipelineGroups,
+          pipelineChips,
           optUsePre,
           optUseHybrid,
           optUseMultiQuery,
