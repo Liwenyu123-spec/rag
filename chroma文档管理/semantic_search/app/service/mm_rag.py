@@ -1,9 +1,9 @@
-"""多模态 RAG：Chinese-CLIP 图文向量 + DeepSeek / 千问 VL 看图作答。
+"""多模态 RAG：Chinese-CLIP 图文向量 + DeepSeek 看图作答。
 
 对齐飞书「01_多模态RAG」主路径（不做 ColPali）：
 - 图像塔入库独立 Chroma 集合
 - 以文搜图 / 以图搜图 / 以图搜文（仅文本库也是 CLIP 时）
-- 默认用 DeepSeek（deepseek-flash / V4.1 Flash 原生多模态）分析上传的图
+- 用 DeepSeek（deepseek-flash）分析上传的图
 """
 
 from __future__ import annotations
@@ -16,8 +16,6 @@ from pathlib import Path
 
 from semantic_search.app.config import (
     CHROMA_PERSIST_DIR,
-    DASHSCOPE_API_KEY,
-    DASHSCOPE_COMPAT_BASE,
     DATA_DIR,
     DEEPSEEK_API_KEY,
     DEEPSEEK_BASE_URL,
@@ -116,7 +114,7 @@ class MultimodalRagService:
             "vl_model": VL_MODEL if self._vl_ready() else None,
             "message": (
                 f"当前图库 {slot.count()} 张（Chroma {chroma_n} / Qdrant {qdrant_n}）；"
-                + (f"{self._vl_label()} 可看图作答" if self._vl_ready() else "未配置看图模型（DEEPSEEK_API_KEY 或 DASHSCOPE_API_KEY）")
+                + (f"{self._vl_label()} 可看图作答" if self._vl_ready() else "未配置 DEEPSEEK_API_KEY，无法看图")
             ),
         }
 
@@ -307,22 +305,14 @@ class MultimodalRagService:
         return f"data:{mime};base64,{b64}"
 
     def _vl_ready(self) -> bool:
-        if VL_PROVIDER == "dashscope":
-            return bool(DASHSCOPE_API_KEY)
         return bool(DEEPSEEK_API_KEY)
 
     def _vl_label(self) -> str:
-        if VL_PROVIDER == "dashscope":
-            return f"千问 {VL_MODEL}"
         return f"DeepSeek {VL_MODEL}"
 
     def _vl_openai(self):
         from openai import OpenAI
 
-        if VL_PROVIDER == "dashscope":
-            if not DASHSCOPE_API_KEY:
-                raise RuntimeError("未配置 DASHSCOPE_API_KEY")
-            return OpenAI(api_key=DASHSCOPE_API_KEY, base_url=DASHSCOPE_COMPAT_BASE)
         if not DEEPSEEK_API_KEY:
             raise RuntimeError("未配置 DEEPSEEK_API_KEY")
         return OpenAI(api_key=DEEPSEEK_API_KEY, base_url=DEEPSEEK_BASE_URL)
@@ -401,7 +391,7 @@ class MultimodalRagService:
             answer = self._text_fallback_answer(q, image_hits, [])
             if not self._vl_ready():
                 answer = (
-                    "还不能真正看图：请配置 DEEPSEEK_API_KEY（推荐 deepseek-flash）或 DASHSCOPE_API_KEY。\n"
+                    "还不能真正看图：请配置 DEEPSEEK_API_KEY（推荐模型 deepseek-flash）。\n"
                     "当前只会把图片写入图库，并用 CLIP 找相似图。\n\n"
                     + answer
                 )

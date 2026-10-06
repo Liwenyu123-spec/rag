@@ -16,16 +16,15 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from semantic_search.app.config import (  # 从配置模块导入密钥、模型、主机端口等常量
-    DASHSCOPE_API_KEY,  # 阿里云百炼 / 千问 API Key
     DATA_DIR,  # 知识库文件落盘目录
     DEEPSEEK_API_KEY,  # DeepSeek API Key（优先读 Windows 环境变量）
     EMBEDDING_MODEL,  # 向量化模型名，如 BAAI/bge-small-zh-v1.5
-    EMBEDDING_PROVIDER,  # 向量化提供方：huggingface 或 dashscope
+    EMBEDDING_PROVIDER,  # 向量化提供方：huggingface 或 chinese_clip
     GRAPH_RAG_ENABLED,  # GraphRAG 总开关
     HOST,  # 服务监听地址，默认 127.0.0.1
     IMAGE_EXTS,
     LLM_MODEL,  # 大模型名称，如 deepseek-v4-flash
-    LLM_PROVIDER,  # 大模型提供方：deepseek 或 dashscope
+    LLM_PROVIDER,  # 大模型提供方：deepseek
     NEO4J_PASSWORD,  # Neo4j 密码
     PORT,  # 服务端口，默认 8003
     normalize_vector_backend,
@@ -110,7 +109,7 @@ def _try_init_graph_rag(app: FastAPI):
         return existing
     if not GRAPH_RAG_ENABLED or not NEO4J_PASSWORD:
         return None
-    if not (DEEPSEEK_API_KEY or DASHSCOPE_API_KEY):
+    if not DEEPSEEK_API_KEY:
         return None
     from semantic_search.app.service.graph_rag import GraphRagService, neo4j_bolt_reachable
 
@@ -124,7 +123,7 @@ def _try_init_graph_rag(app: FastAPI):
     try:
         app.state.graph_rag = GraphRagService()
         app.state.graph_rag_error = None
-        print("GraphRAG 已就绪（Neo4j + DeepSeek/千问可配）")
+        print("GraphRAG 已就绪（Neo4j + DeepSeek）")
         return app.state.graph_rag
     except Exception as exc:  # noqa: BLE001
         app.state.graph_rag = None
@@ -187,20 +186,14 @@ async def lifespan(app: FastAPI):  # FastAPI 启动和关闭时都会走到这�
     print("=" * 50)  # 打印分隔线，方便在终端里辨认启动日志
     print("正在启动 RAG 四合一平台（当前搜索引擎 + 聊天/文案）...")
 
-    llm_ready = (  # 判断当前配置下大模型密钥是否齐备
-        (LLM_PROVIDER == "deepseek" and bool(DEEPSEEK_API_KEY))  # DeepSeek 模式需要 DEEPSEEK_API_KEY
-        or (LLM_PROVIDER == "dashscope" and bool(DASHSCOPE_API_KEY))  # 千问模式需要 DASHSCOPE_API_KEY
-    )  # 括号结束
+    llm_ready = bool(DEEPSEEK_API_KEY)
     if llm_ready:  # 密钥齐了才真正创建引擎
         app.state.search_engine = SemanticSearchEngine()  # 初始化 Embedding、LLM、Chroma、索引
         total = app.state.search_engine.seed_if_empty()  # 库空时写入示例文档并加载 data 目录
         print(f"服务启动完成，当前文档数: {total}")  # 打印当前向量库文档数量
     else:  # 缺密钥：服务能起来，但检索/问答接口会 503
         app.state.search_engine = None  # 明确标记引擎不可用
-        if LLM_PROVIDER == "deepseek":  # 按当前提供方打印对应提示
-            print("错误: 未找到 DEEPSEEK_API_KEY（进程 / .env / Windows 用户环境变量）")  # DeepSeek 缺 Key
-        else:  # 当前是 dashscope 提供方
-            print("错误: 未找到 DASHSCOPE_API_KEY")  # 千问密钥缺失提示
+        print("错误: 未找到 DEEPSEEK_API_KEY（进程 / .env / Windows 用户环境变量）")  # DeepSeek 缺 Key
 
     # GraphRAG：Neo4j 未开时稍后可在请求里重试连接
     app.state.graph_rag = None
@@ -675,9 +668,8 @@ async def graph_status():
         return {
             "ready": False,
             "message": getattr(app.state, "graph_rag_error", None)
-            or "GraphRAG 未初始化（需 NEO4J_PASSWORD + DeepSeek/千问 Key + Neo4j）",
+            or "GraphRAG 未初始化（需 NEO4J_PASSWORD + DEEPSEEK_API_KEY + Neo4j）",
             "deepseek_configured": bool(DEEPSEEK_API_KEY),
-            "dashscope_configured": bool(DASHSCOPE_API_KEY),
             "neo4j_password_configured": bool(NEO4J_PASSWORD),
         }
     return service.status()
@@ -748,7 +740,7 @@ async def mm_status():
         return {
             "ready": False,
             "message": getattr(app.state, "mm_rag_error", None) or "多模态未初始化",
-            "dashscope_configured": bool(DASHSCOPE_API_KEY),
+            "deepseek_configured": bool(DEEPSEEK_API_KEY),
         }
     return service.status()
 
@@ -823,7 +815,7 @@ async def mm_ask(
     image: UploadFile | None = File(None),
     backend: str = Depends(vector_backend_dep),
 ):
-    """多模态问答：CLIP 召回图片后，有千问 Key 则用 VL 看图作答。"""
+    """多模态问答：CLIP 召回图片后，用 DeepSeek 看图作答。"""
     mm = _require_mm_rag(app)
     query_image_path = None
     if image is not None and image.filename:

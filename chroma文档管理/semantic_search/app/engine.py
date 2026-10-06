@@ -28,7 +28,6 @@ from semantic_search.app.config import (  # 导入运行时配置常量
     COLLECTION_NAME,  # 集合名
     COMPRESS_ENABLED,  # 上下文压缩开关
     CRAG_ENABLED,  # Corrective RAG 开关
-    DASHSCOPE_API_KEY,  # 千问 Key
     DATA_DIR,  # 默认数据目录
     DEEPSEEK_API_KEY,  # DeepSeek Key
     DEEPSEEK_BASE_URL,  # DeepSeek API 地址
@@ -60,7 +59,7 @@ SAMPLE_DOCUMENTS = [  # 空库时写入的示例知识，方便一启动就能�
     "倒排索引是搜索引擎的核心数据结构，通过词到文档的映射实现快速全文检索",  # 示例：倒排索引
     "向量数据库通过存储和检索高维向量实现语义搜索，是RAG应用的关键组件",  # 示例：向量库概念
     "深度学习模型如BERT、RoBERTa可以生成高质量的文本嵌入向量，捕捉语义信息",  # 示例：Embedding 模型
-    "阿里云千问提供text-embedding系列模型，支持文档和查询向量的差异编码",  # 示例：千问 Embedding
+    "DeepSeek 提供对话与视觉多模态接口，本项目用它生成答案并分析上传的图片",  # 示例：DeepSeek
     "FAISS索引IVFFlat通过聚类技术将向量空间划分，大幅提升大规模检索效率",  # 示例：IVFFlat
 ]  # SAMPLE_DOCUMENTS 结束
 
@@ -172,24 +171,12 @@ class SemanticSearchEngine:  # Native RAG 引擎主体
         return self._slot().raw_client
 
     def _init_embed_model(self):  # 按配置选择 Embedding 实现
-        """DeepSeek 不做向量化；支持 Chinese-CLIP / HuggingFace / 千问。"""  # 方法说明
+        """DeepSeek 不做向量化；支持本地 Chinese-CLIP / HuggingFace。"""  # 方法说明
         if EMBEDDING_PROVIDER in {"chinese_clip", "cn_clip", "chinese-clip"}:  # 本地 Chinese-CLIP
             from semantic_search.app.chinese_clip_embedding import ChineseCLIPEmbedding  # 文本塔封装
 
             print(f"使用本地 Chinese-CLIP Embedding: {self.model_name}")  # 启动日志
             return ChineseCLIPEmbedding(model_path=self.model_name)  # 目录含 pytorch_model.bin
-
-        if EMBEDDING_PROVIDER == "dashscope":  # 云端千问 Embedding
-            from semantic_search.app.safe_embedding import SafeDashScopeEmbedding  # 分批安全封装
-
-            if not DASHSCOPE_API_KEY:  # 选了千问却没 Key
-                raise RuntimeError("EMBEDDING_PROVIDER=dashscope 但未找到 DASHSCOPE_API_KEY")  # 配置冲突直接报错
-            print(f"使用 SafeDashScopeEmbedding（分批≤10）: {self.model_name}")  # 提示当前 Embedding
-            return SafeDashScopeEmbedding(  # 对齐 ModularRAG：避免批量超限
-                model_name=self.model_name,  # 如 text-embedding-v3
-                api_key=DASHSCOPE_API_KEY,  # 鉴权
-                text_type="document",  # 文档侧编码（相对 query 侧）
-            )  # SafeDashScopeEmbedding 结束
 
         from llama_index.embeddings.huggingface import HuggingFaceEmbedding  # 本地模型
 
@@ -198,14 +185,6 @@ class SemanticSearchEngine:  # Native RAG 引擎主体
 
     def _init_llm(self):  # 按配置选择大模型；失败则返回 None
         """默认使用 Windows 环境变量里的 DEEPSEEK_API_KEY。"""  # 方法说明
-        if LLM_PROVIDER == "dashscope":  # 千问对话
-            from llama_index.llms.dashscope import DashScope  # 延迟导入千问 LLM
-
-            if not DASHSCOPE_API_KEY:  # 没 Key：搜索还能用，问答不可用
-                print("警告: 未设置 DASHSCOPE_API_KEY，/query 和 /chat 将不可用")  # 提示缺 Key
-                return None  # LLM 置空，仅检索可用
-            return DashScope(model_name=LLM_MODEL, api_key=DASHSCOPE_API_KEY, max_tokens=2048)  # 创建千问 LLM
-
         from llama_index.llms.deepseek import DeepSeek  # DeepSeek 对话
 
         if not DEEPSEEK_API_KEY:  # 没 Key
@@ -317,7 +296,7 @@ class SemanticSearchEngine:  # Native RAG 引擎主体
 
     def _require_llm(self) -> None:  # 问答前检查 LLM 是否可用
         if Settings.llm is None:  # 全局 LLM 未初始化
-            raise RuntimeError("大模型未初始化，请检查 LLM_PROVIDER 与对应 API Key")  # 交给路由转 503
+            raise RuntimeError("大模型未初始化，请检查 DEEPSEEK_API_KEY")  # 交给路由转 503
 
     def _is_duplicate_file(self, path: Path, seen: set[str] | None = None) -> bool:
         digest = file_sha256(path)

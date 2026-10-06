@@ -52,47 +52,39 @@ def get_windows_env(name: str) -> str:  # 按优先级查找环境变量
     )  # 括号结束
 
 
-DASHSCOPE_API_KEY = get_windows_env("DASHSCOPE_API_KEY")  # 阿里云千问 / 百炼 Key
 DEEPSEEK_API_KEY = get_windows_env("DEEPSEEK_API_KEY")  # DeepSeek Key
 DEEPSEEK_BASE_URL = os.getenv("DEEPSEEK_BASE_URL", "https://api.deepseek.com").strip()  # DeepSeek API 根地址
 
-LLM_PROVIDER = os.getenv("LLM_PROVIDER", "deepseek").strip().lower()  # 大模型提供方，默认 deepseek
-LLM_MODEL = os.getenv(  # 大模型名称
-    "LLM_MODEL",  # 环境变量名
-    "deepseek-v4-flash" if LLM_PROVIDER == "deepseek" else "qwen-plus",  # 按提供方给默认模型名
-)  # LLM_MODEL 赋值结束
+LLM_PROVIDER = "deepseek"
+LLM_MODEL = os.getenv("LLM_MODEL", "deepseek-v4-flash").strip()
 
-# DeepSeek 没有公开 Embedding 接口；没有千问 Key 时用本地 HuggingFace / Chinese-CLIP。
+# DeepSeek 没有公开 Embedding 接口，向量化只用本地 Chinese-CLIP / HuggingFace。
 _DEFAULT_CHINESE_CLIP = r"H:\二阶段\chinese-clip-vit-base-patch16"  # Bandizip 解压目标
-if os.getenv("EMBEDDING_PROVIDER"):  # 若显式配置了向量化提供方
-    EMBEDDING_PROVIDER = os.getenv("EMBEDDING_PROVIDER", "").strip().lower()  # 用用户配置
-elif Path(_DEFAULT_CHINESE_CLIP).is_dir() and (  # 本地已有 Chinese-CLIP 权重
+_clip_ready = Path(_DEFAULT_CHINESE_CLIP).is_dir() and (
     Path(_DEFAULT_CHINESE_CLIP) / "pytorch_model.bin"
-).is_file():
-    EMBEDDING_PROVIDER = "chinese_clip"  # 优先本地 Chinese-CLIP
-elif DASHSCOPE_API_KEY:  # 有千问 Key 时默认走云端 Embedding
-    EMBEDDING_PROVIDER = "dashscope"  # 云端千问向量化
-else:  # 否则用本地 HuggingFace 模型
-    EMBEDDING_PROVIDER = "huggingface"  # 本地 bge 等模型
-
-if EMBEDDING_PROVIDER == "chinese_clip":  # Chinese-CLIP 本地目录
-    EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", _DEFAULT_CHINESE_CLIP)  # 默认二阶段目录
-elif EMBEDDING_PROVIDER == "huggingface":  # 本地向量模型默认名
-    EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "BAAI/bge-small-zh-v1.5")  # 中文小模型，体积小
-else:  # 千问向量模型默认名
-    EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "text-embedding-v3")  # 阿里云默认 embedding
-
-EMBEDDING_API_BASE = os.getenv(  # OpenAI 兼容的 Embedding 接口地址（千问兼容模式）
-    "EMBEDDING_API_BASE",  # 环境变量名
-    "https://dashscope.aliyuncs.com/compatible-mode/v1",  # 默认兼容模式地址
-)  # 括号结束
+).is_file()
+_raw_embed = os.getenv("EMBEDDING_PROVIDER", "").strip().lower()
+if _raw_embed in {"dashscope", "qwen", "aliyun"}:
+    _raw_embed = ""
+if _raw_embed:
+    EMBEDDING_PROVIDER = _raw_embed
+elif _clip_ready:
+    EMBEDDING_PROVIDER = "chinese_clip"
+else:
+    EMBEDDING_PROVIDER = "huggingface"
+if EMBEDDING_PROVIDER in {"chinese_clip", "cn_clip", "chinese-clip"}:
+    EMBEDDING_PROVIDER = "chinese_clip"
+    EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", _DEFAULT_CHINESE_CLIP)
+else:
+    EMBEDDING_PROVIDER = "huggingface"
+    EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "BAAI/bge-small-zh-v1.5")
 
 RAG_SYSTEM_PROMPT = os.getenv(  # 多轮 RAG 对话的系统提示词
     "RAG_SYSTEM_PROMPT",  # 环境变量名
     "你是一个知识库助手，根据检索的内容，用简体中文回答问题",  # 默认中文助手人设
 )  # 括号结束
 
-# Chinese-CLIP 维度与 bge/千问不同，默认换独立集合，避免旧向量混用
+# Chinese-CLIP 维度与 bge 不同，默认换独立集合，避免旧向量混用
 _default_collection = (
     "native_rag_chinese_clip" if EMBEDDING_PROVIDER == "chinese_clip" else "native_rag"
 )
@@ -120,9 +112,11 @@ def _env_bool(name: str, default: bool) -> bool:  # 读布尔型环境变量的�
 HYBRID_ENABLED = _env_bool("HYBRID_ENABLED", True)  # 同库：向量 + BM25 融合
 HYBRID_FUSION_MODE = os.getenv("HYBRID_FUSION_MODE", "reciprocal_rerank").strip()  # 或 relative_score
 RETRIEVE_CANDIDATES = int(os.getenv("RETRIEVE_CANDIDATES", "20"))  # 粗排候选数（给精排留窗口）
-# 重排：默认本地 bge，不依赖千问；provider=dashscope 才需要 DASHSCOPE_API_KEY
+# 重排：本地 bge
 RERANK_ENABLED = _env_bool("RERANK_ENABLED", True)  # 是否启用重排序
-RERANK_PROVIDER = os.getenv("RERANK_PROVIDER", "local").strip().lower()  # local | dashscope | none
+RERANK_PROVIDER = os.getenv("RERANK_PROVIDER", "local").strip().lower()  # local | none
+if RERANK_PROVIDER in {"dashscope", "qwen", "aliyun"}:
+    RERANK_PROVIDER = "local"
 _DEFAULT_BGE_RERANKER = r"H:\二阶段\bge-reranker-base"
 _PACKAGED_BGE_RERANKER = PACKAGE_DIR / "models" / "bge-reranker-base"
 
@@ -137,8 +131,6 @@ def _looks_like_hf_model_dir(path: Path) -> bool:
 
 
 def _resolve_rerank_model() -> str:
-    if (RERANK_PROVIDER or "local").strip().lower() in {"dashscope", "qwen", "aliyun"}:
-        return os.getenv("RERANK_MODEL", "qwen3-rerank").strip()
     configured = (os.getenv("RERANK_MODEL") or "").strip()
     candidates = [
         Path(configured) if configured else None,
@@ -179,41 +171,31 @@ def normalize_vector_backend(name: str | None) -> str:
 HOST = os.getenv("SEARCH_HOST", "127.0.0.1")  # Web 服务监听地址
 PORT = int(os.getenv("SEARCH_PORT", "8003"))  # 默认 8003，避免和「带安全校验的聊天机器人」8001 冲突
 
-# ----- GraphRAG（PropertyGraphIndex + Neo4j；LLM 可用 DeepSeek / 千问）-----
+# ----- GraphRAG（PropertyGraphIndex + Neo4j；LLM 用 DeepSeek）-----
 NEO4J_URI = os.getenv("NEO4J_URI", "bolt://localhost:7687").strip()  # Bolt，不是 7474
 NEO4J_USERNAME = (
     os.getenv("NEO4J_USERNAME") or os.getenv("NEO4J_USER") or "neo4j"
 ).strip()  # 默认 neo4j
 NEO4J_PASSWORD = os.getenv("NEO4J_PASSWORD", "").strip()  # 必填：首次改密后的密码
-# Graph LLM：有 DeepSeek 默认用 deepseek；显式设 GRAPH_LLM_PROVIDER=dashscope 才用千问
-if os.getenv("GRAPH_LLM_PROVIDER"):
-    GRAPH_LLM_PROVIDER = os.getenv("GRAPH_LLM_PROVIDER", "").strip().lower()
-elif DEEPSEEK_API_KEY:
-    GRAPH_LLM_PROVIDER = "deepseek"
-elif DASHSCOPE_API_KEY:
-    GRAPH_LLM_PROVIDER = "dashscope"
-else:
-    GRAPH_LLM_PROVIDER = "deepseek"
-GRAPH_LLM_MODEL = os.getenv(
-    "GRAPH_LLM_MODEL",
-    "deepseek-v4-flash" if GRAPH_LLM_PROVIDER == "deepseek" else "qwen-plus",
-).strip()
-# Graph Embedding：DeepSeek 无向量接口；默认本地 Chinese-CLIP / HF，有千问也可用 dashscope
+GRAPH_LLM_PROVIDER = "deepseek"
+GRAPH_LLM_MODEL = os.getenv("GRAPH_LLM_MODEL", "deepseek-v4-flash").strip()
+# Graph Embedding：DeepSeek 无向量接口，只用本地 Chinese-CLIP / HuggingFace
 _DEFAULT_CHINESE_CLIP_GRAPH = r"H:\二阶段\chinese-clip-vit-base-patch16"
-if os.getenv("GRAPH_EMBED_PROVIDER"):
-    GRAPH_EMBED_PROVIDER = os.getenv("GRAPH_EMBED_PROVIDER", "").strip().lower()
+_raw_graph_embed = os.getenv("GRAPH_EMBED_PROVIDER", "").strip().lower()
+if _raw_graph_embed in {"dashscope", "qwen", "aliyun"}:
+    _raw_graph_embed = ""
+if _raw_graph_embed:
+    GRAPH_EMBED_PROVIDER = _raw_graph_embed
 elif Path(_DEFAULT_CHINESE_CLIP_GRAPH).is_dir() and (
     Path(_DEFAULT_CHINESE_CLIP_GRAPH) / "pytorch_model.bin"
 ).is_file():
     GRAPH_EMBED_PROVIDER = "chinese_clip"
-elif DASHSCOPE_API_KEY:
-    GRAPH_EMBED_PROVIDER = "dashscope"
 else:
     GRAPH_EMBED_PROVIDER = "huggingface"
-if GRAPH_EMBED_PROVIDER == "chinese_clip":
+if GRAPH_EMBED_PROVIDER not in {"chinese_clip", "cn_clip", "chinese-clip", "huggingface"}:
+    GRAPH_EMBED_PROVIDER = "huggingface"
+if GRAPH_EMBED_PROVIDER in {"chinese_clip", "cn_clip", "chinese-clip"}:
     GRAPH_EMBED_MODEL = os.getenv("GRAPH_EMBED_MODEL", _DEFAULT_CHINESE_CLIP_GRAPH).strip()
-elif GRAPH_EMBED_PROVIDER == "dashscope":
-    GRAPH_EMBED_MODEL = os.getenv("GRAPH_EMBED_MODEL", "text-embedding-v4").strip()
 else:
     GRAPH_EMBED_MODEL = os.getenv("GRAPH_EMBED_MODEL", "BAAI/bge-small-zh-v1.5").strip()
 GRAPH_EXTRACTOR = os.getenv("GRAPH_EXTRACTOR", "simple").strip().lower()  # simple | schema
@@ -222,24 +204,6 @@ GRAPH_RAG_ENABLED = _env_bool("GRAPH_RAG_ENABLED", True)  # 总开关：缺依�
 # ----- 多模态 RAG（Chinese-CLIP 图像塔 + 视觉模型看图）-----
 IMAGE_COLLECTION_NAME = os.getenv("CHROMA_IMAGE_COLLECTION", "native_rag_clip_images")
 IMAGE_DIR = os.getenv("RAG_IMAGE_DIR", str(Path(DATA_DIR) / "images"))
-# 默认跟文本同一套 DeepSeek（V4.1 Flash 原生多模态）；没有 DeepSeek Key 才用千问 VL
-_vl_provider_env = os.getenv("VL_PROVIDER", "").strip().lower()
-if _vl_provider_env:
-    VL_PROVIDER = _vl_provider_env
-elif DEEPSEEK_API_KEY:
-    VL_PROVIDER = "deepseek"
-elif DASHSCOPE_API_KEY:
-    VL_PROVIDER = "dashscope"
-else:
-    VL_PROVIDER = "deepseek"
-if os.getenv("VL_MODEL"):
-    VL_MODEL = os.getenv("VL_MODEL", "").strip()
-elif VL_PROVIDER == "deepseek":
-    VL_MODEL = "deepseek-flash"
-else:
-    VL_MODEL = "qwen-vl-plus"
-DASHSCOPE_COMPAT_BASE = os.getenv(
-    "DASHSCOPE_COMPAT_BASE",
-    "https://dashscope.aliyuncs.com/compatible-mode/v1",
-).strip()
+VL_PROVIDER = "deepseek"
+VL_MODEL = os.getenv("VL_MODEL", "deepseek-flash").strip()
 IMAGE_EXTS = (".jpg", ".jpeg", ".png", ".webp", ".bmp", ".gif")

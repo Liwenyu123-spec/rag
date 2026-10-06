@@ -1,6 +1,6 @@
 """Corrective RAG（库内修正版）：相关性过滤 + 全无关时改写重检索。  # 模块一句话
 
-对齐课上 demo01：不联网、不依赖千问；用当前 Settings.llm（如 DeepSeek）做评估与改写。  # 约束说明
+对齐课上 demo01：不联网；用当前 Settings.llm（DeepSeek）做评估与改写。  # 约束说明
 """  # docstring 结束
 
 from __future__ import annotations  # 延后注解

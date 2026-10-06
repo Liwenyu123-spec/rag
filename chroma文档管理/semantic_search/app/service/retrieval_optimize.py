@@ -11,13 +11,12 @@ from llama_index.core.schema import NodeWithScore, TextNode  # 召回节点与�
 from semantic_search.app.config import (  # 从配置读取检索/后处理开关与参数
     COMPRESS_ENABLED,  # 是否启用上下文压缩
     COMPRESS_PERCENTILE,  # 压缩保留百分位阈值
-    DASHSCOPE_API_KEY,  # 千问重排所需 Key
     HYBRID_ENABLED,  # 是否默认开混合检索
     HYBRID_FUSION_MODE,  # 融合模式（如 reciprocal_rerank）
     REORDER_ENABLED,  # 是否启用长上下文重排版
     RERANK_ENABLED,  # 是否启用精排
     RERANK_MODEL,  # 重排模型名
-    RERANK_PROVIDER,  # 重排提供方：local / dashscope
+    RERANK_PROVIDER,  # 重排提供方：local / none
     RERANK_TOP_N,  # 精排保留条数上限
     RETRIEVE_CANDIDATES,  # 粗排候选数下限
     SIMILARITY_TOP_K,  # 默认最终 Top-K
@@ -153,27 +152,12 @@ _local_reranker_key: tuple | None = None
 
 
 def _build_reranker(top_n: int) -> Any | None:  # 按配置构建重排器
-    """构建重排器：默认本地 bge；仅 RERANK_PROVIDER=dashscope 时用千问。"""  # 本地优先，省 Key
+    """构建重排器：默认本地 bge。"""  # 本地优先
     from pathlib import Path
 
     provider = (RERANK_PROVIDER or "local").strip().lower()  # 规范化提供方名
-
-    if provider in {"dashscope", "qwen", "aliyun"}:  # 走云侧重排
-        if not DASHSCOPE_API_KEY:  # 缺 Key
-            print("警告: RERANK_PROVIDER=dashscope 但未配置 DASHSCOPE_API_KEY，跳过重排")  # 提示配置
-            return None  # 跳过重排
-        try:  # 初始化千问重排
-            from llama_index.postprocessor.dashscope_rerank import DashScopeRerank  # 千问后处理器
-
-            print(f"重排: DashScopeRerank({RERANK_MODEL}), top_n={top_n}")  # 日志
-            return DashScopeRerank(  # 返回云侧重排器
-                model=RERANK_MODEL,  # 模型名
-                top_n=top_n,  # 保留条数
-                api_key=DASHSCOPE_API_KEY,  # API Key
-            )  # 括号结束
-        except Exception as ext:  # noqa: BLE001  # 初始化失败
-            print(f"警告: 初始化 DashScopeRerank 失败，跳过重排: {ext}")  # 打警告
-            return None  # 跳过重排
+    if provider in {"none", "off", "false"}:
+        return None
 
     global _local_reranker, _local_reranker_key
     model_name = RERANK_MODEL or r"H:\二阶段\bge-reranker-base"

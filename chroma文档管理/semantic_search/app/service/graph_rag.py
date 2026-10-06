@@ -1,7 +1,6 @@
 """GraphRAG：LlamaIndex PropertyGraphIndex + Neo4j。
 
-飞书默认千问；本仓库支持 DeepSeek 做抽取/生成。
-Embedding：DeepSeek 无接口，默认 Chinese-CLIP / HuggingFace，也可千问。
+抽取与生成使用 DeepSeek。Embedding 用本地 Chinese-CLIP / HuggingFace。
 """
 
 from __future__ import annotations
@@ -28,7 +27,6 @@ else:
     _GRAPH_STORE_IMPORT_ERROR = None
 
 from semantic_search.app.config import (
-    DASHSCOPE_API_KEY,
     DEEPSEEK_API_KEY,
     DEEPSEEK_BASE_URL,
     GRAPH_EMBED_MODEL,
@@ -93,34 +91,17 @@ class GraphRagService:
         self._index: PropertyGraphIndex | None = None
 
     def _init_llm(self):
-        provider = GRAPH_LLM_PROVIDER
-        if provider == "dashscope":
-            if not DASHSCOPE_API_KEY:
-                raise RuntimeError("GRAPH_LLM_PROVIDER=dashscope 但未配置 DASHSCOPE_API_KEY")
-            from llama_index.llms.dashscope import DashScope
+        if not DEEPSEEK_API_KEY:
+            raise RuntimeError("GraphRAG 使用 DeepSeek，但未找到 DEEPSEEK_API_KEY。")
+        from llama_index.llms.deepseek import DeepSeek
 
-            llm = DashScope(
-                model_name=GRAPH_LLM_MODEL,
-                api_key=DASHSCOPE_API_KEY,
-                temperature=0,
-                timeout=60,
-                max_tokens=4096,
-            )
-        else:
-            if not DEEPSEEK_API_KEY:
-                raise RuntimeError(
-                    "GraphRAG 使用 DeepSeek，但未找到 DEEPSEEK_API_KEY。"
-                    "也可设 GRAPH_LLM_PROVIDER=dashscope 改用千问。"
-                )
-            from llama_index.llms.deepseek import DeepSeek
-
-            llm = DeepSeek(
-                model=GRAPH_LLM_MODEL,
-                api_key=DEEPSEEK_API_KEY,
-                api_base=DEEPSEEK_BASE_URL,
-                temperature=0,
-                max_tokens=4096,
-            )
+        llm = DeepSeek(
+            model=GRAPH_LLM_MODEL,
+            api_key=DEEPSEEK_API_KEY,
+            api_base=DEEPSEEK_BASE_URL,
+            temperature=0,
+            max_tokens=4096,
+        )
         # Schema 抽取走纯 LLM JSON，避免默认 program 模式不兼容
         try:
             llm.pydantic_program_mode = PydanticProgramMode.LLM
@@ -134,15 +115,6 @@ class GraphRagService:
             from semantic_search.app.chinese_clip_embedding import ChineseCLIPEmbedding
 
             return ChineseCLIPEmbedding(model_path=GRAPH_EMBED_MODEL)
-        if provider == "dashscope":
-            if not DASHSCOPE_API_KEY:
-                raise RuntimeError("GRAPH_EMBED_PROVIDER=dashscope 但未配置 DASHSCOPE_API_KEY")
-            from llama_index.embeddings.dashscope import DashScopeEmbedding
-
-            return DashScopeEmbedding(
-                model_name=GRAPH_EMBED_MODEL,
-                api_key=DASHSCOPE_API_KEY,
-            )
         from llama_index.embeddings.huggingface import HuggingFaceEmbedding
 
         return HuggingFaceEmbedding(model_name=GRAPH_EMBED_MODEL)
@@ -174,7 +146,6 @@ class GraphRagService:
             "extractor": GRAPH_EXTRACTOR,
             "has_index": self._index is not None,
             "deepseek_configured": bool(DEEPSEEK_API_KEY),
-            "dashscope_configured": bool(DASHSCOPE_API_KEY),
         }
 
     def _build_extractor(self, mode: str | None = None):

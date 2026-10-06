@@ -1129,7 +1129,7 @@
           <option value="text2image">以文搜图</option>
           <option value="image2image">以图搜图</option>
         </select>
-        <div class="upload-msg">{{ health?.vl_ready ? ((health.vl_provider === 'deepseek' ? 'DeepSeek' : '千问') + ' 可看图：' + (health.vl_model || '')) : '未配 DEEPSEEK_API_KEY 时无法看图（也可配 DASHSCOPE 用千问 VL）' }}</div>
+        <div class="upload-msg">{{ health?.vl_ready ? ('DeepSeek 可看图：' + (health.vl_model || 'deepseek-flash')) : '未配 DEEPSEEK_API_KEY 时无法看图' }}</div>
       </div>
 
       <div class="side-label">导入文档</div>
@@ -1579,7 +1579,7 @@
           },
           mmrag: {
             title: '多模态 RAG',
-            subtitle: 'Chinese-CLIP 检索；DeepSeek 看图分析（也可改用千问 VL）',
+            subtitle: 'Chinese-CLIP 检索；DeepSeek 看图分析',
             emptyTitle: '先上传图片到知识库',
             emptyDesc: '左侧导入 jpg/png。以文搜图输入描述；以图搜图/看图在输入栏选一张图。',
             placeholder: '例如：一张红色的汽车 / 这张图里有什么？',
