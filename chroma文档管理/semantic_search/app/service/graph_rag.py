@@ -224,6 +224,30 @@ class GraphRagService:
             "neo4j_uri": NEO4J_URI,
         }
 
+    def build_from_files(
+        self,
+        file_paths: List[str],
+        *,
+        extractor: str | None = None,
+    ) -> dict:
+        """读取本地文件，分块后抽三元组写入 Neo4j。"""
+        from llama_index.core import SimpleDirectoryReader
+        from llama_index.core.node_parser import SentenceSplitter
+
+        paths = [p for p in file_paths if p]
+        if not paths:
+            raise ValueError("没有可导入图谱的文件")
+        docs = SimpleDirectoryReader(input_files=paths).load_data()
+        if not docs:
+            raise ValueError("文件中没有可读文本")
+        nodes = SentenceSplitter(chunk_size=512, chunk_overlap=64).get_nodes_from_documents(docs)
+        texts = [n.get_content().strip() for n in nodes if (n.get_content() or "").strip()]
+        result = self.build_from_texts(texts, extractor=extractor)
+        result["source_files"] = [str(p) for p in paths]
+        result["chunks"] = len(texts)
+        result["message"] = "已从上传文件抽取三元组并写入 Neo4j"
+        return result
+
     def load_existing(self) -> dict:
         """从已有 Neo4j 图谱加载索引（不再重新抽文本）。"""
         self._index = PropertyGraphIndex.from_existing(
