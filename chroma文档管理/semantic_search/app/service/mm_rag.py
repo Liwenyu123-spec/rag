@@ -159,27 +159,6 @@ class MultimodalRagService:
             "total_images": slot.count() if indexed or skipped_duplicates else self._img(backend).count(),
             "backend": normalize_vector_backend(backend),
         }
-        saved: list[str] = []
-        skipped: list[str] = []
-        for raw in paths:
-            src = Path(raw)
-            if not src.is_file() or not is_image_path(src) or src.name.startswith("_query"):
-                skipped.append(src.name)
-                continue
-            dest = self.image_dir / src.name
-            if src.resolve() != dest.resolve():
-                shutil.copy2(src, dest)
-            saved.append(str(dest))
-        indexed = 0
-        if saved:
-            indexed = self._index_files(saved, backend=backend)
-        return {
-            "saved_images": [Path(p).name for p in saved],
-            "skipped_files": skipped,
-            "indexed": indexed,
-            "total_images": self._img(backend).count(),
-            "backend": normalize_vector_backend(backend),
-        }
 
     def ingest_data_dir(self, root: str | None = None, backend: str | None = None) -> dict:
         base = Path(root or DATA_DIR)

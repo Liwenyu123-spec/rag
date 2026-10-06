@@ -594,22 +594,39 @@ async def upload_documents(  # multipart：files + splitter + target
     }
     parts: list[str] = []
 
+    skipped_duplicates: list[str] = []
+
     if image_paths:
         mm = _require_mm_rag(app)
         payload["multimodal"] = mm.ingest_paths(image_paths, backend=backend)
-        parts.append(f"已写入图库 {payload['multimodal'].get('indexed', 0)} 张")
+        skipped_duplicates.extend(payload["multimodal"].get("skipped_duplicates") or [])
+        indexed_n = payload["multimodal"].get("indexed", 0)
+        if indexed_n:
+            parts.append(f"已写入图库 {indexed_n} 张")
 
+    graph_files = saved_paths
     if target in {"chroma", "both"} and saved_paths:
         engine = _bound_engine(app, backend)
         chroma_result = engine.ingest_files(input_files=saved_paths, splitter=splitter)
         payload.update(chroma_result)
-        parts.append(f"已写入向量库（{backend}）")
+        skipped_duplicates.extend(chroma_result.get("skipped_duplicates") or [])
+        dup_names = set(chroma_result.get("skipped_duplicates") or [])
+        graph_files = [p for p in saved_paths if Path(p).name not in dup_names]
+        loaded = chroma_result.get("loaded_documents", 0)
+        if loaded:
+            parts.append(f"已写入向量库（{backend}）{loaded} 篇")
 
-    if target in {"neo4j", "both"} and saved_paths:
+    if target in {"neo4j", "both"} and graph_files:
         graph = _require_graph_rag(app)
-        graph_result = graph.build_from_files(saved_paths, extractor=extractor)
+        graph_result = graph.build_from_files(graph_files, extractor=extractor)
         payload["graph"] = graph_result
         parts.append("已写入 Neo4j 图谱")
+
+    payload["skipped_duplicates"] = skipped_duplicates
+    if skipped_duplicates and not parts:
+        parts.append("所选文件均已在知识库中，已跳过")
+    elif skipped_duplicates:
+        parts.append(f"重复跳过 {len(skipped_duplicates)} 个")
 
     payload["message"] = "；".join(parts) or "上传完成"
     return payload
