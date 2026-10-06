@@ -425,7 +425,27 @@ def _snip(text: str, n: int = 180) -> str:
 
 
 def _src_key(src: dict) -> str:
-    return _snip(str(src.get("document") or ""), 96)
+    name = str(src.get("file_name") or src.get("document") or "")
+    snip = _snip(str(src.get("snippet") or ""), 80)
+    return f"{name}|{snip}"
+
+
+def _src_card(src: dict, side: str, extra_current: set[str], extra_base: set[str]) -> dict:
+    name = str(src.get("file_name") or src.get("document") or "")
+    key = _src_key(src)
+    tag = ""
+    if side == "current" and key in extra_current:
+        tag = "只在优化后出现"
+    elif side == "baseline" and key in extra_base:
+        tag = "只在基础版出现"
+    return {
+        "rank": src.get("rank"),
+        "file_name": name,
+        "snippet": _snip(str(src.get("snippet") or ""), 220),
+        "location": src.get("location") or "",
+        "page": src.get("page"),
+        "tag": tag,
+    }
 
 
 def _diff_ask_runs(baseline: dict, current: dict, flags: dict) -> dict:
@@ -433,66 +453,44 @@ def _diff_ask_runs(baseline: dict, current: dict, flags: dict) -> dict:
     c_ans = str(current.get("answer") or "").strip()
     b_pre = baseline.get("pre_retrieval") or {}
     c_pre = current.get("pre_retrieval") or {}
-    b_q = b_pre.get("retrieval_queries") or [b_pre.get("original_query") or ""]
-    c_q = c_pre.get("retrieval_queries") or [c_pre.get("original_query") or ""]
+    b_q = [str(q) for q in (b_pre.get("retrieval_queries") or [b_pre.get("original_query") or ""]) if q]
+    c_q = [str(q) for q in (c_pre.get("retrieval_queries") or [c_pre.get("original_query") or ""]) if q]
     b_src = baseline.get("sources") or []
     c_src = current.get("sources") or []
     b_keys = [_src_key(s) for s in b_src]
     c_keys = [_src_key(s) for s in c_src]
     b_set, c_set = set(b_keys), set(c_keys)
-    overlap = len(b_set & c_set)
-    union = len(b_set | c_set) or 1
-    changes: list[str] = []
-    if flags.get("use_pre") and flags.get("strategy") not in {None, "", "none"}:
-        rewritten = c_pre.get("rewritten_query") or c_pre.get("step_back_query") or c_pre.get("hyde_doc")
-        if rewritten:
-            changes.append(
-                f"检索前（{flags.get('strategy')}）：「{_snip(b_pre.get('original_query') or '', 40)}」→「{_snip(str(rewritten), 60)}」"
-            )
-        elif c_q and b_q and c_q[0] != b_q[0]:
-            changes.append(f"检索查询变化：{_snip(b_q[0], 40)} → {_snip(c_q[0], 40)}")
-        else:
-            changes.append("已开检索前优化，查询句可能已清洗/重写")
-    if int(flags.get("num_queries") or 1) > 1:
-        changes.append(f"Multi-Query：{len(c_q)} 路查询再融合")
-    if flags.get("use_hybrid"):
-        changes.append(f"混合检索：{flags.get('fusion_mode') or 'reciprocal_rerank'}")
-    if flags.get("use_rerank"):
-        changes.append("检索后重排序已改变片段顺序/去留")
-    if flags.get("use_compress"):
-        changes.append("上下文压缩：可能删掉低相关句子")
-    if flags.get("use_crag"):
-        crag = current.get("crag") or {}
-        changes.append(f"CRAG：{crag.get('before_count', '?')} → {crag.get('after_count', '?')} 篇（{crag.get('message') or ''}）")
-    only_opt = [k for k in c_keys if k not in b_set]
-    only_base = [k for k in b_keys if k not in c_set]
-    if only_opt:
-        changes.append(f"优化后新召回 {len(only_opt)} 条")
-    if only_base:
-        changes.append(f"优化后不再召回 {len(only_base)} 条")
+    extra_current = c_set - b_set
+    extra_base = b_set - c_set
     if b_ans != c_ans:
-        changes.append("最终答案已改变")
+        verdict = "两边答案不一样。左边是关掉优化时的回答，右边是你现在勾选后的回答。"
     else:
-        changes.append("答案文本与基础 RAG 相同（召回或查询仍可能不同）")
+        verdict = "两边答案几乎一样。如果有差别，多半是搜到的资料不同。"
+    notes: list[str] = []
+    if flags.get("use_pre") and c_q and b_q and c_q != b_q:
+        notes.append(f"检索问法变了：基础版用「{_snip(b_q[0], 36)}」，优化后用「{_snip(c_q[0], 36)}」")
+    if extra_current:
+        notes.append(f"优化后多找到 {len(extra_current)} 条资料")
+    if extra_base:
+        notes.append(f"优化后少了 {len(extra_base)} 条基础版能找到的资料")
+    if not extra_current and not extra_base:
+        notes.append("两边找到的资料基本相同")
     return {
         "enabled": True,
-        "message": "已对照基础 RAG（关闭检索前/后优化）",
+        "verdict": verdict,
         "answer_changed": b_ans != c_ans,
-        "query_changed": list(b_q) != list(c_q),
-        "source_overlap": overlap,
-        "source_union": union,
-        "changes": changes,
+        "query_changed": b_q != c_q,
+        "notes": notes,
+        "message": verdict,
+        "changes": notes,
+        "source_overlap": len(b_set & c_set),
+        "source_union": len(b_set | c_set) or 1,
         "baseline_answer": b_ans,
-        "baseline_queries": [str(q) for q in b_q if q],
-        "current_queries": [str(q) for q in c_q if q],
-        "baseline_sources": [
-            {"rank": s.get("rank"), "file_name": s.get("file_name") or s.get("document") or "", "preview": s.get("file_name") or s.get("document") or ""}
-            for s in b_src
-        ],
-        "current_sources": [
-            {"rank": s.get("rank"), "file_name": s.get("file_name") or s.get("document") or "", "preview": s.get("file_name") or s.get("document") or ""}
-            for s in c_src
-        ],
-        "only_in_optimized": only_opt[:5],
-        "only_in_baseline": only_base[:5],
+        "current_answer": c_ans,
+        "baseline_queries": b_q,
+        "current_queries": c_q,
+        "baseline_sources": [_src_card(s, "baseline", extra_current, extra_base) for s in b_src],
+        "current_sources": [_src_card(s, "current", extra_current, extra_base) for s in c_src],
+        "only_in_optimized": list(extra_current)[:8],
+        "only_in_baseline": list(extra_base)[:8],
     }

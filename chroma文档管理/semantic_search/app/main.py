@@ -702,6 +702,56 @@ async def list_library(
     return payload
 
 
+@app.get("/library/chunks")
+async def library_chunks(
+    file_name: str = Query(..., min_length=1),
+    backend: str = Depends(vector_backend_dep),
+):
+    """按文件名取出入库片段，供点开来源。"""
+    return _bound_engine(app, backend).list_file_chunks(file_name)
+
+
+@app.get("/library/file")
+async def library_file(
+    file_name: str = Query(..., min_length=1),
+    backend: str = Depends(vector_backend_dep),
+):
+    """下载/打开知识库里保存的原始文件。"""
+    engine = _bound_engine(app, backend)
+    path = engine.find_source_file(file_name)
+    if path is None:
+        mm = getattr(app.state, "mm_rag", None)
+        if mm is not None:
+            try:
+                path = mm.resolve_image(file_name)
+            except FileNotFoundError:
+                path = None
+    if path is None or not path.is_file():
+        raise HTTPException(status_code=404, detail="找不到该文件的原文")
+    return FileResponse(path, filename=path.name)
+
+
+@app.delete("/library")
+async def delete_library_file(
+    file_name: str = Query(..., min_length=1),
+    backend: str = Depends(vector_backend_dep),
+):
+    """按文件名删除向量分块和图库条目（同名图片一并删）。"""
+    engine = _bound_engine(app, backend)
+    result = engine.delete_by_file_name(file_name)
+    mm = getattr(app.state, "mm_rag", None)
+    if mm is not None:
+        try:
+            result.update(mm.delete_by_file_name(file_name, backend=backend))
+        except Exception as exc:  # noqa: BLE001
+            result["image_error"] = str(exc)
+    total = int(result.get("deleted_chunks") or 0) + int(result.get("deleted_images") or 0)
+    if total <= 0:
+        raise HTTPException(status_code=404, detail="知识库里没有这个文件")
+    result["message"] = f"已删除 {file_name}"
+    return result
+
+
 @app.get("/graph/status")
 async def graph_status():
     """GraphRAG / Neo4j 连通性与配置摘要。"""

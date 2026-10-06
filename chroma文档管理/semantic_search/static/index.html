@@ -459,7 +459,36 @@
       border: 1px dashed #c5d4f5; background: #f3f7ff;
       color: #445062; font-size: 12px; line-height: 1.65;
     }
-    .cmp-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 8px; }
+    .source-card { cursor: pointer; }
+    .source-loc { color: #8b8b8b; font-weight: 400; }
+    .source-actions { display: flex; gap: 10px; margin-top: 6px; }
+    .cmp-banner {
+      margin-top: 8px; padding: 8px 10px; border-radius: 10px; font-size: 13px; line-height: 1.5;
+      background: #eef4ff; color: #1e3a8a;
+    }
+    .cmp-banner.diff { background: #fff7ed; color: #9a3412; }
+    .cmp-banner.same { background: #f0fdf4; color: #166534; }
+    .cmp-col .cmp-ans {
+      max-height: 180px; overflow: auto; white-space: pre-wrap;
+      font-size: 13px; line-height: 1.6; color: #1a1a1a; margin: 0 0 8px;
+    }
+    .cmp-src {
+      margin-top: 6px; padding: 8px; border-radius: 8px; background: #fff; border: 1px solid #ececec;
+      font-size: 12px; line-height: 1.5;
+    }
+    .cmp-src .tag { display: inline-block; margin-left: 6px; font-size: 11px; color: #b45309; }
+    .lib-actions { display: flex; gap: 8px; margin-top: 6px; }
+    .lib-actions button {
+      border: 1px solid #e6e6e6; background: #fff; border-radius: 8px;
+      padding: 4px 8px; font-size: 12px; cursor: pointer; color: #334155;
+    }
+    .lib-actions button.danger { color: #e11d48; }
+    .src-drawer {
+      position: fixed; right: 0; top: 0; bottom: 0; width: min(420px, 92vw);
+      background: #fff; border-left: 1px solid var(--line); z-index: 40;
+      display: flex; flex-direction: column; padding: 16px;
+    }
+    .src-chunk { margin-top: 10px; padding: 10px; background: #f8fafc; border-radius: 10px; font-size: 13px; line-height: 1.6; }
     .cmp-col {
       padding: 8px; border-radius: 10px; background: #f6f8fc; border: 1px solid var(--line);
     }
@@ -1107,7 +1136,7 @@
           </label>
           <label class="opt-item" :class="{ on: optCompareBaseline }">
             <input type="checkbox" v-model="optCompareBaseline" />
-            <span>对照基础 RAG<small>同时跑未优化版本，对比查询/召回/答案</small></span>
+            <span>对照基础版<small>同一问题再跑一遍未优化检索，左右对比答案和资料</small></span>
           </label>
           <textarea
             v-if="optUseEval"
@@ -1311,29 +1340,31 @@
               </div>
               <div class="pre-line" v-if="msg.optimizations.scope_note">{{ msg.optimizations.scope_note }}</div>
             </div>
-            <div class="pre-box" v-if="msg.comparison">
-              <strong>优化前 vs 优化后</strong>
-              <div class="pre-line">{{ msg.comparison.message }}</div>
-              <div class="pre-line" v-for="(c, ci) in (msg.comparison.changes || [])" :key="'d'+ci">· {{ c }}</div>
-              <div class="pre-line" v-if="msg.comparison.enabled">
-                召回重叠 {{ msg.comparison.source_overlap }}/{{ msg.comparison.source_union }}
-                · 答案{{ msg.comparison.answer_changed ? '已改变' : '相同' }}
+            <div class="pre-box" v-if="msg.comparison && msg.comparison.enabled">
+              <strong>对照：关掉优化 vs 你现在的勾选</strong>
+              <div class="cmp-banner" :class="msg.comparison.answer_changed ? 'diff' : 'same'">
+                {{ msg.comparison.verdict || msg.comparison.message }}
               </div>
-              <div class="cmp-grid" v-if="msg.comparison.enabled">
+              <div class="pre-line" v-for="(c, ci) in (msg.comparison.notes || msg.comparison.changes || [])" :key="'d'+ci">· {{ c }}</div>
+              <div class="cmp-grid">
                 <div class="cmp-col">
-                  <h4>优化前（基础 RAG）</h4>
-                  <p>{{ msg.comparison.baseline_answer || '（无）' }}</p>
-                  <div class="pre-line" v-if="msg.comparison.baseline_queries?.length">查询：{{ msg.comparison.baseline_queries.join(' ｜ ') }}</div>
-                  <div class="pre-line" v-for="(s, si) in (msg.comparison.baseline_sources || [])" :key="'bs'+si">
-                    #{{ s.rank }} {{ s.file_name || s.preview }}
+                  <h4>关掉优化时</h4>
+                  <p class="cmp-ans">{{ msg.comparison.baseline_answer || '（没有回答）' }}</p>
+                  <div class="cmp-src" v-for="(s, si) in (msg.comparison.baseline_sources || [])" :key="'bs'+si">
+                    <strong>{{ s.file_name }}</strong>
+                    <span v-if="s.location"> · {{ s.location }}</span>
+                    <span class="tag" v-if="s.tag">{{ s.tag }}</span>
+                    <div>{{ s.snippet }}</div>
                   </div>
                 </div>
                 <div class="cmp-col">
-                  <h4>优化后（当前勾选）</h4>
-                  <p>{{ msg.content }}</p>
-                  <div class="pre-line" v-if="msg.comparison.current_queries?.length">查询：{{ msg.comparison.current_queries.join(' ｜ ') }}</div>
-                  <div class="pre-line" v-for="(s, si) in (msg.comparison.current_sources || [])" :key="'cs'+si">
-                    #{{ s.rank }} {{ s.file_name || s.preview }}
+                  <h4>现在勾选后</h4>
+                  <p class="cmp-ans">{{ msg.comparison.current_answer || msg.content || '（没有回答）' }}</p>
+                  <div class="cmp-src" v-for="(s, si) in (msg.comparison.current_sources || [])" :key="'cs'+si">
+                    <strong>{{ s.file_name }}</strong>
+                    <span v-if="s.location"> · {{ s.location }}</span>
+                    <span class="tag" v-if="s.tag">{{ s.tag }}</span>
+                    <div>{{ s.snippet }}</div>
                   </div>
                 </div>
               </div>
@@ -1394,14 +1425,29 @@
               <div
                 class="source-card"
                 :class="{ expanded: msg.expanded?.[i] }"
-                v-for="(src, i) in uniqueSources(msg.sources)"
+                v-for="(src, i) in msg.sources"
                 :key="i"
+                @click="toggleSource(msg, i)"
               >
                 <div class="source-meta">
-                  <strong>{{ src.file_name || src.document }}</strong>
-                  <span>相似度 {{ formatScore(src.similarity) }}</span>
+                  <strong>
+                    {{ src.file_name || src.document }}
+                    <span class="source-loc" v-if="src.location"> · {{ src.location }}</span>
+                  </strong>
+                  <span>相关 {{ formatScore(src.similarity) }}</span>
                 </div>
+                <div class="source-text">{{ src.snippet || '点开查看原文片段' }}</div>
                 <img v-if="src.url" class="hit-img" :src="src.url" :alt="src.file_name || 'hit'" />
+                <div class="source-actions">
+                  <button type="button" class="source-toggle" @click.stop="openSourcePreview(src)">查看入库原文</button>
+                  <a
+                    v-if="src.file_name"
+                    class="source-toggle"
+                    :href="'/library/file?file_name=' + encodeURIComponent(src.file_name)"
+                    target="_blank"
+                    @click.stop
+                  >打开原文件</a>
+                </div>
               </div>
             </div>
           </div>
@@ -1441,10 +1487,20 @@
             <strong>{{ item.file_name }}</strong>
             <span>{{ classLabel(item.doc_class) }} · {{ item.file_type }} · {{ item.chunks }} 段</span>
             <div class="lib-preview" v-if="item.preview">{{ item.preview }}</div>
+            <div class="lib-actions">
+              <button type="button" @click="openSourcePreview(item)">查看片段</button>
+              <a :href="'/library/file?file_name=' + encodeURIComponent(item.file_name)" target="_blank">原文件</a>
+              <button type="button" class="danger" @click="deleteLibraryFile(item.file_name)">删除</button>
+            </div>
           </div>
           <div class="hist-item" v-for="img in filteredImages" :key="'img-'+img.file_name">
             <strong>{{ img.file_name }}</strong>
             <span>图片</span>
+            <div class="lib-actions">
+              <a :href="'/library/file?file_name=' + encodeURIComponent(img.file_name)" target="_blank">打开图片</a>
+              <button type="button" class="danger" @click="deleteLibraryFile(img.file_name)">删除</button>
+            </div>
+          </div>
           </div>
         </div>
       </aside>
