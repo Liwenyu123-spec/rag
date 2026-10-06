@@ -489,16 +489,28 @@
 
       <div class="side-label">知识库</div>
       <div class="stat-card stat-grid">
-        <div class="stat-item"><span>文档数</span><strong>{{ health?.total_documents ?? '-' }}</strong></div>
+        <div class="stat-item"><span>文档数</span><strong>{{ currentDocCount }}</strong></div>
         <div class="stat-item"><span>Embedding</span><strong>{{ shortModel }}</strong></div>
-        <div class="stat-item"><span>索引</span><strong>{{ health?.index_type ? 'Chroma' : '-' }}</strong></div>
+        <div class="stat-item"><span>索引</span><strong>{{ vectorBackend === 'qdrant' ? 'Qdrant' : 'Chroma' }}</strong></div>
         <div class="stat-item">
           <span>知识图谱</span>
           <strong>{{ graphStatus?.ready ? 'Neo4j 已连' : '未连接' }}</strong>
         </div>
         <div class="stat-item">
           <span>图库</span>
-          <strong>{{ health?.image_count ?? '-' }}</strong>
+          <strong>{{ currentImageCount }}</strong>
+        </div>
+      </div>
+
+      <div class="side-label">向量数据库</div>
+      <div class="upload-card">
+        <select v-model="vectorBackend" @change="onVectorBackendChange">
+          <option value="chroma">Chroma（本地默认）</option>
+          <option value="qdrant" :disabled="health && health.qdrant_ready === false">Qdrant（讲义存储）</option>
+        </select>
+        <div class="upload-msg">
+          Chroma {{ health?.chroma_documents ?? '-' }} 条 · Qdrant {{ health?.qdrant_documents ?? '-' }} 条
+          <br>两库数据互不影响；切到空库后请重新上传文档。
         </div>
       </div>
 
@@ -968,6 +980,7 @@
         const manualSubjectLabel = ref('PERSON');
         const manualObjectLabel = ref('COMPANY');
         const graphError = ref(false);
+        const vectorBackend = ref(localStorage.getItem('ragVectorBackend') || 'chroma');
         const mmTask = ref('qa');
         const mmQueryFile = ref(null);
         const mmQueryPreview = ref('');
@@ -1063,6 +1076,25 @@
           const parts = name.split('/');
           return parts[parts.length - 1];
         });
+        const currentDocCount = computed(() => {
+          if (vectorBackend.value === 'qdrant') return health.value?.qdrant_documents ?? '-';
+          return health.value?.chroma_documents ?? health.value?.total_documents ?? '-';
+        });
+        const currentImageCount = computed(() => {
+          if (vectorBackend.value === 'qdrant') return health.value?.qdrant_images ?? '-';
+          return health.value?.chroma_images ?? health.value?.image_count ?? '-';
+        });
+
+        const ragFetch = (url, opts = {}) => {
+          const headers = Object.assign({}, opts.headers || {});
+          headers['X-Vector-Backend'] = vectorBackend.value;
+          return fetch(url, Object.assign({}, opts, { headers }));
+        };
+
+        const onVectorBackendChange = () => {
+          localStorage.setItem('ragVectorBackend', vectorBackend.value);
+          messages.value = [];
+        };
 
         const strategyLabel = (s) => strategyNames[s] || s;
         const metricLabel = (m, isCorr = false) => {
@@ -1304,7 +1336,7 @@
           form.append('extractor', graphExtractor.value);
 
           try {
-            const res = await fetch('/upload', { method: 'POST', body: form });
+            const res = await ragFetch('/upload', { method: 'POST', body: form });
             const data = await res.json().catch(() => ({}));
             if (!res.ok) {
               uploadError.value = true;
@@ -1343,7 +1375,7 @@
           const botMsg = messages.value[messages.value.length - 1];
           scrollToBottom();
           try {
-            const res = await fetch('/eval/retrieval', {
+            const res = await ragFetch('/eval/retrieval', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
@@ -1515,9 +1547,9 @@
               else form.append(mmTask.value === 'qa' ? 'question' : 'query', '');
               if (queryImage) form.append('image', queryImage);
               const path = mmTask.value === 'qa' ? '/mm/ask' : '/mm/search';
-              res = await fetch(path, { method: 'POST', body: form });
+              res = await ragFetch(path, { method: 'POST', body: form });
             } else if (mode.value === 'search') {
-              res = await fetch('/search', {
+              res = await ragFetch('/search', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ query: question, k: topK.value }),
@@ -1529,7 +1561,7 @@
                 body: JSON.stringify({ question, k: topK.value }),
               });
             } else if (mode.value === 'ask') {
-              res = await fetch('/ask', {
+              res = await ragFetch('/ask', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -1554,13 +1586,13 @@
                 }),
               });
             } else if (mode.value === 'query') {
-              res = await fetch('/query', {
+              res = await ragFetch('/query', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ question, k: topK.value }),
               });
             } else {
-              res = await fetch('/chat', {
+              res = await ragFetch('/chat', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -1626,7 +1658,10 @@
           basicMsgs, basicInput, sendBasic, clearBasic,
           secureMsgs, secureInput, secureMode, sendSecure, resetSecure,
           product, socialTopic, sloganTask, contentOut, genProduct, genSocial, genSlogan,
-          mode,
+          vectorBackend,
+          onVectorBackendChange,
+          currentDocCount,
+          currentImageCount,
           inputText,
           canSend,
           mmTask,
