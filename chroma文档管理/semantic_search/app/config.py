@@ -219,10 +219,25 @@ else:
 GRAPH_EXTRACTOR = os.getenv("GRAPH_EXTRACTOR", "simple").strip().lower()  # simple | schema
 GRAPH_RAG_ENABLED = _env_bool("GRAPH_RAG_ENABLED", True)  # 总开关：缺依赖时可关
 
-# ----- 多模态 RAG（Chinese-CLIP 图像塔 + 可选千问 VL 看图）-----
+# ----- 多模态 RAG（Chinese-CLIP 图像塔 + 视觉模型看图）-----
 IMAGE_COLLECTION_NAME = os.getenv("CHROMA_IMAGE_COLLECTION", "native_rag_clip_images")
 IMAGE_DIR = os.getenv("RAG_IMAGE_DIR", str(Path(DATA_DIR) / "images"))
-VL_MODEL = os.getenv("VL_MODEL", "qwen-vl-plus").strip()
+# 默认跟文本同一套 DeepSeek（V4.1 Flash 原生多模态）；没有 DeepSeek Key 才用千问 VL
+_vl_provider_env = os.getenv("VL_PROVIDER", "").strip().lower()
+if _vl_provider_env:
+    VL_PROVIDER = _vl_provider_env
+elif DEEPSEEK_API_KEY:
+    VL_PROVIDER = "deepseek"
+elif DASHSCOPE_API_KEY:
+    VL_PROVIDER = "dashscope"
+else:
+    VL_PROVIDER = "deepseek"
+if os.getenv("VL_MODEL"):
+    VL_MODEL = os.getenv("VL_MODEL", "").strip()
+elif VL_PROVIDER == "deepseek":
+    VL_MODEL = "deepseek-flash"
+else:
+    VL_MODEL = "qwen-vl-plus"
 DASHSCOPE_COMPAT_BASE = os.getenv(
     "DASHSCOPE_COMPAT_BASE",
     "https://dashscope.aliyuncs.com/compatible-mode/v1",

@@ -873,6 +873,8 @@ async def health_check():  # 健康检查接口
         "chroma_images": mm_status_data.get("chroma_images", 0),
         "qdrant_images": mm_status_data.get("qdrant_images", 0),
         "vl_ready": bool(mm_status_data.get("vl_ready")),
+        "vl_provider": mm_status_data.get("vl_provider"),
+        "vl_model": mm_status_data.get("vl_model"),
         "type_counts": stats.get("type_counts") or {},
         "class_counts": stats.get("class_counts") or {},
     }  # 字典/集合结束

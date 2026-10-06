@@ -1,9 +1,9 @@
-"""多模态 RAG：Chinese-CLIP 图文向量 + 可选千问 VL 看图作答。
+"""多模态 RAG：Chinese-CLIP 图文向量 + DeepSeek / 千问 VL 看图作答。
 
 对齐飞书「01_多模态RAG」主路径（不做 ColPali）：
 - 图像塔入库独立 Chroma 集合
 - 以文搜图 / 以图搜图 / 以图搜文（仅文本库也是 CLIP 时）
-- 召回图片后交给 qwen-vl-plus（有 DASHSCOPE_API_KEY）看图作答
+- 默认用 DeepSeek（deepseek-flash / V4.1 Flash 原生多模态）分析上传的图
 """
 
 from __future__ import annotations
@@ -30,6 +30,7 @@ from semantic_search.app.config import (
     QDRANT_PATH,
     SIMILARITY_TOP_K,
     VL_MODEL,
+    VL_PROVIDER,
     _DEFAULT_CHINESE_CLIP,
     normalize_vector_backend,
 )
@@ -110,11 +111,12 @@ class MultimodalRagService:
             "collection": IMAGE_COLLECTION_NAME,
             "clip_model": getattr(self.clip, "model_name", None) or str(self.clip.model_path),
             "text_embed_is_clip": EMBEDDING_PROVIDER in {"chinese_clip", "cn_clip", "chinese-clip"},
-            "vl_ready": bool(DASHSCOPE_API_KEY),
-            "vl_model": VL_MODEL if DASHSCOPE_API_KEY else None,
+            "vl_ready": self._vl_ready(),
+            "vl_provider": VL_PROVIDER,
+            "vl_model": VL_MODEL if self._vl_ready() else None,
             "message": (
                 f"当前图库 {slot.count()} 张（Chroma {chroma_n} / Qdrant {qdrant_n}）；"
-                + ("千问 VL 可看图作答" if DASHSCOPE_API_KEY else "未配置 DASHSCOPE_API_KEY，看图作答将退回纯文本 LLM")
+                + (f"{self._vl_label()} 可看图作答" if self._vl_ready() else "未配置看图模型（DEEPSEEK_API_KEY 或 DASHSCOPE_API_KEY）")
             ),
         }
 
@@ -304,9 +306,28 @@ class MultimodalRagService:
         b64 = base64.b64encode(path.read_bytes()).decode("ascii")
         return f"data:{mime};base64,{b64}"
 
-    def _vl_answer(self, question: str, image_paths: list[Path], text_bits: list[str]) -> str:
+    def _vl_ready(self) -> bool:
+        if VL_PROVIDER == "dashscope":
+            return bool(DASHSCOPE_API_KEY)
+        return bool(DEEPSEEK_API_KEY)
+
+    def _vl_label(self) -> str:
+        if VL_PROVIDER == "dashscope":
+            return f"千问 {VL_MODEL}"
+        return f"DeepSeek {VL_MODEL}"
+
+    def _vl_openai(self):
         from openai import OpenAI
 
+        if VL_PROVIDER == "dashscope":
+            if not DASHSCOPE_API_KEY:
+                raise RuntimeError("未配置 DASHSCOPE_API_KEY")
+            return OpenAI(api_key=DASHSCOPE_API_KEY, base_url=DASHSCOPE_COMPAT_BASE)
+        if not DEEPSEEK_API_KEY:
+            raise RuntimeError("未配置 DEEPSEEK_API_KEY")
+        return OpenAI(api_key=DEEPSEEK_API_KEY, base_url=DEEPSEEK_BASE_URL)
+
+    def _vl_answer(self, question: str, image_paths: list[Path], text_bits: list[str]) -> str:
         parts: list[dict] = []
         ctx = "\n\n".join(text_bits[:6]) if text_bits else "（没有文本资料）"
         prompt = (
@@ -316,8 +337,11 @@ class MultimodalRagService:
         )
         parts.append({"type": "text", "text": prompt})
         for path in image_paths[:4]:
-            parts.append({"type": "image_url", "image_url": {"url": self._image_data_url(path)}})
-        client = OpenAI(api_key=DASHSCOPE_API_KEY, base_url=DASHSCOPE_COMPAT_BASE)
+            parts.append({
+                "type": "image_url",
+                "image_url": {"url": self._image_data_url(path), "detail": "high"},
+            })
+        client = self._vl_openai()
         resp = client.chat.completions.create(
             model=VL_MODEL,
             messages=[{"role": "user", "content": parts}],
@@ -326,8 +350,6 @@ class MultimodalRagService:
         return (resp.choices[0].message.content or "").strip()
 
     def _vl_describe(self, question: str, image_path: Path) -> str:
-        from openai import OpenAI
-
         prompt = (
             "请只分析用户刚刚上传的这一张图片，用简体中文详细说明："
             "1）图中有哪些主体、人物或物体；2）场景和环境；"
@@ -335,14 +357,17 @@ class MultimodalRagService:
             "看不清的不要编造。不要提知识库里其他图片。\n\n"
             f"用户问题：{question}"
         )
-        client = OpenAI(api_key=DASHSCOPE_API_KEY, base_url=DASHSCOPE_COMPAT_BASE)
+        client = self._vl_openai()
         resp = client.chat.completions.create(
             model=VL_MODEL,
             messages=[{
                 "role": "user",
                 "content": [
                     {"type": "text", "text": prompt},
-                    {"type": "image_url", "image_url": {"url": self._image_data_url(image_path)}},
+                    {
+                        "type": "image_url",
+                        "image_url": {"url": self._image_data_url(image_path), "detail": "high"},
+                    },
                 ],
             }],
             max_tokens=1024,
@@ -365,18 +390,18 @@ class MultimodalRagService:
         except Exception:
             image_hits = []
         vl_used = False
-        if DASHSCOPE_API_KEY and path.is_file():
+        if self._vl_ready() and path.is_file():
             try:
                 answer = self._vl_describe(q, path)
                 vl_used = True
             except Exception as exc:  # noqa: BLE001
                 answer = self._text_fallback_answer(q, image_hits, [])
-                answer = f"（千问 VL 调用失败：{exc}，已退回文本模型）\n\n{answer}"
+                answer = f"（{self._vl_label()} 调用失败：{exc}，已退回文本模型）\n\n{answer}"
         else:
             answer = self._text_fallback_answer(q, image_hits, [])
-            if not DASHSCOPE_API_KEY:
+            if not self._vl_ready():
                 answer = (
-                    "还不能真正看图：请在环境变量配置 DASHSCOPE_API_KEY（千问 VL，如 qwen-vl-plus）。\n"
+                    "还不能真正看图：请配置 DEEPSEEK_API_KEY（推荐 deepseek-flash）或 DASHSCOPE_API_KEY。\n"
                     "当前只会把图片写入图库，并用 CLIP 找相似图。\n\n"
                     + answer
                 )
@@ -400,7 +425,7 @@ class MultimodalRagService:
         )
         if not DEEPSEEK_API_KEY:
             return (
-                "未配置 DASHSCOPE_API_KEY（qwen-vl）也未配置 DEEPSEEK_API_KEY，无法生成看图答案。"
+                "未配置看图模型，也未配置 DEEPSEEK_API_KEY，无法生成看图答案。"
                 f"检索到图片：{names}"
             )
         from openai import OpenAI
@@ -454,13 +479,13 @@ class MultimodalRagService:
             uniq.append(p)
         text_bits = [h.get("document") or "" for h in text_hits]
         vl_used = False
-        if DASHSCOPE_API_KEY and uniq:
+        if self._vl_ready() and uniq:
             try:
                 answer = self._vl_answer(q, uniq, text_bits)
                 vl_used = True
             except Exception as exc:  # noqa: BLE001
                 answer = self._text_fallback_answer(q, image_hits, text_hits)
-                answer = f"（千问 VL 调用失败：{exc}，已退回文本模型）\n\n{answer}"
+                answer = f"（{self._vl_label()} 调用失败：{exc}，已退回文本模型）\n\n{answer}"
         else:
             answer = self._text_fallback_answer(q, image_hits, text_hits)
 
