@@ -192,7 +192,13 @@
     .upload-drop.on { border-color: #4d8dff; color: #c9dcff; background: rgba(36,107,253,.12); }
     .upload-btn:disabled { opacity: .45; cursor: not-allowed; box-shadow: none; }
     .upload-msg { color: #9bb8ff; font-size: 11px; line-height: 1.55; min-height: 16px; }
-    .upload-msg.err { color: #ff9aa6; }
+    .eval-plain { font-size: 12px; line-height: 1.55; color: #c8d2e4; display: grid; gap: 8px; }
+    .eval-plain h4 { margin: 0; font-size: 12px; color: #fff; font-weight: 600; }
+    .eval-plain .kv { color: #9bb8ff; }
+    .eval-plain .q { padding: 6px 0 0; border-top: 1px solid rgba(255,255,255,.08); }
+    .eval-plain .ok { color: #86efac; }
+    .eval-plain .bad { color: #fda4af; }
+    .eval-hint { color: #8b93a7; font-size: 11px; line-height: 1.5; }
     .opt-list { display: grid; gap: 8px; }
     .opt-item {
       display: flex; align-items: flex-start; gap: 10px;
@@ -591,6 +597,10 @@
     }
     .model-name, .stat-item strong, .pipe-name { color: #1a1a1a; }
     .model-detail, .stat-item, .stat-note, .upload-msg, .eval-hint, .pipe-detail, .pipe-head, .pipe-title { color: #8b8b8b; }
+    .eval-plain { color: #333; }
+    .eval-plain h4 { color: #1a1a1a; }
+    .eval-plain .kv { color: #4d6bfe; }
+    .eval-plain .q { border-top-color: #ececec; }
     .status-dot { background: #22c55e; }
     .stat-card select, .upload-card select, .upload-card input[type="file"],
     .upload-card input[type="text"], .upload-card input:not([type]) {
@@ -1138,9 +1148,27 @@
           style="margin-top:8px"
           :disabled="evalLoading"
           @click="runRetrievalEval"
-        >{{ evalLoading ? '检索评估中...' : '跑检索评估（基础 vs 当前）' }}</button>
-        <div class="upload-msg" v-if="evalRetrievalMsg">{{ evalRetrievalMsg }}</div>
-        <div class="eval-hint">company_info 题：基础 RAG 对照当前勾选。开 CRAG 会较慢。</div>
+        >{{ evalLoading ? '正在测检索…' : '测一下检索好不好用' }}</button>
+        <div class="eval-hint">
+          这不是聊天提问。会用内置的 5 道「贝壳科技」样题，看你勾选的优化能不能搜到资料，结果只显示在下面，不会当成你的问题。
+        </div>
+        <div class="eval-plain" v-if="evalResult">
+          <h4>检索自测结果（内置样题，不是你问的）</h4>
+          <div>一共 {{ evalResult.total }} 题。</div>
+          <div class="kv">
+            当前勾选：{{ evalHitText(evalResult) }}
+          </div>
+          <div class="kv" v-if="evalResult.baseline">
+            未开优化的基础版：{{ evalHitText(evalResult.baseline) }}
+          </div>
+          <div v-if="evalCompareText">{{ evalCompareText }}</div>
+          <div v-if="evalResult.diagnosis">说明：{{ evalPlainDiagnosis(evalResult.diagnosis) }}</div>
+          <div class="q" v-for="(r, i) in (evalResult.results || [])" :key="'eq'+i">
+            <span :class="r.hit ? 'ok' : 'bad'">{{ r.hit ? '找到了' : '没找到' }}</span>
+            · {{ r.query }}
+          </div>
+        </div>
+        <div class="upload-msg err" v-if="evalRetrievalMsg && !evalResult">{{ evalRetrievalMsg }}</div>
       </div>
 
       <div class="upload-card" v-if="mode === 'mmrag'">
@@ -1355,29 +1383,11 @@
               <div class="pre-line" v-if="msg.generationEval.diagnosis">诊断：{{ msg.generationEval.diagnosis }}</div>
             </div>
             <div class="pre-box" v-if="msg.retrievalEval">
-              <strong>检索质量评估 · 基础 RAG vs 当前优化</strong>
-              <div class="pre-line">
-                当前：Hit={{ msg.retrievalEval.hit_rate }} · MRR={{ msg.retrievalEval.mrr }}
-                · P@K={{ msg.retrievalEval.precision_at_k }} · R@K={{ msg.retrievalEval.recall_at_k }}
-                · {{ msg.retrievalEval.total }} 题
-              </div>
-              <div class="pre-line" v-if="msg.retrievalEval.baseline">
-                基础：Hit={{ msg.retrievalEval.baseline.hit_rate }} · MRR={{ msg.retrievalEval.baseline.mrr }}
-                · P@K={{ msg.retrievalEval.baseline.precision_at_k }} · R@K={{ msg.retrievalEval.baseline.recall_at_k }}
-              </div>
-              <div class="pre-line" v-if="msg.retrievalEval.delta">
-                差值 Δ：Hit={{ fmtDelta(msg.retrievalEval.delta.hit_rate) }}
-                · MRR={{ fmtDelta(msg.retrievalEval.delta.mrr) }}
-                · P@K={{ fmtDelta(msg.retrievalEval.delta.precision_at_k) }}
-                · R@K={{ fmtDelta(msg.retrievalEval.delta.recall_at_k) }}
-              </div>
-              <div class="pre-line" v-if="msg.retrievalEval.diagnosis">当前诊断：{{ msg.retrievalEval.diagnosis }}</div>
-              <div class="pre-line" v-if="msg.retrievalEval.baseline?.diagnosis">基础诊断：{{ msg.retrievalEval.baseline.diagnosis }}</div>
+              <strong>这不是你的提问，是系统用内置样题测检索</strong>
+              <div class="pre-line">{{ evalHitText(msg.retrievalEval) }}</div>
+              <div class="pre-line" v-if="msg.retrievalEval.baseline">基础版：{{ evalHitText(msg.retrievalEval.baseline) }}</div>
               <div class="pre-line" v-for="(r, i) in (msg.retrievalEval.results || [])" :key="'c'+i">
-                当前 {{ r.hit ? '✓' : '✗' }} MRR={{ r.mrr }} P={{ r.precision }} R={{ r.recall }} · {{ r.query }}
-              </div>
-              <div class="pre-line" v-for="(r, i) in (msg.retrievalEval.baseline?.results || [])" :key="'b'+i">
-                基础 {{ r.hit ? '✓' : '✗' }} MRR={{ r.mrr }} · {{ r.query }}
+                {{ r.hit ? '找到了' : '没找到' }} · {{ r.query }}
               </div>
             </div>
             <div class="sources" v-if="msg.sources && msg.sources.length">
@@ -1545,6 +1555,7 @@
         const evalReference = ref('');
         const evalLoading = ref(false);
         const evalRetrievalMsg = ref('');
+        const evalResult = ref(null);
         const health = ref(null);
         const messagesEl = ref(null);
         const sessionId = ref('web-' + Math.random().toString(36).slice(2, 10));
@@ -1713,6 +1724,28 @@
           const sign = n > 0 ? '+' : '';
           return sign + n.toFixed(4);
         };
+        const evalHitText = (bundle) => {
+          if (!bundle) return '';
+          const rows = bundle.results || [];
+          const total = bundle.total || rows.length || 0;
+          const hits = rows.filter((r) => r.hit).length;
+          if (total) return `${hits}/${total} 题搜到了相关资料`;
+          return `命中 ${Math.round((Number(bundle.hit_rate) || 0) * 100)}%`;
+        };
+        const evalPlainDiagnosis = (text) => {
+          const raw = String(text || '');
+          if (/Recall@K 偏低|没捞全/.test(raw)) return '相关内容没搜全，可以把 Top-K 调大，或打开混合检索。';
+          if (/检索侧整体可用/.test(raw)) return '检索大体能用；如果回答仍差，多半是生成环节的问题。';
+          return raw;
+        };
+        const evalCompareText = computed(() => {
+          const d = evalResult.value && evalResult.value.delta;
+          if (!d) return '';
+          const hit = Number(d.hit_rate || 0);
+          if (hit > 0.02) return '比未开优化的基础版更能搜到题。';
+          if (hit < -0.02) return '比基础版少搜到一些题：当前勾选不一定更好。';
+          return '和基础版找到的题目数量差不多。';
+        });
 
         const PRESET_MAP = {
           basic: {
@@ -2376,15 +2409,8 @@
         const runRetrievalEval = async () => {
           if (evalLoading.value) return;
           evalLoading.value = true;
-          evalRetrievalMsg.value = '正在对比基础 RAG 与当前优化…';
-          messages.value.push({
-            role: 'bot',
-            content: '检索质量评估进行中…',
-            sources: [],
-            expanded: {},
-          });
-          const botMsg = messages.value[messages.value.length - 1];
-          scrollToBottom();
+          evalResult.value = null;
+          evalRetrievalMsg.value = '正在用内置样题测检索…';
           try {
             const res = await ragFetch('/eval/retrieval', {
               method: 'POST',
@@ -2405,21 +2431,15 @@
             });
             const data = await res.json().catch(() => ({}));
             if (!res.ok) {
-              botMsg.content = data.detail || ('评估失败：HTTP ' + res.status);
-              evalRetrievalMsg.value = botMsg.content;
+              evalRetrievalMsg.value = data.detail || ('评估失败：HTTP ' + res.status);
             } else {
-              botMsg.content = `检索评估完成：当前 Hit=${data.hit_rate} MRR=${data.mrr} P@K=${data.precision_at_k} R@K=${data.recall_at_k}`
-                + (data.delta ? `；相对基础 ΔHit=${fmtDelta(data.delta.hit_rate)} ΔMRR=${fmtDelta(data.delta.mrr)}` : '')
-                + `（${data.total} 题）`;
-              botMsg.retrievalEval = data;
-              evalRetrievalMsg.value = botMsg.content;
+              evalResult.value = data;
+              evalRetrievalMsg.value = '';
             }
           } catch (err) {
-            botMsg.content = '评估失败：' + (err.message || String(err));
-            evalRetrievalMsg.value = botMsg.content;
+            evalRetrievalMsg.value = '评估失败：' + (err.message || String(err));
           } finally {
             evalLoading.value = false;
-            scrollToBottom();
           }
         };
 
@@ -2791,6 +2811,10 @@
           strategyLabel,
           metricLabel,
           fmtDelta,
+          evalHitText,
+          evalPlainDiagnosis,
+          evalCompareText,
+          evalResult,
           applyPreset,
           autoResize,
           formatScore,
