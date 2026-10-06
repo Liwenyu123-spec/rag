@@ -82,10 +82,6 @@ elif EMBEDDING_PROVIDER == "huggingface":  # 本地向量模型默认名
 else:  # 千问向量模型默认名
     EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "text-embedding-v3")  # 阿里云默认 embedding
 
-# Chinese-CLIP 维度与 bge/千问不同，默认换独立集合，避免旧向量混用
-if EMBEDDING_PROVIDER == "chinese_clip" and not os.getenv("CHROMA_COLLECTION"):
-    COLLECTION_NAME = "native_rag_chinese_clip"  # 仅在未显式配置集合名时生效
-
 EMBEDDING_API_BASE = os.getenv(  # OpenAI 兼容的 Embedding 接口地址（千问兼容模式）
     "EMBEDDING_API_BASE",  # 环境变量名
     "https://dashscope.aliyuncs.com/compatible-mode/v1",  # 默认兼容模式地址
@@ -96,9 +92,11 @@ RAG_SYSTEM_PROMPT = os.getenv(  # 多轮 RAG 对话的系统提示词
     "你是一个知识库助手，根据检索的内容，用简体中文回答问题",  # 默认中文助手人设
 )  # 括号结束
 
-# 集合名：chinese_clip 已在上方可能改写；其余默认 native_rag
-if "COLLECTION_NAME" not in globals():
-    COLLECTION_NAME = os.getenv("CHROMA_COLLECTION", "native_rag")  # Chroma 集合名
+# Chinese-CLIP 维度与 bge/千问不同，默认换独立集合，避免旧向量混用
+_default_collection = (
+    "native_rag_chinese_clip" if EMBEDDING_PROVIDER == "chinese_clip" else "native_rag"
+)
+COLLECTION_NAME = os.getenv("CHROMA_COLLECTION", _default_collection)  # Chroma 集合名
 CHROMA_PERSIST_DIR = os.getenv(  # Chroma 持久化目录
     "CHROMA_PERSIST_DIR",  # 环境变量名
     str(PACKAGE_DIR / "chroma_db"),  # 默认在包内 chroma_db/
