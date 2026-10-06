@@ -1,6 +1,32 @@
 {
   "sessions": [
     {
+      "id": "web-wd3xiexk",
+      "title": "这是什么",
+      "mode": "ask",
+      "updated_at": 1791284745295,
+      "messages": [
+        {
+          "role": "user",
+          "content": "这是什么",
+          "imageUrl": "blob:http://127.0.0.1:8003/6a78a07f-811a-4c6c-9210-f47c147e906c",
+          "sources": []
+        },
+        {
+          "role": "bot",
+          "content": "没有生成回答。",
+          "imageUrl": "",
+          "sources": [
+            {
+              "rank": 1,
+              "similarity": 1,
+              "document": "2281d3d8cb8c87236a327c5deb83b49f.png"
+            }
+          ]
+        }
+      ]
+    },
+    {
       "id": "web-rst95m3f",
       "title": "机器学习有什么相关知识",
       "mode": "ask",
