@@ -45,6 +45,17 @@ ASK_QA_PROMPT = PromptTemplate(  # 组装「上下文 + 问题 → 回答」的 
 
 if TYPE_CHECKING:  # 仅类型检查时导入，避免运行时循环依赖
     from semantic_search.app.engine import SemanticSearchEngine  # 引擎类型注解用
+    from semantic_search.app.service.graph_rag import GraphRagService
+
+
+def _empty_graph() -> dict:
+    return {
+        "enabled": False,
+        "ok": False,
+        "message": "skipped",
+        "total": 0,
+        "results": [],
+    }
 
 
 def _node_key(node: NodeWithScore) -> str:  # 生成节点去重键
@@ -168,8 +179,13 @@ def _context_from_nodes(nodes: list[NodeWithScore]) -> str:  # 把节点列表�
 class RagAskService:  # RAG 问答编排服务
     """编排：Retrieve? → Pre/Mid/Post → CRAG≈ISREL → 生成 → ISSUP/ISUSE。"""  # 链路总览
 
-    def __init__(self, engine: SemanticSearchEngine):  # 注入语义搜索引擎
-        self.engine = engine  # 保存引擎引用，供检索与 LLM 使用
+    def __init__(  # 注入语义搜索引擎与可选图谱服务
+        self,
+        engine: SemanticSearchEngine,
+        graph_rag: Optional["GraphRagService"] = None,
+    ):
+        self.engine = engine
+        self.graph_rag = graph_rag
 
     def _retrieve_pipeline(  # 单查询完整检索管线（混合 + 后处理）
         self,  # 实例
@@ -288,6 +304,7 @@ class RagAskService:  # RAG 问答编排服务
         use_reorder: Optional[bool] = None,  # 是否重排序
         use_crag: Optional[bool] = None,  # 是否 CRAG
         use_self_rag: Optional[bool] = None,  # 是否 Self-RAG
+        use_graph: Optional[bool] = None,  # 是否向量+图谱双通道
         use_eval: Optional[bool] = False,  # 是否生成评估（默认关）
         reference: Optional[str] = None,  # 评估用参考答案
     ) -> dict:  # 返回含答案、溯源、各阶段元信息的字典
@@ -310,6 +327,7 @@ class RagAskService:  # RAG 问答编排服务
                 "use_reorder": use_reorder,  # 重排序
                 "use_crag": use_crag,  # CRAG
                 "use_self_rag": use_self_rag,  # Self-RAG
+                "use_graph": use_graph,
                 "use_eval": use_eval,  # 评估
             },  # 原始开关结束
         )  # 得到合并后的 resolved
@@ -346,6 +364,7 @@ class RagAskService:  # RAG 问答编排服务
         flag_self = _resolve_flag(  # 解析 Self-RAG 开关
             resolved.get("use_self_rag", use_self_rag), SELF_RAG_ENABLED  # 同上
         )  # 得到 flag_self
+        flag_graph = _resolve_flag(resolved.get("use_graph", use_graph), False)
         flag_eval = bool(resolved.get("use_eval", use_eval) or False)  # 评估开关（缺省 False）
         flag_num_queries = max(1, int(resolved.get("num_queries") or num_queries or 1))  # 多查询数至少为 1
         flag_fusion = (  # 融合模式：预设 → 请求 → 配置 → 默认 reciprocal_rerank
@@ -361,6 +380,7 @@ class RagAskService:  # RAG 问答编排服务
             "advanced",  # 进阶
             "full_optimization",  # 全开优化
             "step_back",
+            "graph_hybrid",
             "custom",
         }:  # 合法预设集合
             preset_name = None  # 非法则清空
@@ -377,6 +397,7 @@ class RagAskService:  # RAG 问答编排服务
             "use_reorder": flag_reorder,  # 重排序
             "use_crag": flag_crag,  # CRAG
             "use_self_rag": flag_self,  # Self-RAG
+            "use_graph": flag_graph,
             "use_eval": flag_eval,  # 评估
         }  # optimizations 结束
 
@@ -414,6 +435,7 @@ class RagAskService:  # RAG 问答编排服务
                     "pre_retrieval": empty_pre,  # 空检索前信息
                     "crag": _empty_crag(),  # 未跑 CRAG
                     "self_rag": self_info,  # Self-RAG 元信息
+                    "graph": _empty_graph(),
                     "generation_eval": _maybe_generation_eval(  # 按需评估
                         enabled=flag_eval,  # 是否评估
                         question=question,  # 问题

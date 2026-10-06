@@ -112,6 +112,10 @@ class AskRequest(BaseModel):  # POST /ask：基础 RAG + 可选优化链路
         None,  # 默认跟配置
         description="Self-RAG：Retrieve 门控 + ISSUP 验据修正 + ISUSE；null=跟配置",  # OpenAPI 字段说明
     )  # use_self_rag 字段结束
+    use_graph: bool | None = Field(
+        None,
+        description="知识图谱双通道：Neo4j 子图召回后与向量结果拼接；null=跟配置",
+    )
     # ----- RAG 评估（飞书：生成质量）-----
     use_eval: bool | None = Field(  # 是否做生成质量评估
         False,  # 默认关闭评估
@@ -135,6 +139,7 @@ class OptimizeFlags(BaseModel):  # 本次实际生效的优化开关（回显给
     use_reorder: bool = True  # 是否长上下文重排
     use_crag: bool = True  # 是否 Corrective RAG
     use_self_rag: bool = False  # 是否 Self-RAG
+    use_graph: bool = False  # 是否向量+图谱双通道
     use_eval: bool = False  # 是否做了生成评估
 
 
@@ -164,6 +169,14 @@ class GenerationEvalInfo(BaseModel):  # 生成质量评估汇总
     message: str = "skipped"  # 过程摘要文案
 
 
+class GraphInfo(BaseModel):  # 图谱通道过程信息
+    enabled: bool = False
+    ok: bool = False
+    message: str = "skipped"
+    total: int = 0
+    results: List[dict] = Field(default_factory=list)
+
+
 class AskResponse(BaseModel):  # /ask 的响应体
     question: str  # 原问题
     answer: str  # 最终自然语言答案
@@ -171,6 +184,7 @@ class AskResponse(BaseModel):  # /ask 的响应体
     pre_retrieval: PreRetrievalInfo  # 检索前优化过程信息
     crag: CragInfo | None = None  # Corrective RAG 过程（可选）
     self_rag: SelfRagInfo | None = None  # Self-RAG 过程（可选）
+    graph: GraphInfo | None = None  # 知识图谱通道
     generation_eval: GenerationEvalInfo | None = None  # 生成质量评估
     optimizations: OptimizeFlags | None = None  # 本次实际开启的优化项
 

@@ -237,3 +237,39 @@ class GraphRagService:
             text = getattr(node, "text", None) or getattr(node.node, "text", "")
             items.append({"rank": i + 1, "text": text, "score": score})
         return {"question": question, "results": items, "total": len(items)}
+
+    def retrieve_as_nodes(self, question: str, *, k: int = 5) -> tuple[list, dict]:
+        """给向量通道融合用：图谱片段包装成 NodeWithScore。"""
+        from llama_index.core.schema import NodeWithScore, TextNode
+
+        try:
+            data = self.retrieve(question, k=k)
+        except Exception as exc:  # noqa: BLE001
+            info = {
+                "enabled": True,
+                "ok": False,
+                "message": f"图谱检索失败: {exc}",
+                "total": 0,
+                "results": [],
+            }
+            return [], info
+        packed = []
+        for item in data.get("results") or []:
+            text = (item.get("text") or "").strip()
+            if not text:
+                continue
+            node = TextNode(
+                text=f"[图谱] {text}",
+                metadata={"channel": "graph"},
+            )
+            packed.append(
+                NodeWithScore(node=node, score=float(item.get("score") or 0.0))
+            )
+        info = {
+            "enabled": True,
+            "ok": True,
+            "message": f"图谱召回 {len(packed)} 条",
+            "total": len(packed),
+            "results": data.get("results") or [],
+        }
+        return packed, info
