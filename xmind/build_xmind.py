@@ -26,7 +26,8 @@ TREE = topic(
     note=(
         "根据飞书讲义整理：认知阶段、提示词、RAG整体认知、Embedding、向量数据库、"
         "Native RAG、Advanced RAG、检索前/中/后优化（Pre / Retrieval / Post-retrieval）、"
-        "Self-RAG、Corrective RAG（CRAG）、RAG 评估、Modular RAG、知识图谱（Neo4j/GraphRAG）。"
+        "Self-RAG、Corrective RAG（CRAG）、RAG 评估、Modular RAG、知识图谱（Neo4j）、"
+        "GraphRAG 使用（PropertyGraphIndex）、多模态 RAG（Chinese-CLIP）。"
     ),
     children=[
         topic(
@@ -2904,6 +2905,9 @@ TREE = topic(
                         topic("第 13 章：chroma文档管理 全链路文件/API/开关对照"),
                         topic("第 14 章：RAG 评估（Hit/MRR + Faithfulness 等，量化优化）"),
                         topic("第 15 章：Modular RAG（模块化编排 + 配置驱动，对齐飞书 01）"),
+                        topic("第 16 章：知识图谱理论 + Neo4j/Cypher"),
+                        topic("第 17 章：GraphRAG 使用（PropertyGraphIndex + 抽取器）"),
+                        topic("第 18 章：多模态 RAG（Chinese-CLIP / 图文检索）"),
                     ],
                 ),
             ],
@@ -4417,6 +4421,8 @@ CHAPTER_COLORS = [
     ("#B45309", "#FEF3C7"),  # 14 棕金（RAG评估）
     ("#1D4ED8", "#DBEAFE"),  # 15 靛蓝（Modular RAG）
     ("#0F766E", "#99F6E4"),  # 16 深青（知识图谱）
+    ("#7C3AED", "#EDE9FE"),  # 17 紫（GraphRAG 使用）
+    ("#DB2777", "#FCE7F3"),  # 18 粉（多模态 RAG）
 ]
 
 
@@ -4541,6 +4547,14 @@ def main():
         from _chapters_16_kg import make_chapter as make_ch16
 
         attached.append(make_ch16(topic))
+    if not any(c.get("title", "").startswith("17 ") for c in attached):
+        from _chapters_17_graphrag import make_chapter as make_ch17
+
+        attached.append(make_ch17(topic))
+    if not any(c.get("title", "").startswith("18 ") for c in attached):
+        from _chapters_18_mmrag import make_chapter as make_ch18
+
+        attached.append(make_ch18(topic))
 
     chapters = copy.deepcopy(TREE.get("children", {}).get("attached", []))
     sheets = [make_sheet("00 总览", make_overview(chapters))]
