@@ -705,10 +705,12 @@ async def list_library(
 @app.get("/library/chunks")
 async def library_chunks(
     file_name: str = Query(..., min_length=1),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(10, ge=1, le=50),
     backend: str = Depends(vector_backend_dep),
 ):
-    """按文件名取出入库片段，供点开来源。"""
-    return _bound_engine(app, backend).list_file_chunks(file_name)
+    """按文件名分页取出入库片段，供预览翻页。"""
+    return _bound_engine(app, backend).list_file_chunks(file_name, page=page, page_size=page_size)
 
 
 @app.get("/library/file")
@@ -716,7 +718,9 @@ async def library_file(
     file_name: str = Query(..., min_length=1),
     backend: str = Depends(vector_backend_dep),
 ):
-    """下载/打开知识库里保存的原始文件。"""
+    """在浏览器里预览知识库保存的原始文件（PDF/图片/文本内嵌打开）。"""
+    import mimetypes
+
     engine = _bound_engine(app, backend)
     path = engine.find_source_file(file_name)
     if path is None:
@@ -728,7 +732,15 @@ async def library_file(
                 path = None
     if path is None or not path.is_file():
         raise HTTPException(status_code=404, detail="找不到该文件的原文")
-    return FileResponse(path, filename=path.name)
+    media = mimetypes.guess_type(path.name)[0] or "application/octet-stream"
+    if path.suffix.lower() in {".md", ".txt", ".csv"}:
+        media = "text/plain; charset=utf-8"
+    return FileResponse(
+        path,
+        media_type=media,
+        filename=path.name,
+        content_disposition_type="inline",
+    )
 
 
 @app.delete("/library")

@@ -484,10 +484,25 @@
     }
     .lib-actions button.danger { color: #e11d48; }
     .src-drawer {
-      position: fixed; right: 0; top: 0; bottom: 0; width: min(420px, 92vw);
+      position: fixed; right: 0; top: 0; bottom: 0; width: min(520px, 96vw);
       background: #fff; border-left: 1px solid var(--line); z-index: 40;
-      display: flex; flex-direction: column; padding: 16px;
+      display: flex; flex-direction: column; padding: 16px; overflow: auto;
     }
+    .src-frame {
+      width: 100%; height: 42vh; min-height: 220px; border: 1px solid #ececec;
+      border-radius: 10px; background: #f8fafc; margin: 10px 0;
+    }
+    .src-img { max-width: 100%; max-height: 42vh; display: block; margin: 10px auto; border-radius: 10px; }
+    .src-pager {
+      display: flex; align-items: center; justify-content: space-between; gap: 8px;
+      margin: 8px 0; font-size: 12px; color: #64748b;
+    }
+    .src-pager button, .lib-pager button {
+      border: 1px solid #e6e6e6; background: #fff; border-radius: 8px;
+      padding: 4px 10px; cursor: pointer; color: #334155;
+    }
+    .src-pager button:disabled, .lib-pager button:disabled { opacity: .4; cursor: not-allowed; }
+    .lib-pager { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 10px 0 4px; font-size: 12px; color: #64748b; }
     .src-chunk { margin-top: 10px; padding: 10px; background: #f8fafc; border-radius: 10px; font-size: 13px; line-height: 1.6; }
     .cmp-col {
       padding: 8px; border-radius: 10px; background: #f6f8fc; border: 1px solid var(--line);
@@ -1480,10 +1495,15 @@
         </div>
         <div class="upload-msg" v-if="libraryHint">{{ libraryHint }}</div>
         <input class="lib-search" v-model="libraryQuery" placeholder="按文件名筛选…" />
+        <div class="lib-pager" v-if="libraryPages > 1">
+          <button type="button" :disabled="libPage <= 1" @click="libPage--">上一页</button>
+          <span>文件 {{ libPage }} / {{ libraryPages }}</span>
+          <button type="button" :disabled="libPage >= libraryPages" @click="libPage++">下一页</button>
+        </div>
         <div class="hist-empty" v-if="libraryLoading">正在读取知识库…</div>
         <div class="hist-empty" v-else-if="!filteredLibrary.length && !filteredImages.length">当前范围没有文档</div>
         <div class="hist-list" v-else>
-          <div class="hist-item" v-for="item in filteredLibrary" :key="item.file_name">
+          <div class="hist-item" v-for="item in pagedLibrary" :key="item.file_name">
             <strong>{{ item.file_name }}</strong>
             <span>{{ classLabel(item.doc_class) }} · {{ item.file_type }} · {{ item.chunks }} 段</span>
             <div class="lib-preview" v-if="item.preview">{{ item.preview }}</div>
@@ -1493,7 +1513,7 @@
               <button type="button" class="danger" @click="deleteLibraryFile(item.file_name)">删除</button>
             </div>
           </div>
-          <div class="hist-item" v-for="img in filteredImages" :key="'img-'+img.file_name">
+          <div class="hist-item" v-for="img in pagedImages" :key="'img-'+img.file_name">
             <strong>{{ img.file_name }}</strong>
             <span>图片</span>
             <div class="lib-actions">
@@ -1510,12 +1530,24 @@
           <h3>{{ sourcePreview.file_name }}</h3>
           <button class="header-btn" @click="sourcePreview.open=false">关闭</button>
         </div>
-        <a class="source-toggle" :href="'/library/file?file_name=' + encodeURIComponent(sourcePreview.file_name || '')" target="_blank">打开原文件</a>
+        <div class="upload-msg" v-if="sourcePreview.hint">{{ sourcePreview.hint }}</div>
+        <img v-if="sourcePreview.kind === 'image'" class="src-img" :src="sourcePreview.fileUrl" :alt="sourcePreview.file_name" />
+        <iframe
+          v-else-if="sourcePreview.kind === 'file'"
+          class="src-frame"
+          :src="sourcePreview.fileUrl"
+          title="原文预览"
+        ></iframe>
+        <div class="src-pager">
+          <button type="button" :disabled="!sourcePreview.has_prev" @click="loadSourcePage(sourcePreview.page - 1)">上一页</button>
+          <span>入库片段 {{ sourcePreview.page }} / {{ sourcePreview.pages || 1 }}（共 {{ sourcePreview.total || 0 }} 段）</span>
+          <button type="button" :disabled="!sourcePreview.has_next" @click="loadSourcePage(sourcePreview.page + 1)">下一页</button>
+        </div>
         <div class="hist-empty" v-if="sourcePreview.loading">正在读取片段…</div>
-        <div class="hist-empty" v-else-if="!(sourcePreview.chunks || []).length">没有入库片段（可能是图片或文件已不在向量库）</div>
+        <div class="hist-empty" v-else-if="!(sourcePreview.chunks || []).length">这一页没有片段</div>
         <div class="src-chunk" v-for="(c, i) in (sourcePreview.chunks || [])" :key="'sc'+i">
           <strong v-if="c.location">{{ c.location }}</strong>
-          <div>{{ c.text }}</div>
+          <div style="white-space:pre-wrap">{{ c.text }}</div>
         </div>
       </aside>
 
@@ -1581,7 +1613,7 @@
         '<p style="padding:24px;font-family:sans-serif">页面脚本未加载。请重启 run.py 后打开 http://127.0.0.1:8003/ ，不要用本地文件直接打开 HTML。</p>'
       );
     } else {
-    const { createApp, ref, computed, nextTick, onMounted } = Vue;
+    const { createApp, ref, computed, nextTick, onMounted, watch } = Vue;
     createApp({
       setup() {
         const appModule = ref('rag');
@@ -1631,7 +1663,13 @@
         const sessionId = ref('web-' + Math.random().toString(36).slice(2, 10));
         const showHistory = ref(false);
         const showLibrary = ref(false);
-        const sourcePreview = ref({ open: false, file_name: '', chunks: [], loading: false });
+        const libPage = ref(1);
+        const libPageSize = 12;
+        const sourcePreview = ref({
+          open: false, file_name: '', chunks: [], loading: false,
+          page: 1, pages: 1, total: 0, has_prev: false, has_next: false,
+          fileUrl: '', kind: '', hint: '',
+        });
         const libraryFiles = ref([]);
         const libraryImages = ref([]);
         const libraryQuery = ref('');
@@ -2059,6 +2097,22 @@
           if (!q) return imgs;
           return imgs.filter((img) => String(img.file_name || '').toLowerCase().includes(q));
         });
+        const libraryPages = computed(() => {
+          const n = Math.max(filteredLibrary.value.length, filteredImages.value.length);
+          return Math.max(1, Math.ceil(n / libPageSize));
+        });
+        const pagedLibrary = computed(() => {
+          const start = (libPage.value - 1) * libPageSize;
+          return filteredLibrary.value.slice(start, start + libPageSize);
+        });
+        const pagedImages = computed(() => {
+          const start = (libPage.value - 1) * libPageSize;
+          return filteredImages.value.slice(start, start + libPageSize);
+        });
+        watch(libraryQuery, () => { libPage.value = 1; });
+        watch(libraryPages, (n) => {
+          if (libPage.value > n) libPage.value = n;
+        });
 
         const openLibrary = async () => {
           showLibrary.value = true;
@@ -2075,6 +2129,7 @@
             }
             libraryFiles.value = data.files || [];
             libraryImages.value = data.images || [];
+            libPage.value = 1;
             libraryHint.value = `当前 ${data.backend || vectorBackend.value} · 范围 ${data.scope || docScope.value} · ${data.file_count || 0} 个文件 / ${data.chunk_count || 0} 段`;
           } catch (err) {
             libraryHint.value = '读取失败：' + (err.message || String(err));
@@ -2085,15 +2140,60 @@
           }
         };
 
-        const openSourcePreview = async (src) => {
-          const name = src && (src.file_name || src.document);
+        const sourceKind = (name) => {
+          const ext = String(name || '').toLowerCase().split('.').pop();
+          if (['jpg', 'jpeg', 'png', 'webp', 'gif', 'bmp'].includes(ext)) return 'image';
+          if (['pdf', 'txt', 'md', 'html', 'htm', 'csv'].includes(ext)) return 'file';
+          return 'file';
+        };
+        const openSourcePreview = async (src, page) => {
+          const name = src && (src.file_name || src.document || src);
+          if (!name || typeof name === 'object' && !src.file_name && !src.document) {
+            /* fall through */
+          }
+          const fileName = (src && (src.file_name || src.document)) || String(name || '');
+          if (!fileName) return;
+          const nextPage = page || 1;
+          sourcePreview.value = {
+            ...sourcePreview.value,
+            open: true,
+            file_name: fileName,
+            chunks: [],
+            loading: true,
+            page: nextPage,
+            fileUrl: '/library/file?file_name=' + encodeURIComponent(fileName),
+            kind: sourceKind(fileName),
+            hint: '',
+          };
+          await loadSourcePage(nextPage);
+        };
+
+        const loadSourcePage = async (page) => {
+          const name = sourcePreview.value.file_name;
           if (!name) return;
-          sourcePreview.value = { open: true, file_name: name, chunks: [], loading: true };
+          sourcePreview.value.loading = true;
+          sourcePreview.value.page = page;
           try {
-            const res = await ragFetch('/library/chunks?file_name=' + encodeURIComponent(name));
+            const res = await ragFetch(
+              '/library/chunks?file_name=' + encodeURIComponent(name) + '&page=' + page + '&page_size=10'
+            );
             const data = await res.json().catch(() => ({}));
+            if (!res.ok) {
+              sourcePreview.value.hint = data.detail || '读取片段失败';
+              sourcePreview.value.chunks = [];
+              return;
+            }
             sourcePreview.value.chunks = data.chunks || [];
-          } catch (_) {
+            sourcePreview.value.total = data.total || 0;
+            sourcePreview.value.page = data.page || page;
+            sourcePreview.value.pages = data.pages || 1;
+            sourcePreview.value.has_prev = !!data.has_prev;
+            sourcePreview.value.has_next = !!data.has_next;
+            sourcePreview.value.hint = data.total
+              ? `共 ${data.total} 段，可翻页查看；上方是原文件预览`
+              : '向量库里没有这段文本，仍可尝试上方原文件预览';
+          } catch (err) {
+            sourcePreview.value.hint = '读取失败：' + (err.message || String(err));
             sourcePreview.value.chunks = [];
           } finally {
             sourcePreview.value.loading = false;
@@ -2863,9 +2963,14 @@
           messages,
           showHistory,
           showLibrary,
+          libPage,
+          libraryPages,
+          pagedLibrary,
+          pagedImages,
           sourcePreview,
           openSourcePreview,
           deleteLibraryFile,
+          loadSourcePage,
           libraryFiles,
           libraryImages,
           libraryQuery,

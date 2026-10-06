@@ -571,7 +571,7 @@ class SemanticSearchEngine:  # Native RAG 引擎主体
             "files": files,
         }
 
-    def list_file_chunks(self, file_name: str, limit: int = 40) -> dict:
+    def list_file_chunks(self, file_name: str, page: int = 1, page_size: int = 10) -> dict:
         want = Path(file_name).name
         chunks: list[dict] = []
         try:
@@ -588,13 +588,38 @@ class SemanticSearchEngine:  # Native RAG 引擎主体
             )
             if name != want:
                 continue
-            text = " ".join(((docs[i] if i < len(docs) else "") or "").split())
-            page = meta.get("page_label") or meta.get("page") or meta.get("page_number")
-            location = f"第 {page} 页" if page not in (None, "") else ""
-            chunks.append({"text": text[:1200], "location": location, "page": None if page in (None, "") else str(page)})
-            if len(chunks) >= limit:
-                break
-        return {"file_name": want, "chunks": chunks, "total": len(chunks)}
+            text = ((docs[i] if i < len(docs) else "") or "").strip()
+            page_no = meta.get("page_label") or meta.get("page") or meta.get("page_number")
+            location = f"第 {page_no} 页" if page_no not in (None, "") else ""
+            chunks.append({
+                "text": text,
+                "location": location,
+                "page": None if page_no in (None, "") else str(page_no),
+            })
+
+        def _page_key(item: dict) -> tuple:
+            raw = item.get("page")
+            try:
+                return (0, int(str(raw).split(".")[0]))
+            except (TypeError, ValueError):
+                return (1, str(raw or ""))
+
+        chunks.sort(key=_page_key)
+        total = len(chunks)
+        size = max(1, min(int(page_size or 10), 50))
+        pages = max(1, (total + size - 1) // size) if total else 1
+        current = max(1, min(int(page or 1), pages))
+        start = (current - 1) * size
+        return {
+            "file_name": want,
+            "chunks": chunks[start:start + size],
+            "total": total,
+            "page": current,
+            "page_size": size,
+            "pages": pages,
+            "has_prev": current > 1,
+            "has_next": current < pages,
+        }
 
     def find_source_file(self, file_name: str) -> Path | None:
         want = Path(file_name).name
