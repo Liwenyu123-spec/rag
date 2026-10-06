@@ -173,12 +173,43 @@
     .upload-msg.err { color: #ff9aa6; }
     .opt-list { display: grid; gap: 8px; }
     .opt-item {
-      display: flex; align-items: flex-start; gap: 8px;
+      display: flex; align-items: flex-start; gap: 10px;
+      padding: 9px 10px;
       color: #c8d2e4; font-size: 12px; line-height: 1.45; cursor: pointer;
+      border: 1px solid rgba(255,255,255,.08);
+      border-radius: 10px;
+      background: rgba(0,0,0,.18);
+      transition: .15s ease;
     }
-    .opt-item input { margin-top: 2px; accent-color: #4d8dff; flex-shrink: 0; }
+    .opt-item:hover { background: rgba(255,255,255,.07); }
+    .opt-item.on {
+      color: #fff;
+      border-color: rgba(125, 176, 255, .7);
+      background: rgba(36, 107, 253, .34);
+      box-shadow: inset 0 0 0 1px rgba(170, 204, 255, .28);
+    }
+    .opt-item input[type="checkbox"] {
+      appearance: none; -webkit-appearance: none;
+      width: 18px; height: 18px; margin-top: 1px; flex-shrink: 0;
+      border: 2px solid #8aa0c4; border-radius: 5px;
+      background: #0d1628; cursor: pointer;
+    }
+    .opt-item input[type="checkbox"]:checked {
+      border-color: #c5dcff;
+      background: #246bfd url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath fill='none' stroke='%23fff' stroke-width='2.6' stroke-linecap='round' stroke-linejoin='round' d='M3.2 8.2l3.2 3.3L12.8 4.6'/%3E%3C/svg%3E") center / 12px 12px no-repeat;
+      box-shadow: 0 0 0 3px rgba(36,107,253,.28);
+    }
     .opt-item small { display: block; margin-top: 2px; color: #8090a8; font-size: 11px; }
+    .opt-item.on small { color: #c5d6f5; }
     .opt-item.disabled { opacity: .45; pointer-events: none; }
+    .upload-card select {
+      color: #fff;
+      background: #1a2740;
+    }
+    .upload-card select option {
+      color: #18212f;
+      background: #fff;
+    }
     .opt-tags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
     .opt-tag {
       padding: 2px 8px; border-radius: 999px; font-size: 11px;
@@ -537,7 +568,7 @@
           <option value="graph_hybrid">预设 · graph_hybrid 向量+图谱</option>
         </select>
         <div class="opt-list">
-          <label class="opt-item">
+          <label class="opt-item" :class="{ on: optUsePre }">
             <input type="checkbox" v-model="optUsePre" @change="askPreset='custom'" />
             <span>检索前优化<small>清洗 / 重写 / HyDE / Step-Back</small></span>
           </label>
@@ -547,7 +578,7 @@
             <option value="hyde">清洗 + HyDE 假想文档</option>
             <option value="clean">仅查询清洗</option>
           </select>
-          <label class="opt-item">
+          <label class="opt-item" :class="{ on: optUseHybrid }">
             <input type="checkbox" v-model="optUseHybrid" @change="askPreset='custom'" />
             <span>检索中 · 混合检索<small>向量 + BM25 融合</small></span>
           </label>
@@ -556,35 +587,35 @@
             <option value="simple">融合 · 简单拼接（simple）</option>
             <option value="relative_score">融合 · 相对分（relative_score）</option>
           </select>
-          <label class="opt-item">
+          <label class="opt-item" :class="{ on: optUseMultiQuery }">
             <input type="checkbox" v-model="optUseMultiQuery" @change="askPreset='custom'" />
             <span>检索中 · Multi-Query<small>LLM 生成多查询变体再融合</small></span>
           </label>
-          <label class="opt-item">
+          <label class="opt-item" :class="{ on: optUseRerank }">
             <input type="checkbox" v-model="optUseRerank" @change="askPreset='custom'" />
             <span>检索后 · 重排序<small>Cross-Encoder / 精排</small></span>
           </label>
-          <label class="opt-item">
+          <label class="opt-item" :class="{ on: optUseCompress }">
             <input type="checkbox" v-model="optUseCompress" @change="askPreset='custom'" />
             <span>检索后 · 上下文压缩<small>去掉低相关句子</small></span>
           </label>
-          <label class="opt-item">
+          <label class="opt-item" :class="{ on: optUseReorder }">
             <input type="checkbox" v-model="optUseReorder" @change="askPreset='custom'" />
             <span>检索后 · 长上下文重排<small>重要内容靠前靠后</small></span>
           </label>
-          <label class="opt-item">
+          <label class="opt-item" :class="{ on: optUseCrag }">
             <input type="checkbox" v-model="optUseCrag" @change="askPreset='custom'" />
             <span>Corrective RAG<small>过滤无关并必要时改写重检</small></span>
           </label>
-          <label class="opt-item">
+          <label class="opt-item" :class="{ on: optUseSelfRag }">
             <input type="checkbox" v-model="optUseSelfRag" @change="askPreset='custom'" />
             <span>Self-RAG<small>Retrieve 门控 · ISSUP 验据 · ISUSE 打分</small></span>
           </label>
-          <label class="opt-item">
+          <label class="opt-item" :class="{ on: optUseGraph }">
             <input type="checkbox" v-model="optUseGraph" @change="askPreset='custom'" />
             <span>知识图谱双通道<small>Neo4j 子图 + 向量库拼接生成</small></span>
           </label>
-          <label class="opt-item">
+          <label class="opt-item" :class="{ on: optUseEval }">
             <input type="checkbox" v-model="optUseEval" @change="askPreset='custom'" />
             <span>生成质量评估<small>Faithfulness / Relevancy / Correctness</small></span>
           </label>
