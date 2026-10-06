@@ -43,7 +43,6 @@ from semantic_search.app.service.retrieval_optimize import (  # 检索中/后优
     build_hybrid_retriever,  # 构建向量或混合检索器
     build_node_postprocessors,  # 组装 NodePostprocessor 列表
     candidate_top_k,  # 粗排候选数计算
-    nodes_from_index,  # 从索引拉出 BM25 语料节点
 )  # retrieval_optimize 导入结束
 
 SAMPLE_DOCUMENTS = [  # 空库时写入的示例知识，方便一启动就能搜
