@@ -1631,6 +1631,7 @@
         const sessionId = ref('web-' + Math.random().toString(36).slice(2, 10));
         const showHistory = ref(false);
         const showLibrary = ref(false);
+        const sourcePreview = ref({ open: false, file_name: '', chunks: [], loading: false });
         const libraryFiles = ref([]);
         const libraryImages = ref([]);
         const libraryQuery = ref('');
@@ -2081,6 +2082,39 @@
             libraryImages.value = [];
           } finally {
             libraryLoading.value = false;
+          }
+        };
+
+        const openSourcePreview = async (src) => {
+          const name = src && (src.file_name || src.document);
+          if (!name) return;
+          sourcePreview.value = { open: true, file_name: name, chunks: [], loading: true };
+          try {
+            const res = await ragFetch('/library/chunks?file_name=' + encodeURIComponent(name));
+            const data = await res.json().catch(() => ({}));
+            sourcePreview.value.chunks = data.chunks || [];
+          } catch (_) {
+            sourcePreview.value.chunks = [];
+          } finally {
+            sourcePreview.value.loading = false;
+          }
+        };
+
+        const deleteLibraryFile = async (name) => {
+          if (!name) return;
+          if (!window.confirm('从知识库删除「' + name + '」？同名图片也会删掉。')) return;
+          try {
+            const res = await ragFetch('/library?file_name=' + encodeURIComponent(name), { method: 'DELETE' });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok) {
+              libraryHint.value = data.detail || '删除失败';
+              return;
+            }
+            libraryHint.value = data.message || ('已删除 ' + name);
+            await openLibrary();
+            refreshHealth();
+          } catch (err) {
+            libraryHint.value = '删除失败：' + (err.message || String(err));
           }
         };
 
@@ -2776,7 +2810,7 @@
               botMsg.generationEval = data.generation_eval || null;
               botMsg.optimizations = data.optimizations || null;
               botMsg.graph = data.graph || null;
-              botMsg.comparison = data.comparison || null;
+              botMsg.comparison = (data.comparison && data.comparison.enabled) ? data.comparison : null;
               botMsg.thinking = data.thinking || '';
               botMsg.thinkOpen = true;
             }
@@ -2827,6 +2861,9 @@
           messages,
           showHistory,
           showLibrary,
+          sourcePreview,
+          openSourcePreview,
+          deleteLibraryFile,
           libraryFiles,
           libraryImages,
           libraryQuery,
