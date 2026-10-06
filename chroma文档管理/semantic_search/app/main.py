@@ -64,6 +64,9 @@ from semantic_search.app.service.rag_eval import (
     compare_retrieval_runs,
     evaluate_retrieval_cases,
 )
+from semantic_search.app.routers import basic as basic_router
+from semantic_search.app.routers import content as content_router
+from semantic_search.app.routers import secure as secure_router
 
 STATIC_DIR = Path(__file__).resolve().parent.parent / "static"  # static 目录：放前端页面
 INDEX_HTML = STATIC_DIR / "index.html"  # 前端入口 HTML 的完整路径
@@ -127,7 +130,7 @@ def _require_graph_rag(app: FastAPI):
 @asynccontextmanager  # 把下面函数变成「启动时进入 / 关闭时退出」的生命周期钩子
 async def lifespan(app: FastAPI):  # FastAPI 启动和关闭时都会走到这里
     print("=" * 50)  # 打印分隔线，方便在终端里辨认启动日志
-    print("正在启动 Native RAG 语义搜索引擎...")  # 提示开始初始化
+    print("正在启动 RAG 四合一平台（当前搜索引擎 + 聊天/文案）...")
 
     llm_ready = (  # 判断当前配置下大模型密钥是否齐备
         (LLM_PROVIDER == "deepseek" and bool(DEEPSEEK_API_KEY))  # DeepSeek 模式需要 DEEPSEEK_API_KEY
@@ -155,11 +158,14 @@ async def lifespan(app: FastAPI):  # FastAPI 启动和关闭时都会走到这�
 
 
 app = FastAPI(  # 创建 FastAPI 应用实例
-    title="Native RAG 语义搜索引擎",  # 出现在 /docs 顶部的标题
-    description="LlamaIndex + DeepSeek + Chroma：基础 RAG + Modular RAG（YAML / Step-Back / CRAG / Self-RAG）",  # API 文档说明
-    version="2.1.0",  # 接口版本号
-    lifespan=lifespan,  # 绑定上面的启动/关闭钩子
-)  # 括号结束
+    title="RAG 四合一平台",
+    description="基础聊天 + 安全聊天 + 文案生成 + 知识库 RAG（LlamaIndex / DeepSeek / Chroma / 可选 GraphRAG）",
+    version="3.0.0",
+    lifespan=lifespan,
+)
+app.include_router(basic_router.router)
+app.include_router(secure_router.router)
+app.include_router(content_router.router)
 
 
 @app.get("/")  # 浏览器访问根路径时走这个函数
@@ -180,17 +186,20 @@ async def root():  # 返回前端问答 / 搜索页面
 async def api_info():  # 方便程序或调试查看有哪些入口
     """返回 API 基本信息和使用入口。"""  # OpenAPI 文档说明
     return {  # 返回一个字典，FastAPI 会自动转成 JSON
-        "message": "Native RAG 语义搜索引擎 API",  # 服务简介
-        "ui": "/",  # 前端页面地址
-        "docs": "/docs",  # Swagger 交互文档
-        "health": "/health",  # 健康检查
-        "search": "/search?q=你的查询内容",  # GET 搜索示例
-        "query": "/query?q=根据知识库回答问题",  # GET 问答示例
-        "ask": "POST /ask",  # 可勾选优化 + 可选生成评估
-        "modules": "GET /modules",  # Modular RAG 三层抽象 + YAML
-        "eval_retrieval": "POST /eval/retrieval",  # Hit Rate / MRR
-        "chat": "POST /chat",  # 多轮对话接口
-        "ingest": "POST /ingest",  # 本地文件导入接口
+        "message": "RAG 四合一平台 API",
+        "ui": "/",
+        "docs": "/docs",
+        "health": "/health",
+        "basic_chat": "POST /api/basic/chat",
+        "secure_chat": "GET /api/secure/stream_chat",
+        "content": "POST /api/content/product_copy | social_plan | GET self_consistency",
+        "search": "/search?q=你的查询内容",
+        "query": "/query?q=根据知识库回答问题",
+        "ask": "POST /ask",
+        "modules": "GET /modules",
+        "eval_retrieval": "POST /eval/retrieval",
+        "chat": "POST /chat",
+        "ingest": "POST /ingest",
         "graph_status": "GET /graph/status",
         "graph_build": "POST /graph/build",
         "graph_load": "POST /graph/load",
@@ -577,14 +586,16 @@ async def health_check():  # 健康检查接口
     if engine is None:  # 引擎没起来
         return {  # 返回 error 状态而不是抛异常
             "status": "error",  # 前端侧栏显示红点
-            "message": "搜索引擎未初始化，请在 Windows 用户环境变量中配置 DEEPSEEK_API_KEY",  # 缺 Key 提示
+            "message": "搜索引擎未初始化，请在 Windows 用户环境变量中配置 DEEPSEEK_API_KEY",
             "graph_rag_ready": graph is not None,
-        }  # 字典/集合结束
+            "modules": ["basic", "secure", "content", "rag"],
+        }
 
     stats = engine.get_stats()  # 读取运行时统计
     return {  # 精简字段给前端展示
         "status": "ok",  # 一切正常
-        "service": "native-rag-search-engine",  # 服务标识
+        "service": "rag-quad-platform",
+        "modules": ["basic", "secure", "content", "rag"],
         "model": stats["model_name"],  # Embedding 模型名
         "llm_provider": stats["llm_provider"],  # LLM 提供方
         "llm_model": stats["llm_model"],  # LLM 模型名
@@ -605,7 +616,7 @@ if __name__ == "__main__":  # 只有直接运行本文件时才进入（python -
     import uvicorn  # ASGI 服务器，用来真正监听端口
 
     print("=" * 50)  # 启动横幅分隔线
-    print("Native RAG 语义搜索引擎 - LlamaIndex + DeepSeek + Chroma")  # 打印产品名
+    print("RAG 四合一平台 - 聊天 / 文案 / 知识库 RAG")
     print("=" * 50)  # 横幅下部分隔线
     if DEEPSEEK_API_KEY:  # 启动前快速自检 Key 是否读到
         print("DeepSeek API Key 已从 Windows 环境读取")  # Key 已就绪

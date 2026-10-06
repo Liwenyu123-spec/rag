@@ -1,10 +1,9 @@
 # -*- coding: utf-8 -*-  # 声明源文件用 UTF-8 编码，避免中文注释乱码
-"""项目：chroma文档管理综合案例（FastAPI 工程化）
+"""RAG 四合一平台启动入口（原 chroma文档管理）。
 
-原目录：semantic_search/
 启动：python chroma文档管理/run.py
 页面：http://127.0.0.1:8003/
-"""  # 模块说明：本文件是项目启动入口
+"""
 from __future__ import annotations  # 允许类型注解使用未定义的前向引用写法
 
 import sys  # 修改模块搜索路径，保证能 import semantic_search
@@ -17,4 +16,4 @@ if str(HERE) not in sys.path:  # 若该目录还不在 Python 搜索路径里
 from semantic_search.__main__ import main  # 复用包内统一的 uvicorn 启动函数
 
 if __name__ == "__main__":  # 仅在直接运行本文件时进入（被 import 时不启动服务）
-    main()  # 启动 Native RAG 语义搜索 Web 服务
+    main()  # 启动四合一 Web 服务

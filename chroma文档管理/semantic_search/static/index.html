@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>RAG 知识库问答</title>
+      <title>RAG 四合一平台</title>
   <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
   <style>
     :root {
@@ -37,8 +37,8 @@
       height: 100%;
       min-height: 0;
       display: grid;
-      grid-template-columns: 260px minmax(0, 1fr);
-      grid-template-rows: minmax(0, 1fr);
+      grid-template-columns: 1fr;
+      grid-template-rows: auto minmax(0, 1fr);
       background: rgba(255,255,255,.95);
       border: 1px solid rgba(255,255,255,.8);
       border-radius: 24px;
@@ -46,6 +46,48 @@
       overflow: hidden;
       backdrop-filter: blur(16px);
     }
+    .module-bar {
+      display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+      padding: 10px 16px; border-bottom: 1px solid var(--line); background: #fff;
+    }
+    .module-bar strong { font-size: 14px; margin-right: 6px; }
+    .mod-btn {
+      padding: 7px 12px; border-radius: 999px; cursor: pointer;
+      border: 1px solid var(--line); background: #f7f9fc; color: #4f5c6e; font-size: 12px;
+    }
+    .mod-btn.active { color: #fff; border-color: transparent; background: var(--blue); }
+    .rag-workspace {
+      min-height: 0; height: 100%; overflow: hidden;
+      display: grid; grid-template-columns: 260px minmax(0, 1fr);
+    }
+    .extra-workspace {
+      min-height: 0; overflow: auto; padding: 20px 24px 28px; background: #f8fafc;
+    }
+    .extra-panel { max-width: 820px; }
+    .extra-log {
+      margin-top: 12px; min-height: 220px; padding: 14px; border-radius: 12px;
+      border: 1px solid var(--line); background: #fff; white-space: pre-wrap;
+      font-size: 14px; line-height: 1.65;
+    }
+    .extra-row { display: flex; gap: 10px; margin-top: 12px; }
+    .extra-row input, .extra-card input, .extra-card select, .extra-card textarea {
+      width: 100%; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--line);
+      background: #fff; color: var(--ink);
+    }
+    .extra-card {
+      margin-top: 12px; padding: 14px; border: 1px solid var(--line);
+      border-radius: 14px; background: #fff;
+    }
+    .extra-card h3 { font-size: 15px; }
+    .extra-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 8px; }
+    .extra-send {
+      min-width: 76px; height: 42px; padding: 0 16px; border: 0; border-radius: 11px;
+      color: #fff; background: var(--blue); cursor: pointer; font-weight: 600;
+    }
+    .extra-send:disabled { opacity: .45; cursor: not-allowed; }
+    .extra-ghost { background: #5c697b; }
+    .msg.user { color: var(--blue); }
+    .msg.bot { color: #1f6b4a; }
     .sidebar {
       min-height: 0;
       overflow-x: hidden;
@@ -296,6 +338,7 @@
     @media (max-width: 760px) {
       body { padding: 0; }
       #app { height: 100vh; min-height: 0; grid-template-columns: 1fr; border-radius: 0; }
+      .rag-workspace { grid-template-columns: 1fr; }
       .sidebar { display: none; }
       .header { height: 68px; padding: 0 17px; }
       .header-subtitle { display: none; }
@@ -309,6 +352,85 @@
 </head>
 <body>
   <div id="app">
+    <nav class="module-bar">
+      <strong>四合一</strong>
+      <button class="mod-btn" :class="{active: appModule==='basic'}" @click="appModule='basic'">基础聊天</button>
+      <button class="mod-btn" :class="{active: appModule==='secure'}" @click="appModule='secure'">安全聊天</button>
+      <button class="mod-btn" :class="{active: appModule==='content'}" @click="appModule='content'">文案与电商</button>
+      <button class="mod-btn" :class="{active: appModule==='rag'}" @click="appModule='rag'">知识库 RAG</button>
+    </nav>
+
+    <div class="extra-workspace" v-show="appModule==='basic'">
+      <div class="extra-panel">
+        <h2>基础聊天</h2>
+        <p class="header-subtitle">通用流式多轮，不走知识库</p>
+        <div class="extra-log">
+          <div v-for="(m,i) in basicMsgs" :key="i" class="msg" :class="m.role">{{ m.role==='user'?'我：':'AI：' }}{{ m.text }}</div>
+        </div>
+        <div class="extra-row">
+          <input v-model="basicInput" @keydown.enter="sendBasic" placeholder="随便聊，可连续追问" :disabled="extraBusy" />
+          <button class="extra-send" @click="sendBasic" :disabled="extraBusy || !basicInput.trim()">发送</button>
+          <button class="extra-send extra-ghost" @click="clearBasic">清空</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="extra-workspace" v-show="appModule==='secure'">
+      <div class="extra-panel">
+        <h2>安全校验聊天</h2>
+        <p class="header-subtitle">输入净化 + 零样本 / 少样本 / CoT / ToT</p>
+        <div class="extra-grid">
+          <div>
+            <label class="header-subtitle">提示词策略</label>
+            <select v-model="secureMode" style="margin-top:6px;width:100%;padding:10px 12px;border-radius:10px;border:1px solid var(--line)">
+              <option value="zero_shot">零样本</option>
+              <option value="few_shot">少样本</option>
+              <option value="cot">思维链 CoT</option>
+              <option value="tot">思维树 ToT</option>
+            </select>
+          </div>
+          <div style="display:flex;align-items:end">
+            <button class="extra-send extra-ghost" style="width:100%" @click="resetSecure">重置会话记忆</button>
+          </div>
+        </div>
+        <div class="extra-log">
+          <div v-for="(m,i) in secureMsgs" :key="i" class="msg" :class="m.role">{{ m.role==='user'?'我：':'AI：' }}{{ m.text }}</div>
+        </div>
+        <div class="extra-row">
+          <input v-model="secureInput" @keydown.enter="sendSecure" placeholder="带安全校验的提问…" :disabled="extraBusy" />
+          <button class="extra-send" @click="sendSecure" :disabled="extraBusy || !secureInput.trim()">发送</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="extra-workspace" v-show="appModule==='content'">
+      <div class="extra-panel">
+        <h2>社交媒体文案与电商内容</h2>
+        <p class="header-subtitle">产品描述、ToT 策划、自我一致性口号</p>
+        <div class="extra-card">
+          <h3>电商产品描述</h3>
+          <div class="extra-grid">
+            <input v-model="product.name" placeholder="产品名称" />
+            <input v-model="product.audience" placeholder="目标人群" />
+          </div>
+          <input style="margin-top:8px" v-model="product.features" placeholder="核心卖点" />
+          <button class="extra-send" style="margin-top:10px" @click="genProduct" :disabled="extraBusy">生成文案</button>
+        </div>
+        <div class="extra-card">
+          <h3>社交媒体策划（ToT）</h3>
+          <input style="margin-top:8px" v-model="socialTopic" placeholder="主题，如：夏季减肥" />
+          <button class="extra-send" style="margin-top:10px" @click="genSocial" :disabled="extraBusy">生成策划</button>
+        </div>
+        <div class="extra-card">
+          <h3>自我一致性口号</h3>
+          <input style="margin-top:8px" v-model="sloganTask" placeholder="为户外运动鞋写一句广告口号" />
+          <button class="extra-send" style="margin-top:10px" @click="genSlogan" :disabled="extraBusy">评选口号</button>
+        </div>
+        <div class="extra-log">{{ contentOut || '结果会显示在这里' }}</div>
+      </div>
+    </div>
+
+    <div class="rag-workspace" v-show="appModule==='rag'">
     <aside class="sidebar">
       <div class="brand">
         <div class="brand-mark">⌕</div>
@@ -696,6 +818,7 @@
         <div class="input-hint">答案基于知识库检索，重要信息请再核对原文</div>
       </div>
     </main>
+    </div>
   </div>
 
   <script>
@@ -703,6 +826,19 @@
 
     createApp({
       setup() {
+        const appModule = ref('rag');
+        const extraBusy = ref(false);
+        const basicMsgs = ref([]);
+        const basicInput = ref('');
+        const basicHistory = [{ role: 'system', content: '你是一个有帮助的中文助手。' }];
+        const secureMsgs = ref([]);
+        const secureInput = ref('');
+        const secureMode = ref('zero_shot');
+        const product = ref({ name: '无线降噪耳机', features: '40dB深度降噪, 30小时续航', audience: '通勤上班族' });
+        const socialTopic = ref('夏季减肥');
+        const sloganTask = ref('为户外运动鞋写一句广告口号');
+        const contentOut = ref('');
+
         const mode = ref('ask');
         const inputText = ref('');
         const messages = ref([]);
@@ -1079,6 +1215,108 @@
           }
         };
 
+        async function readSSE(res, onDelta) {
+          const reader = res.body.getReader();
+          const decoder = new TextDecoder();
+          let buffer = '', full = '';
+          while (true) {
+            const { value, done } = await reader.read();
+            if (done) break;
+            buffer += decoder.decode(value, { stream: true });
+            const parts = buffer.split('\n\n');
+            buffer = parts.pop();
+            for (const part of parts) {
+              const line = part.trim();
+              if (!line.startsWith('data:')) continue;
+              const data = line.slice(5).trim();
+              if (data === '[DONE]') continue;
+              try {
+                const obj = JSON.parse(data);
+                if (obj.content) { full += obj.content; onDelta(full); }
+              } catch (_) {}
+            }
+          }
+          return full;
+        }
+
+        async function sendBasic() {
+          const q = basicInput.value.trim();
+          if (!q || extraBusy.value) return;
+          extraBusy.value = true;
+          basicInput.value = '';
+          basicHistory.push({ role: 'user', content: q });
+          basicMsgs.value.push({ role: 'user', text: q });
+          basicMsgs.value.push({ role: 'bot', text: '' });
+          const bot = basicMsgs.value[basicMsgs.value.length - 1];
+          try {
+            const res = await fetch('/api/basic/chat', {
+              method: 'POST', headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ messages: basicHistory }),
+            });
+            const full = await readSSE(res, (t) => { bot.text = t; });
+            basicHistory.push({ role: 'assistant', content: full });
+          } catch (e) {
+            bot.text = '请求失败：' + e.message;
+          } finally { extraBusy.value = false; }
+        }
+        function clearBasic() {
+          basicHistory.length = 1;
+          basicMsgs.value = [];
+        }
+        async function sendSecure() {
+          const q = secureInput.value.trim();
+          if (!q || extraBusy.value) return;
+          extraBusy.value = true;
+          secureInput.value = '';
+          secureMsgs.value.push({ role: 'user', text: q });
+          secureMsgs.value.push({ role: 'bot', text: '' });
+          const bot = secureMsgs.value[secureMsgs.value.length - 1];
+          try {
+            const url = `/api/secure/stream_chat?question=${encodeURIComponent(q)}&mode=${secureMode.value}`;
+            const res = await fetch(url);
+            await readSSE(res, (t) => { bot.text = t; });
+          } catch (e) {
+            bot.text = '请求失败：' + e.message;
+          } finally { extraBusy.value = false; }
+        }
+        async function resetSecure() {
+          await fetch('/api/secure/reset', { method: 'POST' });
+          secureMsgs.value = [];
+        }
+        async function genProduct() {
+          extraBusy.value = true; contentOut.value = '生成中…';
+          try {
+            const r = await fetch('/api/content/product_copy', {
+              method: 'POST', headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(product.value),
+            });
+            const j = await r.json();
+            contentOut.value = j.result || j.error || JSON.stringify(j, null, 2);
+          } catch (e) { contentOut.value = e.message; }
+          finally { extraBusy.value = false; }
+        }
+        async function genSocial() {
+          extraBusy.value = true; contentOut.value = '策划生成中，可能需要几十秒…';
+          try {
+            const r = await fetch('/api/content/social_plan', {
+              method: 'POST', headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ topic: socialTopic.value }),
+            });
+            const j = await r.json();
+            contentOut.value = [j.ideas, j.evaluation, j.plan].filter(Boolean).join('\n\n——\n\n') || j.error || JSON.stringify(j, null, 2);
+          } catch (e) { contentOut.value = e.message; }
+          finally { extraBusy.value = false; }
+        }
+        async function genSlogan() {
+          extraBusy.value = true; contentOut.value = '生成中…';
+          try {
+            const r = await fetch('/api/content/self_consistency?question=' + encodeURIComponent(sloganTask.value) + '&num=2');
+            const j = await r.json();
+            contentOut.value = '候选:\n' + (j.candidates || []).map((c, i) => `${i + 1}. ${c}`).join('\n') + '\n\n最佳: ' + (j.final || j.error || '');
+          } catch (e) { contentOut.value = e.message; }
+          finally { extraBusy.value = false; }
+        }
+
         const sendMessage = async () => {
           const question = inputText.value.trim();
           if (!question || loading.value) return;
@@ -1197,6 +1435,11 @@
         });
 
         return {
+          appModule,
+          extraBusy,
+          basicMsgs, basicInput, sendBasic, clearBasic,
+          secureMsgs, secureInput, secureMode, sendSecure, resetSecure,
+          product, socialTopic, sloganTask, contentOut, genProduct, genSocial, genSlogan,
           mode,
           inputText,
           messages,

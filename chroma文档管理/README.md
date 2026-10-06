@@ -1,4 +1,7 @@
-# chroma文档管理综合案例（FastAPI 工程化）
+# RAG 四合一平台（chroma文档管理）
+
+一个端口、一个页面、四个模块：基础聊天、安全聊天、文案生成、知识库 RAG。  
+原先独立的搜索引擎就是现在的「知识库 RAG」页签。
 
 模块说明见：**[项目说明.md](./项目说明.md)**。
 
@@ -9,18 +12,16 @@ python -m semantic_search
 ```
 
 打开 http://127.0.0.1:8003/  
-代码在 `chroma文档管理/semantic_search/`。
+接口文档：http://127.0.0.1:8003/docs
 
-## 主流程（POST /ask）
+顶部切换模块。知识库页签仍走 `POST /ask`，可选 GraphRAG。
 
-浏览器默认「RAG 知识库问答」：可选预设或勾选检索前/中/后、Self-RAG、CRAG、**知识图谱双通道**、生成评估。  
-前端调用 `POST /ask`，返回答案、来源、各模块过程信息（含 `graph`）。
-
-图谱相关：
-
-- 侧栏可 `neo4j console` 之后「用示例构建图谱」
-- 模式「图谱问答」走 `POST /graph/query`
-- 预设 `graph_hybrid` = 向量 RAG + Neo4j 子图
+| 模块 | 接口 |
+|------|------|
+| 基础聊天 | `POST /api/basic/chat`（SSE） |
+| 安全聊天 | `GET /api/secure/stream_chat` |
+| 文案与电商 | `/api/content/product_copy`、`social_plan`、`self_consistency` |
+| 知识库 RAG | `/ask` `/search` `/query` `/chat` `/graph/*` |
 
 ```http
 POST /ask
