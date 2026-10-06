@@ -6,7 +6,9 @@ Embedding：DeepSeek 无接口，默认 Chinese-CLIP / HuggingFace，也可千�
 
 from __future__ import annotations
 
+import socket
 from typing import List, Literal, Tuple
+from urllib.parse import urlparse
 
 from llama_index.core import Document
 from llama_index.core.indices.property_graph import (
@@ -52,6 +54,18 @@ SAMPLE_GRAPH_TEXTS = [
 ]
 
 
+def neo4j_bolt_reachable(uri: str | None = None, timeout: float = 0.2) -> bool:
+    """只探测 Bolt 端口是否在听，不走 Neo4j 驱动重试。"""
+    parsed = urlparse(uri or NEO4J_URI)
+    host = parsed.hostname or "127.0.0.1"
+    port = parsed.port or 7687
+    try:
+        with socket.create_connection((host, port), timeout=timeout):
+            return True
+    except OSError:
+        return False
+
+
 class GraphRagService:
     """封装 Neo4j 连接、图谱构建与自然语言问答。"""
 
@@ -63,6 +77,10 @@ class GraphRagService:
         if not NEO4J_PASSWORD:
             raise RuntimeError(
                 "未配置 NEO4J_PASSWORD。请在 .env 写入 Neo4j 密码。"
+            )
+        if not neo4j_bolt_reachable():
+            raise RuntimeError(
+                f"Neo4j 未在 {NEO4J_URI} 监听。向量搜索可继续用；需要图谱时再执行 neo4j console。"
             )
         self.llm = self._init_llm()
         self.embed_model = self._init_embed()

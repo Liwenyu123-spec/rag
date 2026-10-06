@@ -88,9 +88,16 @@ def _try_init_graph_rag(app: FastAPI):
         return None
     if not (DEEPSEEK_API_KEY or DASHSCOPE_API_KEY):
         return None
-    try:
-        from semantic_search.app.service.graph_rag import GraphRagService
+    from semantic_search.app.service.graph_rag import GraphRagService, neo4j_bolt_reachable
 
+    if not neo4j_bolt_reachable():
+        app.state.graph_rag = None
+        app.state.graph_rag_error = "Neo4j 未运行（Bolt 端口拒绝连接）。向量搜索不受影响。"
+        if not getattr(app.state, "_logged_graph_skip", False):
+            print("提示: Neo4j 未启动，已跳过 GraphRAG。搜索引擎可正常使用。")
+            app.state._logged_graph_skip = True
+        return None
+    try:
         app.state.graph_rag = GraphRagService()
         app.state.graph_rag_error = None
         print("GraphRAG 已就绪（Neo4j + DeepSeek/千问可配）")
@@ -230,9 +237,10 @@ async def ask(request: AskRequest):  # 请求体含 question / k / 各优化开�
             detail="preset 只能是 basic / hybrid_search / advanced / full_optimization / custom / step_back / graph_hybrid",
         )
     try:  # 业务层可能抛 ValueError / RuntimeError
+        want_graph = bool(request.use_graph) or request.preset == "graph_hybrid"
         payload = RagAskService(
             _require_engine(app),
-            graph_rag=_try_init_graph_rag(app),
+            graph_rag=_try_init_graph_rag(app) if want_graph else getattr(app.state, "graph_rag", None),
         ).ask(  # 编排：检索前→检索→生成→可选评估
             request.question,  # 用户问题
             k=request.k,  # Top-K
@@ -565,7 +573,7 @@ async def graph_retrieve(request: GraphRetrieveRequest):
 async def health_check():  # 健康检查接口
     """健康检查，用于确认服务与配置是否可用。"""  # 接口说明
     engine = getattr(app.state, "search_engine", None)  # 不强制抛错，方便前端显示状态
-    graph = _try_init_graph_rag(app)
+    graph = getattr(app.state, "graph_rag", None)  # 健康检查不重连 Neo4j，避免未启动时驱动重试刷屏
     if engine is None:  # 引擎没起来
         return {  # 返回 error 状态而不是抛异常
             "status": "error",  # 前端侧栏显示红点
