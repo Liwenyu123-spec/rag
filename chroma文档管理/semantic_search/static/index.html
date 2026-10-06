@@ -1541,7 +1541,7 @@
             subtitle: '左侧勾选优化方向 → 检索 → 大模型生成答案',
             emptyTitle: '向知识库提问',
             emptyDesc: '可勾选检索前/中/后、CRAG、Self-RAG，再生成答案。',
-            placeholder: '例如：嗯那个帮我看看请假咋扣钱啊???',
+            placeholder: '可以直接点「图片」上传，或提问例如：这张图里有什么？',
           },
           chat: {
             title: '多轮知识库问答',
@@ -2009,6 +2009,88 @@
           mmQueryFile.value = file;
           if (mmQueryPreview.value) URL.revokeObjectURL(mmQueryPreview.value);
           mmQueryPreview.value = file ? URL.createObjectURL(file) : '';
+        };
+
+        const addComposerImageFiles = (fileList) => {
+          const files = Array.from(fileList || []).filter((f) => f && String(f.type || '').startsWith('image/'));
+          if (!files.length) return;
+          files.forEach((file) => {
+            composerImages.value.push({
+              file,
+              name: file.name,
+              url: URL.createObjectURL(file),
+            });
+          });
+          const last = composerImages.value[composerImages.value.length - 1];
+          mmQueryFile.value = last.file;
+          mmQueryPreview.value = last.url;
+          ingestComposerImages(files);
+        };
+
+        const openComposerImages = () => {
+          if (composerImageInput.value) composerImageInput.value.click();
+        };
+
+        const onPickComposerImages = (e) => {
+          addComposerImageFiles(e.target.files);
+          e.target.value = '';
+        };
+
+        const onDropImages = (e) => {
+          addComposerImageFiles(e.dataTransfer && e.dataTransfer.files);
+        };
+
+        const onPasteImages = (e) => {
+          const files = e.clipboardData && e.clipboardData.files;
+          if (!files || !files.length) return;
+          const images = Array.from(files).filter((f) => String(f.type || '').startsWith('image/'));
+          if (!images.length) return;
+          e.preventDefault();
+          addComposerImageFiles(images);
+        };
+
+        const removeComposerImage = (index) => {
+          const item = composerImages.value[index];
+          if (item && item.url) URL.revokeObjectURL(item.url);
+          composerImages.value.splice(index, 1);
+          const last = composerImages.value[composerImages.value.length - 1];
+          mmQueryFile.value = last ? last.file : null;
+          mmQueryPreview.value = last ? last.url : '';
+        };
+
+        const clearComposerImages = () => {
+          composerImages.value.forEach((item) => {
+            if (item.url) URL.revokeObjectURL(item.url);
+          });
+          composerImages.value = [];
+          mmQueryFile.value = null;
+          mmQueryPreview.value = '';
+        };
+
+        const ingestComposerImages = async (files) => {
+          if (!files || !files.length) return;
+          composerUploadHint.value = `正在写入图库（${files.length} 张）…`;
+          const form = new FormData();
+          files.forEach((f) => form.append('files', f));
+          form.append('splitter', uploadSplitter.value);
+          form.append('target', 'chroma');
+          form.append('extractor', graphExtractor.value);
+          try {
+            const res = await ragFetch('/upload', { method: 'POST', body: form });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok) {
+              composerUploadHint.value = data.detail || '图片写入图库失败';
+              return;
+            }
+            const n = (data.multimodal && data.multimodal.indexed) || (data.saved_images || []).length || files.length;
+            const skip = (data.skipped_duplicates || (data.multimodal && data.multimodal.skipped_duplicates) || []).join(', ');
+            composerUploadHint.value = skip
+              ? `已处理 ${n} 张，重复跳过 ${skip}`
+              : `已写入图库 ${n} 张，可直接提问这张图`;
+            refreshHealth();
+          } catch (err) {
+            composerUploadHint.value = '图片上传失败：' + (err.message || String(err));
+          }
         };
 
         const useSuggestion = (text) => {
@@ -2522,6 +2604,14 @@
           canSend,
           mmTask,
           onPickQueryImage,
+          composerImages,
+          composerUploadHint,
+          composerImageInput,
+          openComposerImages,
+          onPickComposerImages,
+          onDropImages,
+          onPasteImages,
+          removeComposerImage,
           messages,
           showHistory,
           showLibrary,
