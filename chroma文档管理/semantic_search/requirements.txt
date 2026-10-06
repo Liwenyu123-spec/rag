@@ -12,6 +12,8 @@ llama-index-llms-dashscope
 llama-index-embeddings-huggingface
 llama-index-llms-deepseek
 llama-index-vector-stores-chroma
+llama-index-vector-stores-qdrant
+llama-index-multi-modal-llms-dashscope
 llama-index-readers-file
 llama-index-retrievers-bm25
 llama-index-postprocessor-dashscope-rerank
