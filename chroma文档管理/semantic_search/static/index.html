@@ -2559,14 +2559,14 @@
                 ? `找到 ${data.total} 条相关结果：`
                 : '没有找到相关文档。';
               botMsg.sources = list;
-            } else if (mode.value === 'mmrag' && mmTask.value !== 'qa') {
+            } else if (mode.value === 'mmrag' && mmTask.value !== 'qa' && !data.answer) {
               const list = data.sources || data.images || [];
               botMsg.content = list.length
                 ? `找到 ${data.total || list.length} 条图文结果（${data.task || mmTask.value}）`
                 : '图库为空或没有相似图片。请先在左侧上传 jpg/png。';
               botMsg.sources = list;
             } else {
-              botMsg.content = data.answer || '没有生成回答。';
+              botMsg.content = data.answer || data.message || data.detail || '没有生成回答。';
               botMsg.sources = data.sources || data.images || [];
               botMsg.preRetrieval = data.pre_retrieval || null;
               botMsg.crag = data.crag || null;

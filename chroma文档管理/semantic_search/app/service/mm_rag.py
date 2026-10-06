@@ -317,6 +317,48 @@ class MultimodalRagService:
             raise RuntimeError("未配置 DEEPSEEK_API_KEY")
         return OpenAI(api_key=DEEPSEEK_API_KEY, base_url=DEEPSEEK_BASE_URL)
 
+    def _vl_message_text(self, resp) -> str:
+        """DeepSeek 看图有时把正文放在 reasoning_content，content 为空。"""
+        choice = (resp.choices or [None])[0]
+        if choice is None:
+            return ""
+        msg = choice.message
+        raw = getattr(msg, "content", None)
+        if isinstance(raw, list):
+            bits = []
+            for part in raw:
+                if isinstance(part, str):
+                    bits.append(part)
+                elif isinstance(part, dict):
+                    bits.append(str(part.get("text") or ""))
+                else:
+                    bits.append(str(getattr(part, "text", "") or ""))
+            text = "\n".join(b for b in bits if b).strip()
+        else:
+            text = (raw or "").strip()
+        if text:
+            return text
+        return (getattr(msg, "reasoning_content", None) or "").strip()
+
+    def _vl_complete(self, content_parts: list[dict]) -> str:
+        client = self._vl_openai()
+        kwargs = {
+            "model": VL_MODEL,
+            "messages": [{"role": "user", "content": content_parts}],
+            "max_tokens": 2048,
+        }
+        try:
+            resp = client.chat.completions.create(
+                **kwargs,
+                extra_body={"thinking": {"type": "disabled"}},
+            )
+        except Exception:
+            resp = client.chat.completions.create(**kwargs)
+        text = self._vl_message_text(resp)
+        if not text:
+            raise RuntimeError("DeepSeek 看图返回了空内容")
+        return text
+
     def _vl_answer(self, question: str, image_paths: list[Path], text_bits: list[str]) -> str:
         parts: list[dict] = []
         ctx = "\n\n".join(text_bits[:6]) if text_bits else "（没有文本资料）"
@@ -329,15 +371,9 @@ class MultimodalRagService:
         for path in image_paths[:4]:
             parts.append({
                 "type": "image_url",
-                "image_url": {"url": self._image_data_url(path), "detail": "high"},
+                "image_url": {"url": self._image_data_url(path)},
             })
-        client = self._vl_openai()
-        resp = client.chat.completions.create(
-            model=VL_MODEL,
-            messages=[{"role": "user", "content": parts}],
-            max_tokens=1024,
-        )
-        return (resp.choices[0].message.content or "").strip()
+        return self._vl_complete(parts)
 
     def _vl_describe(self, question: str, image_path: Path) -> str:
         prompt = (
@@ -347,22 +383,13 @@ class MultimodalRagService:
             "看不清的不要编造。不要提知识库里其他图片。\n\n"
             f"用户问题：{question}"
         )
-        client = self._vl_openai()
-        resp = client.chat.completions.create(
-            model=VL_MODEL,
-            messages=[{
-                "role": "user",
-                "content": [
-                    {"type": "text", "text": prompt},
-                    {
-                        "type": "image_url",
-                        "image_url": {"url": self._image_data_url(image_path), "detail": "high"},
-                    },
-                ],
-            }],
-            max_tokens=1024,
-        )
-        return (resp.choices[0].message.content or "").strip()
+        return self._vl_complete([
+            {"type": "text", "text": prompt},
+            {
+                "type": "image_url",
+                "image_url": {"url": self._image_data_url(image_path)},
+            },
+        ])
 
     def describe(
         self,
