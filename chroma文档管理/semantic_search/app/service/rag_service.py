@@ -17,6 +17,7 @@ from semantic_search.app.config import (
     SELF_RAG_ENABLED,
     SIMILARITY_TOP_K,
 )
+from semantic_search.app.knowledge_scope import drop_course_note_nodes
 from semantic_search.app.service.ask_modules import default_ask_modules
 from semantic_search.app.service.crag import apply_crag
 from semantic_search.app.modular_config import yaml_as_ask_defaults
@@ -82,12 +83,12 @@ class RagAskService:
         fusion_mode: str | None = None,
     ) -> list[NodeWithScore]:
         retriever = self.engine._build_retriever(
-            k,
+            max(k * 4, 20),
             hybrid_enabled=use_hybrid,
             num_queries=num_queries,
             fusion_mode=fusion_mode,
         )
-        nodes = list(retriever.retrieve(query))
+        nodes = drop_course_note_nodes(list(retriever.retrieve(query)))
         return apply_postprocessors(
             nodes,
             query,

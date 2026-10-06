@@ -10,6 +10,7 @@ from pathlib import Path  # 检查 data 目录、创建持久化路径
 from typing import List  # 类型注解
 
 from semantic_search.app.file_loaders import SUPPORTED_EXTS, make_directory_reader
+from semantic_search.app.knowledge_scope import drop_course_note_nodes, is_course_note_path
 from llama_index.core import Document, Settings  # 文档、全局设置
 from llama_index.core.memory import ChatMemoryBuffer  # 多轮对话记忆缓冲区
 from llama_index.core.node_parser import SemanticSplitterNodeParser, SentenceSplitter, TokenTextSplitter  # 三种分块器
@@ -133,6 +134,9 @@ class SemanticSearchEngine:  # Native RAG 引擎主体
             f"compress={COMPRESS_ENABLED}, reorder={REORDER_ENABLED}, "  # 压缩与重排版
             f"crag={CRAG_ENABLED}, self_rag={SELF_RAG_ENABLED}"  # CRAG 与 Self-RAG
         )  # 优化开关日志结束
+        removed = self.purge_course_notes()
+        if removed:
+            print(f"已从向量库移除讲义/复习笔记 {removed} 条，避免示范问句干扰考勤检索")
 
     def bind(self, backend: str | None) -> "SemanticSearchEngine":
         name = normalize_vector_backend(backend)
@@ -288,6 +292,21 @@ class SemanticSearchEngine:  # Native RAG 引擎主体
             reorder_enabled=reorder_enabled,  # 重排版开关
         )  # build_node_postprocessors 结束
 
+    def purge_course_notes(self) -> int:
+        """删掉已入库的飞书讲义分块，汇报演示只检索制度/业务文档。"""
+        removed = 0
+        for name, slot in self.slots.items():
+            ids = slot.collect_course_note_ids()
+            if not ids:
+                continue
+            n = slot.delete_ids(ids)
+            removed += n
+            print(f"{name} 移除讲义分块 {n} 条")
+        if removed:
+            self._bm25_nodes_cache = {key: None for key in self._bm25_nodes_cache}
+            self._chat_engines.clear()
+        return removed
+
     def _require_llm(self) -> None:  # 问答前检查 LLM 是否可用
         if Settings.llm is None:  # 全局 LLM 未初始化
             raise RuntimeError("大模型未初始化，请检查 LLM_PROVIDER 与对应 API Key")  # 交给路由转 503
@@ -370,6 +389,9 @@ class SemanticSearchEngine:  # Native RAG 引擎主体
         for path in candidates:
             if not path.is_file():
                 continue
+            if is_course_note_path(path):
+                print(f"跳过讲义/笔记（不进入检索库）: {path.name}")
+                continue
             if self._is_duplicate_file(path, seen):
                 skipped_duplicates.append(path.name)
                 print(f"跳过重复文档: {path.name}")
@@ -436,8 +458,8 @@ class SemanticSearchEngine:  # Native RAG 引擎主体
         if k == 0:  # 极端兜底
             return []  # 无结果
 
-        retriever = self._build_retriever(k)  # 检索中：向量 / 混合
-        results = list(retriever.retrieve(query))  # 粗排候选
+        retriever = self._build_retriever(candidate_top_k(k))  # 检索中：向量 / 混合
+        results = drop_course_note_nodes(list(retriever.retrieve(query)))  # 粗排候选
         results = apply_postprocessors(results, query, k)  # 检索后：重排/压缩/排版
         formatted_results = []  # 转成 API 友好结构
         for i, item in enumerate(results):  # 逐条格式化

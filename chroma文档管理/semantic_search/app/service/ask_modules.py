@@ -7,6 +7,7 @@ from llama_index.core.response_synthesizers import get_response_synthesizer
 from llama_index.core.schema import NodeWithScore
 
 from semantic_search.app.config import RAG_SYSTEM_PROMPT, SELF_RAG_VERBOSE
+from semantic_search.app.knowledge_scope import drop_course_note_nodes
 from semantic_search.app.service.crag import apply_crag, filter_relevant_nodes
 from semantic_search.app.service.pipeline import (
     AskContext,
@@ -99,12 +100,14 @@ class VectorRetrieveModule(AskModule):
         flags = ctx.flags
         queries = ctx.pre_retrieval.get("retrieval_queries") or [ctx.question]
         retriever = ctx.engine._build_retriever(
-            ctx.k,
+            max(ctx.k * 4, 20),
             hybrid_enabled=bool(flags.get("use_hybrid")),
             num_queries=max(1, int(flags.get("num_queries") or 1)),
             fusion_mode=flags.get("fusion_mode"),
         )
-        ranked: list[list[NodeWithScore]] = [list(retriever.retrieve(q)) for q in queries]
+        ranked: list[list[NodeWithScore]] = [
+            drop_course_note_nodes(list(retriever.retrieve(q))) for q in queries
+        ]
         fuse_k = max(ctx.k, min(ctx.corpus_size, ctx.k * 2))
         ctx.nodes = (
             merge_nodes_rrf(ranked, k=fuse_k)
@@ -142,6 +145,7 @@ class CragModule(AskModule):
         return bool(ctx.flags.get("use_crag") or ctx.flags.get("use_self_rag"))
 
     def run(self, ctx: AskContext) -> None:
+        flags = ctx.flags
         retrieve_fn = getattr(ctx, "retrieve_retry", None)
         if flags.get("use_crag"):
             ctx.nodes, ctx.crag = apply_crag(

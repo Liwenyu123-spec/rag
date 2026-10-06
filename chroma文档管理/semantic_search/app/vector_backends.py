@@ -54,6 +54,27 @@ class VectorSlot:
     def upsert(self, ids, embeddings, documents, metadatas) -> None:
         raise NotImplementedError
 
+    def delete_ids(self, ids: list[str]) -> int:
+        return 0
+
+    def collect_course_note_ids(self) -> list[str]:
+        from semantic_search.app.knowledge_scope import is_course_note
+
+        try:
+            data = self.get(include=["documents", "metadatas"])
+        except Exception:
+            return []
+        ids = data.get("ids") or []
+        documents = data.get("documents") or []
+        metadatas = data.get("metadatas") or []
+        hit: list[str] = []
+        for i, doc_id in enumerate(ids):
+            text = documents[i] if i < len(documents) else ""
+            meta = metadatas[i] if i < len(metadatas) and isinstance(metadatas[i], dict) else {}
+            if is_course_note(metadata=meta, text=text or ""):
+                hit.append(str(doc_id))
+        return hit
+
     def rebuild_empty_index(self) -> VectorStoreIndex:
         raise NotImplementedError
 
@@ -97,6 +118,14 @@ class ChromaSlot(VectorSlot):
             documents=documents,
             metadatas=metadatas,
         )
+
+    def delete_ids(self, ids: list[str]) -> int:
+        if not ids:
+            return 0
+        for i in range(0, len(ids), 200):
+            batch = [str(x) for x in ids[i : i + 200]]
+            self.collection.delete(ids=batch)
+        return len(ids)
 
     def rebuild_empty_index(self) -> VectorStoreIndex:
         from llama_index.vector_stores.chroma import ChromaVectorStore
@@ -234,6 +263,15 @@ class QdrantSlot(VectorSlot):
             )
         self.client.upsert(collection_name=self.collection_name, points=points)
 
+    def delete_ids(self, ids: list[str]) -> int:
+        if not ids or not self._exists():
+            return 0
+        try:
+            self.client.delete(collection_name=self.collection_name, points_selector=list(ids))
+            return len(ids)
+        except Exception:
+            return 0
+
     def rebuild_empty_index(self) -> VectorStoreIndex:
         from llama_index.vector_stores.qdrant import QdrantVectorStore
 
@@ -305,5 +343,9 @@ def nodes_from_slot(slot: VectorSlot) -> list[TextNode]:
         if not text:
             continue
         meta = metadatas[i] if i < len(metadatas) and isinstance(metadatas[i], dict) else {}
+        from semantic_search.app.knowledge_scope import is_course_note
+
+        if is_course_note(metadata=meta, text=text):
+            continue
         nodes.append(TextNode(text=text, id_=str(doc_id), metadata=meta or {}))
     return nodes
