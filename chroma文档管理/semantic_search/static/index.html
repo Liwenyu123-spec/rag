@@ -472,7 +472,17 @@
       box-shadow: none;
       background: #fff;
     }
-    .module-bar {
+    .ds-shell {
+      height: 100%;
+      min-height: 0;
+      display: grid;
+      grid-template-columns: 1fr;
+      grid-template-rows: auto minmax(0, 1fr);
+    }
+    .ds-shell:not(.not-rag) {
+      grid-template-rows: minmax(0, 1fr);
+    }
+    .ds-shell:not(.not-rag) > .module-bar {
       display: none;
     }
     .rag-workspace {
@@ -627,14 +637,15 @@
       border: 0; background: transparent; color: #8b8b8b; font-size: 11px; cursor: pointer;
     }
     .ds-mods button.active { color: #4d6bfe; font-weight: 600; }
-    #app.not-rag .module-bar { display: flex; }
+    .ds-shell.not-rag .module-bar { display: flex; }
     @media (max-width: 760px) {
       .rag-workspace { grid-template-columns: 1fr; }
     }
   </style>
 </head>
 <body>
-  <div id="app" v-cloak :class="{ 'not-rag': appModule !== 'rag' }">
+  <div id="app" v-cloak>
+  <div class="ds-shell" :class="{ 'not-rag': appModule !== 'rag' }">
     <nav class="module-bar">
       <strong>四合一</strong>
       <button class="mod-btn" :class="{active: appModule==='basic'}" @click="appModule='basic'">基础聊天</button>
@@ -1264,6 +1275,7 @@
       </div>
     </main>
     </div>
+  </div>
   </div>
 
   <script>
