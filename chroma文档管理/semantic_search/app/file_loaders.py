@@ -86,31 +86,28 @@ def build_file_extractor() -> dict[str, Any]:
 
 
 def _import_reader(name: str, **kwargs):
-    from llama_index.readers.file import (
-        DocxReader,
-        FlatReader,
-        HTMLTagReader,
-        IPYNBReader,
-        MarkdownReader,
-        PandasCSVReader,
-        PDFReader,
-        PptxReader,
-        PyMuPDFReader,
-        UnstructuredReader,
-    )
-
-    cls = {
-        "FlatReader": FlatReader,
-        "PyMuPDFReader": PyMuPDFReader,
-        "UnstructuredReader": UnstructuredReader,
-        "PDFReader": PDFReader,
-        "DocxReader": DocxReader,
-        "PptxReader": PptxReader,
-        "PandasCSVReader": PandasCSVReader,
-        "MarkdownReader": MarkdownReader,
-        "HTMLTagReader": HTMLTagReader,
-        "IPYNBReader": IPYNBReader,
-    }[name]
+    if name == "FlatReader":
+        from llama_index.readers.file import FlatReader as cls
+    elif name == "PyMuPDFReader":
+        from llama_index.readers.file import PyMuPDFReader as cls
+    elif name == "UnstructuredReader":
+        from llama_index.readers.file import UnstructuredReader as cls
+    elif name == "PDFReader":
+        from llama_index.readers.file import PDFReader as cls
+    elif name == "DocxReader":
+        from llama_index.readers.file import DocxReader as cls
+    elif name == "PptxReader":
+        from llama_index.readers.file import PptxReader as cls
+    elif name == "PandasCSVReader":
+        from llama_index.readers.file import PandasCSVReader as cls
+    elif name == "MarkdownReader":
+        from llama_index.readers.file import MarkdownReader as cls
+    elif name == "HTMLTagReader":
+        from llama_index.readers.file import HTMLTagReader as cls
+    elif name == "IPYNBReader":
+        from llama_index.readers.file import IPYNBReader as cls
+    else:
+        raise ValueError(name)
     return cls(**kwargs)
 
 
