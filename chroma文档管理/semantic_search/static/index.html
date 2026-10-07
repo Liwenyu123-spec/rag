@@ -909,15 +909,30 @@
     /* —— 聊天壁纸：挂在 body 全局层，避免被 #app 白底盖住 —— */
     #global-wallpaper {
       position: fixed; inset: 0; z-index: 0; pointer-events: none;
-      overflow: hidden; display: none;
+      overflow: hidden; display: none; background: #0b1220;
     }
     body.app-has-wallpaper #global-wallpaper { display: block; }
     #global-wallpaper .wp-media {
       position: absolute; inset: 0; width: 100%; height: 100%;
-      object-fit: cover; display: block;
+      display: block;
+    }
+    /* 底层：放大模糊铺满，填补黑边 */
+    #global-wallpaper .wp-fill {
+      object-fit: cover;
+      object-position: center;
+      transform: scale(1.18);
+      filter: blur(36px) saturate(1.15);
+      opacity: .95;
+    }
+    /* 前景：完整显示、不裁切，按窗口自动等比适配 */
+    #global-wallpaper .wp-fit {
+      object-fit: contain;
+      object-position: center;
+      z-index: 1;
     }
     #global-wallpaper .wp-dim {
-      position: absolute; inset: 0; background: #fff; pointer-events: none;
+      position: absolute; inset: 0; z-index: 2;
+      background: #fff; pointer-events: none;
     }
     body.app-has-wallpaper {
       background: #0b1220 !important;
@@ -2016,7 +2031,7 @@
       <p>
         {{ wallpaperSrc
           ? ('当前：' + (wallpaperKind === 'video' ? '视频' : '图片') + '壁纸 · 可调透明度')
-          : '从本地上传图片或视频作为背景（不占用左侧功能区）' }}
+          : '从本地上传图片或视频；会自动等比适配窗口，不裁切主体' }}
       </p>
       <input
         ref="wallpaperFileInput"
@@ -2195,6 +2210,26 @@
           }
           return root;
         }
+        function makeWallpaperMedia(kind, src, roleClass) {
+          if (kind === 'video') {
+            const v = document.createElement('video');
+            v.className = 'wp-media ' + roleClass;
+            v.src = src;
+            v.autoplay = true;
+            v.muted = true;
+            v.loop = true;
+            v.playsInline = true;
+            v.setAttribute('playsinline', '');
+            v.play().catch(() => {});
+            return v;
+          }
+          const img = document.createElement('img');
+          img.className = 'wp-media ' + roleClass;
+          img.src = src;
+          img.alt = '';
+          img.decoding = 'async';
+          return img;
+        }
         function syncGlobalWallpaper() {
           const root = ensureGlobalWallpaperEl();
           const src = wallpaperSrc.value;
@@ -2206,23 +2241,11 @@
           const dimEl = root.querySelector('.wp-dim');
           if (dimEl) dimEl.style.opacity = String(dim);
           if (!src) return;
-          if (kind === 'video') {
-            const v = document.createElement('video');
-            v.className = 'wp-media';
-            v.src = src;
-            v.autoplay = true;
-            v.muted = true;
-            v.loop = true;
-            v.playsInline = true;
-            root.insertBefore(v, dimEl || null);
-            v.play().catch(() => {});
-          } else {
-            const img = document.createElement('img');
-            img.className = 'wp-media';
-            img.src = src;
-            img.alt = '';
-            root.insertBefore(img, dimEl || null);
-          }
+          // 模糊铺满 + 前景 contain，保证整图可见且窗口自适应
+          const fill = makeWallpaperMedia(kind, src, 'wp-fill');
+          const fit = makeWallpaperMedia(kind, src, 'wp-fit');
+          root.insertBefore(fill, dimEl || null);
+          root.insertBefore(fit, dimEl || null);
         }
 
         function wpOpenDb() {
