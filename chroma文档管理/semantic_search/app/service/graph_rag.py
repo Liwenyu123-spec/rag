@@ -450,10 +450,10 @@ class GraphRagService:
     def retrieve(self, question: str, *, k: int = 5) -> dict:
         """只检索子图/节点，不生成答案。"""
         index = self._ensure_index()
+        # 索引已绑定 embed_model，这里再传会触发 "multiple values for keyword argument"
         retriever = index.as_retriever(
             include_text=True,
             similarity_top_k=k,
-            embed_model=self.embed_model,
         )
         nodes = retriever.retrieve(question)
         items = []

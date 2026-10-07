@@ -602,16 +602,14 @@ def evaluate_graph_cases(graph_service: Any, cases: list[dict] | None = None) ->
                 retrieved = {"results": [], "paths": [], "mentions": []}
 
         paths = retrieved.get("paths") or []
-        mentions = retrieved.get("mentions") or []
+        # 只用图里真实召回/路径判命中，不用问题里抽到的 mentions（会假阳性）
         blob_parts = [
             *(r.get("text") or "" for r in (retrieved.get("results") or [])),
             *(p.get("path") or "" for p in paths),
             *(f"{p.get('subject','')}|{p.get('relation','')}|{p.get('object','')}" for p in paths),
-            " ".join(mentions),
         ]
-        # 把整张图的样例边也算进兜底（避免只测到空检索）
         try:
-            for t in (graph_service.graph_counts().get("sample_triples") or [])[:20]:
+            for t in (graph_service.graph_counts().get("sample_triples") or [])[:30]:
                 blob_parts.append(
                     f"{t.get('subject','')}|{t.get('relation','')}|{t.get('object','')}"
                 )
@@ -619,7 +617,7 @@ def evaluate_graph_cases(graph_service: Any, cases: list[dict] | None = None) ->
             pass
         blob = "\n".join(blob_parts).lower()
         kw_hit = any(k.lower() in blob for k in keywords) if keywords else False
-        # 实体：命中任意一个关键实体即可（不再要求全部同时出现）
+        # 实体：在图数据里命中任意相关实体即可
         ent_hit = any(e.lower() in blob for e in entities) if entities else False
         hit = bool(kw_hit or ent_hit)
         preview = ""
