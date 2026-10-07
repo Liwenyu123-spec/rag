@@ -49,6 +49,17 @@ def empty_self_rag() -> dict:
     }
 
 
+def empty_web() -> dict:
+    return {
+        "enabled": False,
+        "ok": False,
+        "message": "skipped",
+        "query": "",
+        "total": 0,
+        "results": [],
+    }
+
+
 def empty_eval() -> dict:
     return {
         "enabled": False,
@@ -85,6 +96,8 @@ def node_plain_text(node: Any) -> str:
 def source_file_name(node: Any) -> str:
     n = getattr(node, "node", node)
     meta = getattr(n, "metadata", None) or {}
+    if str(meta.get("source_kind") or "") == "web":
+        return str(meta.get("file_name") or meta.get("url") or "网页")[:120]
     raw = meta.get("file_name") or meta.get("filename") or meta.get("file_path") or ""
     name = Path(str(raw)).name if raw else ""
     return name or "未知文档"
@@ -115,7 +128,11 @@ def format_source(rank: int, item: NodeWithScore) -> dict:
     name = source_file_name(item)
     page = source_page(item)
     snippet = " ".join(node_plain_text(item).split())
-    location = f"第 {page} 页" if page else ""
+    n = getattr(item, "node", item)
+    meta = getattr(n, "metadata", None) or {}
+    kind = str(meta.get("source_kind") or "")
+    web_url = str(meta.get("url") or "").strip() if kind == "web" else None
+    location = "网页" if kind == "web" else (f"第 {page} 页" if page else "")
     return {
         "rank": rank,
         "index": rank - 1,
@@ -125,6 +142,8 @@ def format_source(rank: int, item: NodeWithScore) -> dict:
         "page": page,
         "location": location,
         "node_id": source_node_id(item),
+        "source_kind": kind,
+        "web_url": web_url,
         "similarity": round(score, 4),
         "distance": (
             round(max(1.0 - score, 0.0), 4)
@@ -194,6 +213,7 @@ class AskContext:
     self_rag: dict = field(default_factory=dict)
     graph: dict = field(default_factory=dict)
     generation_eval: dict = field(default_factory=dict)
+    web: dict = field(default_factory=dict)
     thinking: str = ""
     ran_modules: list[str] = field(default_factory=list)
 
@@ -207,6 +227,7 @@ class AskContext:
             "crag": self.crag,
             "self_rag": self.self_rag,
             "graph": self.graph,
+            "web": self.web,
             "generation_eval": self.generation_eval,
             "optimizations": {
                 **self.flags,

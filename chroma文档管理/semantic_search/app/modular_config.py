@@ -108,6 +108,7 @@ def yaml_as_ask_defaults() -> dict[str, Any]:
         "use_crag": bool(gen.get("crag", CRAG_ENABLED)),
         "use_self_rag": bool(gen.get("self_rag", SELF_RAG_ENABLED)),
         "use_eval": bool(gen.get("eval", False)),
+        "use_web": False,
     }
 
 

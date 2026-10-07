@@ -54,6 +54,8 @@ def get_windows_env(name: str) -> str:  # 按优先级查找环境变量
 
 DEEPSEEK_API_KEY = get_windows_env("DEEPSEEK_API_KEY")  # DeepSeek Key
 DEEPSEEK_BASE_URL = os.getenv("DEEPSEEK_BASE_URL", "https://api.deepseek.com").strip()  # DeepSeek API 根地址
+TAVILY_API_KEY = get_windows_env("TAVILY_API_KEY")  # Tavily 联网搜索（可选）
+TAVILY_MAX_RESULTS = int(os.getenv("TAVILY_MAX_RESULTS", "5"))  # 每次联网条数，省额度
 
 LLM_PROVIDER = "deepseek"
 LLM_MODEL = os.getenv("LLM_MODEL", "deepseek-v4-flash").strip()

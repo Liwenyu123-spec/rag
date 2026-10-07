@@ -54,7 +54,7 @@ def filter_relevant_nodes(  # 批量过滤
         ok = _is_relevant(query, content, llm=llm)  # 判相关
         details.append({"rank": i, "relevant": ok, "preview": content[:80]})  # 记明细
         if verbose:  # 需要终端日志
-            print(f"  [CRAG] 文档 {i}：{'相关' if ok else '无关'}")  # 打印状态
+        print(f"  [CRAG] 文档 {i}：{'相关' if ok else '无关'}", flush=True)  # 打印状态
         if ok:  # 相关则留下
             kept.append(item)  # 加入保留列表
     return kept, details  # 返回二元组
@@ -109,6 +109,8 @@ def apply_crag(  # CRAG 主入口
     if kept:  # 还有相关篇
         info["after_count"] = len(kept)  # 更新数量
         info["message"] = "filtered"  # 仅过滤成功
+        if verb:
+            print(f"[CRAG] 保留 {len(kept)} 篇，接着生成回答…", flush=True)
         return kept, info  # 直接用过滤结果
 
     # 全部无关 → 改写 + 重检索（只再来一轮，对齐 demo01）  # 纠错分支

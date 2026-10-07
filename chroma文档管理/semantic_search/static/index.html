@@ -427,6 +427,50 @@
       background: linear-gradient(135deg, var(--blue), var(--blue-dark));
       box-shadow: 0 8px 18px rgba(36,107,253,.18);
     }
+    .md-body { white-space: normal; }
+    .md-body > *:first-child { margin-top: 0; }
+    .md-body > *:last-child { margin-bottom: 0; }
+    .md-body p { margin: 0 0 .7em; }
+    .md-body h1, .md-body h2, .md-body h3, .md-body h4 {
+      margin: 1em 0 .45em; line-height: 1.35; font-weight: 650; color: inherit;
+    }
+    .md-body h1 { font-size: 1.28em; }
+    .md-body h2 { font-size: 1.14em; }
+    .md-body h3, .md-body h4 { font-size: 1.05em; }
+    .md-body ul, .md-body ol { margin: 0 0 .7em; padding-left: 1.4em; }
+    .md-body li { margin: .2em 0; }
+    .md-body li > p { margin: 0; }
+    .md-body blockquote {
+      margin: 0 0 .7em; padding: 6px 12px; border-left: 3px solid #c9d4e8;
+      color: #4b5568; background: #f8fafc; border-radius: 0 8px 8px 0;
+    }
+    .md-body hr { border: 0; border-top: 1px solid #e6eaf0; margin: 12px 0; }
+    .md-body a { color: #246bfd; text-decoration: none; }
+    .md-body a:hover { text-decoration: underline; }
+    .md-body code {
+      font-family: Consolas, "Cascadia Mono", monospace;
+      font-size: .88em; padding: .12em .38em; border-radius: 5px;
+      background: #eef2f7; color: #1f2937;
+    }
+    .md-body pre {
+      margin: 0 0 .8em; padding: 12px 14px; overflow: auto;
+      border-radius: 10px; background: #0f172a; color: #e2e8f0;
+    }
+    .md-body pre code { background: transparent; color: inherit; padding: 0; font-size: 12px; }
+    .md-body table { border-collapse: collapse; margin: 0 0 .8em; width: 100%; font-size: 13px; }
+    .md-body th, .md-body td {
+      border: 1px solid #e2e8f0; padding: 6px 10px; text-align: left; vertical-align: top;
+    }
+    .md-body th { background: #f1f5f9; font-weight: 650; }
+    .message.user .md-body a { color: #fff; text-decoration: underline; }
+    .message.user .md-body code { background: rgba(255,255,255,.2); color: #fff; }
+    .message.user .md-body pre { background: rgba(15,23,42,.35); }
+    .message.user .md-body blockquote { background: rgba(255,255,255,.12); border-left-color: #fff; color: #eef4ff; }
+    .message.user .md-body th, .message.user .md-body td { border-color: rgba(255,255,255,.35); }
+    .message.user .md-body th { background: rgba(255,255,255,.15); }
+    .cmp-ans.md-body { font-size: 13px; line-height: 1.6; color: #334155; }
+    .src-chunk .md-body { font-size: 13px; line-height: 1.65; }
+    .source-text.md-body { font-size: 13px; color: #64748b; }
     .sources {
       margin-top: 10px; display: grid; gap: 8px;
     }
@@ -811,7 +855,7 @@
           </div>
           <div class="message" :class="m.role" v-for="(m,i) in basicMsgs" :key="i">
             <div class="avatar">{{ m.role === 'user' ? '你' : '🐋' }}</div>
-            <div class="bubble-wrap"><div class="bubble">{{ m.text || (m.role==='bot' ? '正在思考…' : '') }}</div></div>
+            <div class="bubble-wrap"><div class="bubble md-body" v-html="renderMd(m.text || (m.role==='bot' ? '正在思考…' : ''))"></div></div>
           </div>
         </div>
         <div class="input-area">
@@ -848,7 +892,7 @@
           </div>
           <div class="message" :class="m.role" v-for="(m,i) in secureMsgs" :key="i">
             <div class="avatar">{{ m.role === 'user' ? '你' : '🐋' }}</div>
-            <div class="bubble-wrap"><div class="bubble">{{ m.text || (m.role==='bot' ? '正在思考…' : '') }}</div></div>
+            <div class="bubble-wrap"><div class="bubble md-body" v-html="renderMd(m.text || (m.role==='bot' ? '正在思考…' : ''))"></div></div>
           </div>
         </div>
         <div class="input-area">
@@ -889,7 +933,7 @@
           </div>
           <div class="message" :class="m.role" v-for="(m,i) in contentMsgs" :key="i">
             <div class="avatar">{{ m.role === 'user' ? '你' : '🐋' }}</div>
-            <div class="bubble-wrap"><div class="bubble" style="white-space:pre-wrap">{{ m.text }}</div></div>
+            <div class="bubble-wrap"><div class="bubble md-body" v-html="renderMd(m.text)"></div></div>
           </div>
         </div>
         <div class="input-area">
@@ -1149,6 +1193,10 @@
             <input type="checkbox" v-model="optUseThink" />
             <span>深度思考<small>先推理再作答，展示思考过程</small></span>
           </label>
+          <label class="opt-item" :class="{ on: optUseWeb }">
+            <input type="checkbox" v-model="optUseWeb" />
+            <span>联网搜索<small>Tavily 网页摘要，默认关，勾选才扣额度</small></span>
+          </label>
           <label class="opt-item" :class="{ on: optCompareBaseline }">
             <input type="checkbox" v-model="optCompareBaseline" />
             <span>对照基础版<small>同一问题再跑一遍未优化检索，左右对比答案和资料</small></span>
@@ -1327,9 +1375,12 @@
                 <button class="think-toggle" type="button" @click="msg.thinkOpen = !msg.thinkOpen">
                   {{ msg.content ? (msg.thinkOpen === false ? '▶ 已完成深度思考' : '▼ 深度思考') : '深度思考中…' }}
                 </button>
-                <div class="think-body" v-show="msg.thinkOpen !== false && msg.thinking">{{ msg.thinking }}</div>
+                <div class="think-body md-body" v-show="msg.thinkOpen !== false && msg.thinking" v-html="renderMd(msg.thinking)"></div>
               </div>
-              {{ msg.content || (msg.role === 'bot' ? (optUseThink ? '正在深度思考…' : '正在检索与生成...') : '') }}
+              <div
+                class="md-body"
+                v-html="renderMd(msg.content || (msg.role === 'bot' ? (optUseThink ? '正在深度思考…' : '正在检索与生成...') : ''))"
+              ></div>
               <img v-if="msg.imageUrl" class="query-thumb" :src="msg.imageUrl" alt="query" />
             </div>
             <div class="pre-box" v-if="msg.optimizations">
@@ -1351,6 +1402,7 @@
                 <span class="opt-tag" :class="{ off: !msg.optimizations.use_self_rag }">Self-RAG{{ msg.optimizations.use_self_rag ? '' : '关' }}</span>
                 <span class="opt-tag" :class="{ off: !msg.optimizations.use_graph }">图谱{{ msg.optimizations.use_graph ? '' : '关' }}</span>
                 <span class="opt-tag" :class="{ off: !msg.optimizations.use_think }">深度思考{{ msg.optimizations.use_think ? '' : '关' }}</span>
+                <span class="opt-tag" :class="{ off: !msg.optimizations.use_web }">联网{{ msg.optimizations.use_web ? '' : '关' }}</span>
                 <span class="opt-tag">范围·{{ scopeLabel(msg.optimizations.doc_scope) }}</span>
               </div>
               <div class="pre-line" v-if="msg.optimizations.scope_note">{{ msg.optimizations.scope_note }}</div>
@@ -1364,7 +1416,7 @@
               <div class="cmp-grid">
                 <div class="cmp-col">
                   <h4>关掉优化时</h4>
-                  <p class="cmp-ans">{{ msg.comparison.baseline_answer || '（没有回答）' }}</p>
+                  <div class="cmp-ans md-body" v-html="renderMd(msg.comparison.baseline_answer || '（没有回答）')"></div>
                   <div class="cmp-src" v-for="(s, si) in (msg.comparison.baseline_sources || [])" :key="'bs'+si">
                     <strong>{{ s.file_name }}</strong>
                     <span v-if="s.location"> · {{ s.location }}</span>
@@ -1374,7 +1426,7 @@
                 </div>
                 <div class="cmp-col">
                   <h4>现在勾选后</h4>
-                  <p class="cmp-ans">{{ msg.comparison.current_answer || msg.content || '（没有回答）' }}</p>
+                  <div class="cmp-ans md-body" v-html="renderMd(msg.comparison.current_answer || msg.content || '（没有回答）')"></div>
                   <div class="cmp-src" v-for="(s, si) in (msg.comparison.current_sources || [])" :key="'cs'+si">
                     <strong>{{ s.file_name }}</strong>
                     <span v-if="s.location"> · {{ s.location }}</span>
@@ -1398,6 +1450,11 @@
               <strong>{{ msg.crag.enabled ? 'Corrective RAG' : 'Self-RAG · ISREL' }}</strong>
               <div class="pre-line">过滤：{{ msg.crag.before_count }} → {{ msg.crag.after_count }} 篇 · {{ msg.crag.message }}</div>
               <div class="pre-line" v-if="msg.crag.retried && msg.crag.rewritten_query">纠错改写：{{ msg.crag.rewritten_query }}</div>
+            </div>
+            <div class="pre-box" v-if="msg.web && msg.web.enabled">
+              <strong>联网搜索 · Tavily</strong>
+              <div class="pre-line">{{ msg.web.message }}</div>
+              <div class="pre-line" v-if="msg.web.query">检索词：{{ msg.web.query }}</div>
             </div>
             <div class="pre-box" v-if="msg.graph && msg.graph.enabled">
               <strong>知识图谱通道</strong>
@@ -1451,17 +1508,27 @@
                   </strong>
                   <span>相关 {{ formatScore(src.similarity) }}</span>
                 </div>
-                <div class="source-text">{{ src.snippet || '点开查看原文片段' }}</div>
-                <img v-if="src.url" class="hit-img" :src="src.url" :alt="src.file_name || 'hit'" />
+                <div class="source-text md-body" v-html="renderMd(src.snippet || '点开查看原文片段')"></div>
+                <img v-if="src.url && src.source_kind !== 'web'" class="hit-img" :src="src.url" :alt="src.file_name || 'hit'" />
                 <div class="source-actions">
-                  <button type="button" class="source-toggle" @click.stop="openSourcePreview(src)">查看入库原文</button>
                   <a
-                    v-if="src.file_name"
+                    v-if="src.source_kind === 'web' && src.web_url"
                     class="source-toggle"
-                    :href="'/library/file?file_name=' + encodeURIComponent(src.file_name)"
+                    :href="src.web_url"
                     target="_blank"
+                    rel="noopener noreferrer"
                     @click.stop
-                  >打开原文件</a>
+                  >打开网页</a>
+                  <template v-else>
+                    <button type="button" class="source-toggle" @click.stop="openSourcePreview(src)">查看入库原文</button>
+                    <a
+                      v-if="src.file_name"
+                      class="source-toggle"
+                      :href="'/library/file?file_name=' + encodeURIComponent(src.file_name)"
+                      target="_blank"
+                      @click.stop
+                    >打开原文件</a>
+                  </template>
                 </div>
               </div>
             </div>
@@ -1548,7 +1615,7 @@
         <div class="hist-empty" v-else-if="!(sourcePreview.chunks || []).length">这一页没有片段</div>
         <div class="src-chunk" v-for="(c, i) in (sourcePreview.chunks || [])" :key="'sc'+i">
           <strong v-if="c.location">{{ c.location }}</strong>
-          <div style="white-space:pre-wrap">{{ c.text }}</div>
+          <div class="md-body" v-html="renderMd(c.text)"></div>
         </div>
       </aside>
 
@@ -1572,6 +1639,7 @@
           ></textarea>
             <div class="composer-bar">
             <button type="button" class="chip" :class="{ on: optUseThink }" @click="optUseThink = !optUseThink">深度思考</button>
+            <button type="button" class="chip" :class="{ on: optUseWeb }" @click="optUseWeb = !optUseWeb">联网</button>
             <button type="button" class="chip" :class="{ on: !!composerImages.length }" @click="openComposerImages">图片</button>
             <button
               type="button"
@@ -1600,7 +1668,7 @@
             >{{ loading ? '…' : '↑' }}</button>
           </div>
         </div>
-        <div class="input-hint">答案基于知识库检索，重要信息请再核对原文</div>
+        <div class="input-hint">答案默认只来自知识库；点「联网」才会调用 Tavily（大约 1 次搜索扣 1 点额度）</div>
       </div>
     </main>
     </div>
@@ -1654,6 +1722,7 @@
         const optUseGraph = ref(false);
         const optUseEval = ref(false);
         const optUseThink = ref(false);
+        const optUseWeb = ref(false);
         const optCompareBaseline = ref(true);
         const evalReference = ref('');
         const evalLoading = ref(false);
@@ -1942,6 +2011,7 @@
               { name: 'CRAG', on: optUseCrag.value, detail: optUseCrag.value ? '过滤 / 改写重检' : '' },
               { name: 'Self-RAG', on: optUseSelfRag.value, detail: optUseSelfRag.value ? 'Retrieve / ISSUP / ISUSE' : '' },
               { name: '深度思考', on: optUseThink.value, detail: optUseThink.value ? '先推理再作答' : '' },
+              { name: '联网搜索', on: optUseWeb.value, detail: optUseWeb.value ? 'Tavily 网页摘要' : '' },
               { name: '生成评估', on: optUseEval.value, detail: '' },
             ],
           },
@@ -1950,6 +2020,7 @@
         const pipelineChips = computed(() => {
           const chips = ['直线流水线'];
           if (optUseGraph.value) chips.push('分支：向量∥图谱');
+          if (optUseWeb.value) chips.push('分支：知识库∥联网');
           if (optUseSelfRag.value) chips.push('条件：是否检索');
           if (optUseCrag.value || optUseSelfRag.value) chips.push('循环：重检/验据');
           return chips;
@@ -2865,6 +2936,7 @@
                   use_graph: optUseGraph.value,
                   use_eval: optUseEval.value,
                   use_think: optUseThink.value,
+                  use_web: optUseWeb.value,
                   compare_baseline: optCompareBaseline.value,
                   reference: optUseEval.value && evalReference.value.trim()
                     ? evalReference.value.trim()
@@ -2914,6 +2986,7 @@
               botMsg.generationEval = data.generation_eval || null;
               botMsg.optimizations = data.optimizations || null;
               botMsg.graph = data.graph || null;
+              botMsg.web = data.web || null;
               botMsg.comparison = (data.comparison && data.comparison.enabled) ? data.comparison : null;
               botMsg.thinking = data.thinking || '';
               botMsg.thinkOpen = true;
@@ -2929,6 +3002,139 @@
           }
         };
 
+        const escapeHtml = (s) => String(s ?? '')
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;')
+          .replace(/"/g, '&quot;');
+
+        const safeHref = (href) => {
+          const u = String(href || '').trim();
+          if (/^(https?:\/\/|\/|#)/i.test(u) && !/^\s*javascript:/i.test(u)) return u;
+          return '';
+        };
+
+        const renderInline = (raw) => {
+          let s = escapeHtml(raw);
+          s = s.replace(/`([^`]+)`/g, '<code>$1</code>');
+          s = s.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+          s = s.replace(/__([^_]+)__/g, '<strong>$1</strong>');
+          s = s.replace(/(^|[^*])\*([^*\n]+)\*/g, '$1<em>$2</em>');
+          s = s.replace(/~~([^~]+)~~/g, '<del>$1</del>');
+          s = s.replace(/!\[([^\]]*)\]\(([^)\s]+)\)/g, (_, alt, href) => {
+            const h = safeHref(href);
+            return h ? `<img alt="${alt}" src="${h}" />` : alt;
+          });
+          s = s.replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, (_, label, href) => {
+            const h = safeHref(href);
+            return h ? `<a href="${h}" target="_blank" rel="noopener noreferrer">${label}</a>` : label;
+          });
+          return s;
+        };
+
+        const splitRow = (line) => {
+          let t = line.trim();
+          if (t.startsWith('|')) t = t.slice(1);
+          if (t.endsWith('|')) t = t.slice(0, -1);
+          return t.split('|').map((c) => c.trim());
+        };
+
+        const isSepRow = (line) => /^\s*\|?\s*:?-{3,}[\s|:-]*\|?\s*$/.test(line) && line.includes('-');
+
+        const renderMd = (raw) => {
+          if (raw == null || raw === '') return '';
+          const src = String(raw).replace(/\r\n/g, '\n');
+          const lines = src.split('\n');
+          const html = [];
+          let i = 0;
+          while (i < lines.length) {
+            const line = lines[i];
+            if (!line.trim()) { i += 1; continue; }
+
+            if (line.trim().startsWith('```')) {
+              const lang = escapeHtml(line.trim().slice(3).trim());
+              const buf = [];
+              i += 1;
+              while (i < lines.length && !lines[i].trim().startsWith('```')) {
+                buf.push(lines[i]);
+                i += 1;
+              }
+              if (i < lines.length) i += 1;
+              html.push(`<pre><code${lang ? ` class="language-${lang}"` : ''}>${escapeHtml(buf.join('\n'))}</code></pre>`);
+              continue;
+            }
+
+            const hm = line.match(/^(#{1,6})\s+(.+)$/);
+            if (hm) {
+              const n = hm[1].length;
+              html.push(`<h${n}>${renderInline(hm[2])}</h${n}>`);
+              i += 1;
+              continue;
+            }
+
+            if (/^\s*([-*_]){3,}\s*$/.test(line)) {
+              html.push('<hr />');
+              i += 1;
+              continue;
+            }
+
+            if (line.includes('|') && i + 1 < lines.length && isSepRow(lines[i + 1])) {
+              const heads = splitRow(line);
+              i += 2;
+              const rows = [];
+              while (i < lines.length && lines[i].includes('|') && lines[i].trim()) {
+                rows.push(splitRow(lines[i]));
+                i += 1;
+              }
+              const thead = `<tr>${heads.map((h) => `<th>${renderInline(h)}</th>`).join('')}</tr>`;
+              const tbody = rows.map((r) => `<tr>${r.map((c) => `<td>${renderInline(c)}</td>`).join('')}</tr>`).join('');
+              html.push(`<table><thead>${thead}</thead><tbody>${tbody}</tbody></table>`);
+              continue;
+            }
+
+            if (/^\s*>\s?/.test(line)) {
+              const buf = [];
+              while (i < lines.length && /^\s*>\s?/.test(lines[i])) {
+                buf.push(lines[i].replace(/^\s*>\s?/, ''));
+                i += 1;
+              }
+              html.push(`<blockquote>${renderMd(buf.join('\n'))}</blockquote>`);
+              continue;
+            }
+
+            const ul = /^\s*[-*+]\s+/.test(line);
+            const ol = /^\s*\d+[.)]\s+/.test(line);
+            if (ul || ol) {
+              const items = [];
+              const re = ul ? /^\s*[-*+]\s+(.*)$/ : /^\s*\d+[.)]\s+(.*)$/;
+              while (i < lines.length && re.test(lines[i])) {
+                items.push(`<li>${renderInline(lines[i].replace(re, '$1'))}</li>`);
+                i += 1;
+              }
+              html.push(ul ? `<ul>${items.join('')}</ul>` : `<ol>${items.join('')}</ol>`);
+              continue;
+            }
+
+            const para = [line];
+            i += 1;
+            while (
+              i < lines.length &&
+              lines[i].trim() &&
+              !lines[i].trim().startsWith('```') &&
+              !/^(#{1,6})\s+/.test(lines[i]) &&
+              !/^\s*[-*+]\s+/.test(lines[i]) &&
+              !/^\s*\d+[.)]\s+/.test(lines[i]) &&
+              !/^\s*>\s?/.test(lines[i]) &&
+              !(lines[i].includes('|') && i + 1 < lines.length && isSepRow(lines[i + 1]))
+            ) {
+              para.push(lines[i]);
+              i += 1;
+            }
+            html.push(`<p>${para.map(renderInline).join('<br />')}</p>`);
+          }
+          return html.join('');
+        };
+
         onMounted(() => {
           refreshHealth();
           refreshHistory();
@@ -2938,6 +3144,7 @@
         return {
           appModule,
           extraBusy,
+          renderMd,
           basicMsgs, basicInput, sendBasic, clearBasic,
           secureMsgs, secureInput, secureMode, secureModeLabel, sendSecure, resetSecure,
           product, socialTopic, sloganTask, contentOut, contentMsgs, contentTask, contentDraft,
@@ -3011,6 +3218,7 @@
           optUseGraph,
           optUseEval,
           optUseThink,
+          optUseWeb,
           optCompareBaseline,
           evalReference,
           evalLoading,

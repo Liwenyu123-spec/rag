@@ -33,6 +33,7 @@ from semantic_search.app.service.pipeline import (
     empty_graph,
     empty_pre,
     empty_self_rag,
+    empty_web,
     merge_nodes_rrf,
 )
 from semantic_search.app.service.pre_retrieval import prepare_retrieval_queries
@@ -199,6 +200,7 @@ class RagAskService:
         use_eval: Optional[bool],
         doc_scope: Optional[str] = None,
         use_think: Optional[bool] = None,
+        use_web: Optional[bool] = None,
     ) -> dict:
         resolved = apply_preset(
             preset,
@@ -215,6 +217,7 @@ class RagAskService:
                 "use_self_rag": use_self_rag,
                 "use_graph": use_graph,
                 "use_eval": use_eval,
+                "use_web": use_web,
             },
         )
         for key, value in yaml_as_ask_defaults().items():
@@ -262,6 +265,7 @@ class RagAskService:
             "doc_scope": effective_scope,
             "scope_note": scope_note,
             "use_think": bool(use_think) if use_think is not None else bool(resolved.get("use_think") or False),
+            "use_web": bool(use_web) if use_web is not None else bool(resolved.get("use_web") or False),
         }
 
     def ask(
@@ -286,6 +290,7 @@ class RagAskService:
         doc_scope: Optional[str] = None,
         compare_baseline: bool | None = True,
         use_think: Optional[bool] = None,
+        use_web: Optional[bool] = None,
     ) -> dict:
         """解析开关后跑默认 AskPipeline。"""
         self.engine._require_llm()
@@ -311,9 +316,10 @@ class RagAskService:
             use_eval=use_eval,
             doc_scope=doc_scope,
             use_think=use_think,
+            use_web=use_web,
         )
         total = self.engine.collection.count()
-        if total > 0:
+        if total > 0 and not flags.get("use_web"):
             k = max(1, min(k, total))
         else:
             k = max(1, k)
@@ -331,6 +337,7 @@ class RagAskService:
             crag=empty_crag(),
             self_rag=empty_self_rag(),
             graph=empty_graph(),
+            web=empty_web(),
         )
         ctx.self_rag["enabled"] = bool(flags.get("use_self_rag"))
         ctx.retrieve_retry = lambda q: self._retrieve_pipeline(  # type: ignore[attr-defined]
@@ -359,7 +366,7 @@ class RagAskService:
             return True
         if flags.get("use_rerank") or flags.get("use_compress") or flags.get("use_reorder"):
             return True
-        if flags.get("use_crag") or flags.get("use_self_rag") or flags.get("use_graph"):
+        if flags.get("use_crag") or flags.get("use_self_rag") or flags.get("use_graph") or flags.get("use_web"):
             return True
         fusion = str(flags.get("fusion_mode") or "")
         if flags.get("use_hybrid") and fusion not in {"", "simple"}:
@@ -395,6 +402,7 @@ class RagAskService:
             "doc_scope": flags.get("doc_scope"),
             "preset": "basic",
         }
+        print("[对照] 正在再跑一遍未优化检索，所以会多等一会儿…", flush=True)
         baseline = self.ask(
             question,
             k,
@@ -415,6 +423,7 @@ class RagAskService:
             doc_scope=flags.get("doc_scope"),
             compare_baseline=False,
             use_think=False,
+            use_web=False,
         )
         return _diff_ask_runs(baseline, current, flags)
 
@@ -445,6 +454,8 @@ def _src_card(src: dict, side: str, extra_current: set[str], extra_base: set[str
         "location": src.get("location") or "",
         "page": src.get("page"),
         "tag": tag,
+        "source_kind": src.get("source_kind") or "",
+        "web_url": src.get("web_url"),
     }
 
 

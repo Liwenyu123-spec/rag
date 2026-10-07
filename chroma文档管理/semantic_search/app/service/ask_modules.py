@@ -28,7 +28,9 @@ from semantic_search.app.service.self_rag import (
 
 ASK_QA_PROMPT = PromptTemplate(
     f"{RAG_SYSTEM_PROMPT}。"
-    "只依据给定上下文回答。请把上下文中与问题相关的要点尽量归纳完整；"
+    "只依据给定上下文回答。上下文里可能同时有「知识库文档」和「网页搜索」片段；"
+    "知识库优先，网页只作补充，引用网页时写出标题或网址。"
+    "请把上下文中与问题相关的要点尽量归纳完整；"
     "仅当上下文完全没有相关信息时才说不知道，不要因为只命中部分片段就断言知识库没有。\n\n"
     "上下文：\n"
     "---------------------\n"
@@ -70,6 +72,8 @@ class EmptyCorpusModule(AskModule):
     module_type = "Retrieval"
 
     def should_run(self, ctx: AskContext) -> bool:
+        if ctx.flags.get("use_web"):
+            return False
         return (not ctx.skip_retrieve) and ctx.corpus_size == 0 and not ctx.flags.get("use_graph")
 
     def run(self, ctx: AskContext) -> None:
@@ -213,6 +217,35 @@ class GraphRetrieveModule(AskModule):
             ctx.nodes = list(graph_nodes) + list(ctx.nodes)
 
 
+class WebSearchModule(AskModule):
+    name = "web_search"
+    module_type = "Retrieval"
+
+    def should_run(self, ctx: AskContext) -> bool:
+        return bool(ctx.flags.get("use_web")) and not ctx.skip_retrieve
+
+    def run(self, ctx: AskContext) -> None:
+        from semantic_search.app.service.web_search import search_web
+
+        prep = ctx.pre_retrieval or {}
+        queries = prep.get("retrieval_queries") or []
+        query = str((queries[0] if queries else "") or ctx.question).strip()
+        print(f"[联网] 正在请求 Tavily：{query[:80]}", flush=True)
+        info = search_web(query, max_results=min(ctx.k, 5))
+        print(f"[联网] {info.get('message') or '结束'}", flush=True)
+        ctx.web = {
+            "enabled": True,
+            "ok": bool(info.get("ok")),
+            "message": info.get("message") or "",
+            "query": info.get("query") or query,
+            "total": int(info.get("total") or 0),
+            "results": info.get("results") or [],
+        }
+        web_nodes = list(info.get("nodes") or [])
+        if web_nodes:
+            ctx.nodes = list(ctx.nodes) + web_nodes
+
+
 class GenerateModule(AskModule):
     name = "generate"
     module_type = "Generation"
@@ -223,26 +256,31 @@ class GenerateModule(AskModule):
     def run(self, ctx: AskContext) -> None:
         if not ctx.nodes:
             flags = ctx.flags
-            ctx.answer = (
-                "知识库中没有足够相关信息回答该问题（Corrective RAG / ISREL 过滤后为空）。"
-                if (flags.get("use_crag") or flags.get("use_self_rag"))
-                else "知识库中没有检索到相关信息，请换个问法、先导入文档，或先构建知识图谱。"
-            )
+            if flags.get("use_web"):
+                ctx.answer = "知识库和联网搜索都没有足够相关的信息。可换个问法，或确认 Tavily 额度/网络。"
+            elif flags.get("use_crag") or flags.get("use_self_rag"):
+                ctx.answer = "知识库中没有足够相关信息回答该问题（Corrective RAG / ISREL 过滤后为空）。"
+            else:
+                ctx.answer = "知识库中没有检索到相关信息，请换个问法、先导入文档，或勾选「联网」。"
             ctx.sources = []
             return
+        n = len(ctx.nodes)
         if ctx.flags.get("use_think"):
+            print(f"[生成] 深度思考中（{n} 段上下文）…", flush=True)
             from semantic_search.app.service.deep_think import run_deep_think
 
             answer, thinking = run_deep_think(ctx.question, ctx.nodes, ctx.llm)
             ctx.answer = answer
             ctx.thinking = thinking
         else:
+            print(f"[生成] 正在调用 DeepSeek（{n} 段上下文）…", flush=True)
             synthesizer = get_response_synthesizer(
                 response_mode="compact",
                 text_qa_template=ASK_QA_PROMPT,
                 llm=ctx.llm,
             )
             ctx.answer = str(synthesizer.synthesize(query=ctx.question, nodes=ctx.nodes)).strip()
+        print("[生成] 回答已完成", flush=True)
         ctx.sources = [format_source(i + 1, item) for i, item in enumerate(ctx.nodes)]
 
 
@@ -298,6 +336,7 @@ def default_ask_modules() -> list[AskModule]:
         PostRetrieveModule(),
         CragModule(),
         GraphRetrieveModule(),
+        WebSearchModule(),
         GenerateModule(),
         SelfRagPostModule(),
         EvalModule(),

@@ -18,6 +18,7 @@ from fastapi.staticfiles import StaticFiles
 from semantic_search.app.config import (  # 从配置模块导入密钥、模型、主机端口等常量
     DATA_DIR,  # 知识库文件落盘目录
     DEEPSEEK_API_KEY,  # DeepSeek API Key（优先读 Windows 环境变量）
+    TAVILY_API_KEY,
     EMBEDDING_MODEL,  # 向量化模型名，如 BAAI/bge-small-zh-v1.5
     EMBEDDING_PROVIDER,  # 向量化提供方：huggingface 或 chinese_clip
     GRAPH_RAG_ENABLED,  # GraphRAG 总开关
@@ -328,6 +329,7 @@ async def ask(request: AskRequest, backend: str = Depends(vector_backend_dep)): 
             doc_scope=request.doc_scope,
             compare_baseline=request.compare_baseline,
             use_think=request.use_think,
+            use_web=request.use_web,
         )  # ask 调用结束
     except ValueError as exc:  # 参数/策略非法
         raise HTTPException(status_code=400, detail=str(exc)) from exc  # 转成 400
@@ -348,6 +350,7 @@ async def ask(request: AskRequest, backend: str = Depends(vector_backend_dep)): 
         optimizations=OptimizeFlags(**opts) if opts else None,  # 有开关回显才包装
         comparison=payload.get("comparison"),
         thinking=payload.get("thinking") or "",
+        web=payload.get("web"),
     )  # AskResponse 结束
 
 
@@ -971,6 +974,7 @@ async def health_check():  # 健康检查接口
         "vl_ready": bool(mm_status_data.get("vl_ready")),
         "vl_provider": mm_status_data.get("vl_provider"),
         "vl_model": mm_status_data.get("vl_model"),
+        "tavily_configured": bool(TAVILY_API_KEY),
         "type_counts": stats.get("type_counts") or {},
         "class_counts": stats.get("class_counts") or {},
     }  # 字典/集合结束
@@ -1048,6 +1052,10 @@ if __name__ == "__main__":  # 只有直接运行本文件时才进入（python -
         print("DeepSeek API Key 已从 Windows 环境读取")  # Key 已就绪
     else:  # 没读到 Key
         print("警告: 未找到 DEEPSEEK_API_KEY（进程 / .env / Windows 用户变量）")  # 没有 Key 也能启动，但问答不可用
+    if TAVILY_API_KEY:
+        print("Tavily 联网搜索 Key 已配置（前端勾选「联网」才调用）")
+    else:
+        print("提示: 未配置 TAVILY_API_KEY，联网搜索不可用")
     print(f"Embedding: {EMBEDDING_PROVIDER} / {EMBEDDING_MODEL}")  # 打印当前向量化配置
     print(f"LLM: {LLM_PROVIDER} / {LLM_MODEL}")  # 打印当前大模型配置
     print(f"前端页面: http://{HOST}:{PORT}/")  # 浏览器打开这个地址看 UI
