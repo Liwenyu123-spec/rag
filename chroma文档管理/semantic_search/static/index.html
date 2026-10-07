@@ -909,38 +909,53 @@
     /* —— 聊天壁纸（右下角独立入口，不占左侧栏） —— */
     #app { position: relative; isolation: isolate; }
     .wp-layer {
-      position: fixed; inset: 0; z-index: 0; pointer-events: none;
-      background-position: center; background-size: cover; background-repeat: no-repeat;
-      overflow: hidden;
+      position: absolute; inset: 0; z-index: 0; pointer-events: none;
+      overflow: hidden; border-radius: inherit;
     }
-    .wp-video {
-      position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover;
+    .wp-media {
+      position: absolute; inset: 0; width: 100%; height: 100%;
+      object-fit: cover; display: block;
     }
     .wp-dim {
-      position: absolute; inset: 0; background: #fff;
+      position: absolute; inset: 0; background: #ffffff;
+      pointer-events: none;
     }
     .ds-shell { position: relative; z-index: 1; }
     #app.has-wallpaper {
       background: transparent !important;
+      backdrop-filter: none !important;
+      -webkit-backdrop-filter: none !important;
+    }
+    #app.has-wallpaper > .ds-shell {
+      grid-row: 1 / -1;
+      min-height: 0;
+      height: 100%;
     }
     #app.has-wallpaper .module-bar,
     #app.has-wallpaper .header,
     #app.has-wallpaper .input-area,
     #app.has-wallpaper .extra-workspace {
-      background: rgba(255,255,255,.78) !important;
-      backdrop-filter: blur(10px);
+      background: rgba(255,255,255,.72) !important;
+      backdrop-filter: blur(8px);
     }
     #app.has-wallpaper .rag-workspace { background: transparent !important; }
     #app.has-wallpaper .sidebar {
-      background: rgba(249,249,249,.82) !important;
-      backdrop-filter: blur(10px);
+      background: linear-gradient(180deg, rgba(36,107,253,.10), transparent 45%), rgba(16,24,39,.72) !important;
+      backdrop-filter: blur(8px);
     }
     #app.has-wallpaper .messages,
-    #app.has-wallpaper .chat-shell {
+    #app.has-wallpaper .chat-shell,
+    #app.has-wallpaper .empty-tip {
       background: transparent !important;
     }
+    #app.has-wallpaper .input-area {
+      background: linear-gradient(180deg, transparent, rgba(255,255,255,.78) 28%) !important;
+    }
     #app.has-wallpaper .composer {
-      background: rgba(251,252,254,.88) !important;
+      background: rgba(255,255,255,.86) !important;
+    }
+    #app.has-wallpaper .suggestion {
+      background: rgba(247,247,247,.82) !important;
     }
     .wp-fab-root {
       position: fixed; right: 18px; bottom: 110px; z-index: 60;
@@ -995,15 +1010,16 @@
 </head>
 <body>
   <div id="app" v-cloak :class="{ 'has-wallpaper': !!wallpaperSrc }">
-  <div
-    class="wp-layer"
-    v-if="wallpaperSrc"
-    :style="wallpaperKind === 'image' ? { backgroundImage: 'url(' + wallpaperSrc + ')' } : null"
-    aria-hidden="true"
-  >
+  <div class="wp-layer" v-if="wallpaperSrc" aria-hidden="true">
+    <img
+      v-if="wallpaperKind === 'image'"
+      class="wp-media"
+      :src="wallpaperSrc"
+      alt=""
+    />
     <video
-      v-if="wallpaperKind === 'video'"
-      class="wp-video"
+      v-else-if="wallpaperKind === 'video'"
+      class="wp-media"
       :src="wallpaperSrc"
       autoplay
       muted
@@ -2178,7 +2194,7 @@
         const WP_MAX_VID = 40 * 1024 * 1024;
         const wallpaperSrc = ref(null);
         const wallpaperKind = ref(null);
-        const wallpaperDim = ref(0.45);
+        const wallpaperDim = ref(0.35);
         const wallpaperPanelOpen = ref(false);
         const wallpaperBusy = ref(false);
         const wallpaperError = ref('');
