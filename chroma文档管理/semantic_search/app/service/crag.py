@@ -54,7 +54,7 @@ def filter_relevant_nodes(  # 批量过滤
         ok = _is_relevant(query, content, llm=llm)  # 判相关
         details.append({"rank": i, "relevant": ok, "preview": content[:80]})  # 记明细
         if verbose:  # 需要终端日志
-        print(f"  [CRAG] 文档 {i}：{'相关' if ok else '无关'}", flush=True)  # 打印状态
+            print(f"  [CRAG] 文档 {i}：{'相关' if ok else '无关'}", flush=True)  # 打印状态
         if ok:  # 相关则留下
             kept.append(item)  # 加入保留列表
     return kept, details  # 返回二元组
