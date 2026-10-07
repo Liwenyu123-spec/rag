@@ -212,6 +212,39 @@
     .eval-metric em.up { color: #86efac; }
     .eval-metric em.down { color: #fda4af; }
     .eval-preview { color: #8b93a7; font-size: 11px; margin-top: 4px; }
+    .kg-box { margin-top: 10px; }
+    .kg-svg {
+      width: 100%; max-width: 520px; height: 280px; display: block;
+      margin: 10px 0 8px; background: #0b1220; border-radius: 12px;
+      border: 1px solid #1e293b; cursor: default;
+    }
+    .kg-edge { stroke: #64748b; stroke-width: 1.6; opacity: .85; }
+    .kg-edge.hot { stroke: #60a5fa; stroke-width: 2.4; opacity: 1; }
+    .kg-edge.dim { opacity: .18; }
+    .kg-arrow { fill: #64748b; }
+    .kg-arrow.hot { fill: #60a5fa; }
+    .kg-arrow.dim { opacity: .18; }
+    .kg-elabel { fill: #94a3b8; font-size: 10px; pointer-events: none; }
+    .kg-elabel.dim { opacity: .2; }
+    .kg-elabel.hot { fill: #93c5fd; }
+    .kg-node { cursor: pointer; }
+    .kg-node circle { fill: #1e3a5f; stroke: #60a5fa; stroke-width: 1.5; }
+    .kg-node:hover circle { fill: #2563eb; }
+    .kg-node.on circle { fill: #2563eb; stroke: #bfdbfe; stroke-width: 2.2; }
+    .kg-node.dim circle { opacity: .25; }
+    .kg-node text {
+      fill: #e2e8f0; font-size: 11px; text-anchor: middle;
+      dominant-baseline: middle; pointer-events: none;
+    }
+    .kg-hint { color: #8b93a7; font-size: 11px; margin-top: 2px; }
+    .kg-detail {
+      margin-top: 8px; padding: 10px 12px; border-radius: 10px;
+      background: #f8fafc; border: 1px solid #e2e8f0; color: #334155;
+      font-size: 12px; line-height: 1.55;
+    }
+    .kg-detail strong { color: #1e40af; display: block; margin-bottom: 6px; }
+    .kg-detail .rel { margin: 3px 0; }
+    .kg-detail .rel b { color: #0f172a; font-weight: 600; }
     .opt-list { display: grid; gap: 8px; }
     .opt-item {
       display: flex; align-items: flex-start; gap: 10px;
@@ -1541,6 +1574,52 @@
                 · {{ p.path || ((p.subject || '') + ' —[' + (p.relation || '') + ']→ ' + (p.object || '')) }}
               </div>
             </div>
+            <div class="pre-box kg-box" v-if="graphPathsOf(msg).length">
+              <strong>关系图谱</strong>
+              <div class="kg-hint">点击节点，查看它和谁有什么关系</div>
+              <svg class="kg-svg" viewBox="0 0 520 280" xmlns="http://www.w3.org/2000/svg">
+                <defs>
+                  <marker id="kgArrow" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+                    <path d="M0,0 L6,3 L0,6 Z" class="kg-arrow" />
+                  </marker>
+                  <marker id="kgArrowHot" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+                    <path d="M0,0 L6,3 L0,6 Z" class="kg-arrow hot" />
+                  </marker>
+                </defs>
+                <g v-for="(e, ei) in kgLayoutOf(msg).edges" :key="'ke'+ei">
+                  <line
+                    class="kg-edge"
+                    :class="kgEdgeClass(msg, e)"
+                    :x1="e.x1" :y1="e.y1" :x2="e.x2" :y2="e.y2"
+                    :marker-end="kgEdgeHot(msg, e) ? 'url(#kgArrowHot)' : 'url(#kgArrow)'"
+                  />
+                  <text class="kg-elabel" :class="kgEdgeClass(msg, e)" :x="e.mx" :y="e.my - 4">{{ e.relation }}</text>
+                </g>
+                <g
+                  class="kg-node"
+                  v-for="n in kgLayoutOf(msg).nodes"
+                  :key="'kn'+n.id"
+                  :class="kgNodeClass(msg, n.id)"
+                  @click.stop="selectKgNode(msg, n.id)"
+                >
+                  <circle :cx="n.x" :cy="n.y" r="22" />
+                  <text :x="n.x" :y="n.y">{{ shortKgLabel(n.id) }}</text>
+                </g>
+              </svg>
+              <div class="kg-detail" v-if="msg.kgSelected">
+                <strong>{{ msg.kgSelected }}</strong>
+                <div v-if="!(kgRelsOf(msg).length)">这个节点在当前结果里没有连边。</div>
+                <div class="rel" v-for="(r, ri) in kgRelsOf(msg)" :key="'kr'+ri">
+                  <template v-if="r.dir === 'out'">
+                    → <b>{{ r.relation }}</b> → {{ r.other }}
+                  </template>
+                  <template v-else>
+                    ← <b>{{ r.relation }}</b> ← {{ r.other }}
+                  </template>
+                </div>
+                <button type="button" class="source-toggle" style="margin-top:8px" @click="selectKgNode(msg, null)">取消选中</button>
+              </div>
+            </div>
             <div class="pre-box" v-if="msg.selfRag && msg.selfRag.enabled">
               <strong>Self-RAG</strong>
               <div class="pre-line" v-if="msg.selfRag.retrieve === false">Retrieve：NO · 未检索，直接回答</div>
@@ -2003,6 +2082,105 @@
           keywords: '按关键词',
           none: '无标注',
         }[mode] || mode || '按关键词');
+
+        const graphPathsOf = (msg) => {
+          if (!msg) return [];
+          const a = (msg.graph && msg.graph.paths) || [];
+          const b = (msg.graphEvidence && msg.graphEvidence.paths) || [];
+          const out = [];
+          const seen = new Set();
+          for (const p of [...a, ...b]) {
+            const s = String(p.subject || '').trim();
+            const o = String(p.object || '').trim();
+            const r = String(p.relation || '').trim() || 'RELATED';
+            if (!s || !o) continue;
+            const key = s + '|' + r + '|' + o;
+            if (seen.has(key)) continue;
+            seen.add(key);
+            out.push({ subject: s, relation: r, object: o, path: p.path || `${s} —[${r}]→ ${o}` });
+          }
+          return out.slice(0, 24);
+        };
+
+        const kgLayoutOf = (msg) => {
+          const paths = graphPathsOf(msg);
+          const names = [];
+          const seen = new Set();
+          for (const p of paths) {
+            for (const n of [p.subject, p.object]) {
+              if (!seen.has(n)) { seen.add(n); names.push(n); }
+            }
+          }
+          const cx = 260, cy = 140;
+          const radius = names.length <= 2 ? 70 : Math.min(110, 40 + names.length * 10);
+          const nodes = names.map((id, i) => {
+            const ang = names.length === 1 ? -Math.PI / 2 : (-Math.PI / 2 + (2 * Math.PI * i) / names.length);
+            return { id, x: cx + radius * Math.cos(ang), y: cy + radius * Math.sin(ang) };
+          });
+          const pos = Object.fromEntries(nodes.map((n) => [n.id, n]));
+          const edges = paths.map((p) => {
+            const a = pos[p.subject], b = pos[p.object];
+            if (!a || !b) return null;
+            // 缩短线段，避免箭头顶到圆上
+            const dx = b.x - a.x, dy = b.y - a.y;
+            const len = Math.hypot(dx, dy) || 1;
+            const pad = 24;
+            const x1 = a.x + (dx / len) * pad;
+            const y1 = a.y + (dy / len) * pad;
+            const x2 = b.x - (dx / len) * pad;
+            const y2 = b.y - (dy / len) * pad;
+            return {
+              ...p,
+              x1, y1, x2, y2,
+              mx: (x1 + x2) / 2,
+              my: (y1 + y2) / 2,
+            };
+          }).filter(Boolean);
+          return { nodes, edges };
+        };
+
+        const selectKgNode = (msg, id) => {
+          if (!msg) return;
+          msg.kgSelected = id || null;
+        };
+
+        const kgNodeClass = (msg, id) => {
+          const sel = msg && msg.kgSelected;
+          if (!sel) return '';
+          if (sel === id) return 'on';
+          const connected = graphPathsOf(msg).some(
+            (p) => (p.subject === sel || p.object === sel) && (p.subject === id || p.object === id)
+          );
+          return connected ? '' : 'dim';
+        };
+
+        const kgEdgeHot = (msg, e) => {
+          const sel = msg && msg.kgSelected;
+          if (!sel) return false;
+          return e.subject === sel || e.object === sel;
+        };
+
+        const kgEdgeClass = (msg, e) => {
+          const sel = msg && msg.kgSelected;
+          if (!sel) return '';
+          return kgEdgeHot(msg, e) ? 'hot' : 'dim';
+        };
+
+        const kgRelsOf = (msg) => {
+          const sel = msg && msg.kgSelected;
+          if (!sel) return [];
+          const rows = [];
+          for (const p of graphPathsOf(msg)) {
+            if (p.subject === sel) rows.push({ dir: 'out', relation: p.relation, other: p.object });
+            else if (p.object === sel) rows.push({ dir: 'in', relation: p.relation, other: p.subject });
+          }
+          return rows;
+        };
+
+        const shortKgLabel = (name) => {
+          const s = String(name || '');
+          return s.length > 6 ? s.slice(0, 5) + '…' : s;
+        };
         const evalHitText = (bundle) => {
           if (!bundle) return '';
           const rows = bundle.results || [];
@@ -3139,6 +3317,15 @@
                   mentions: data.mentions || [],
                   message: data.evidence_message || '',
                 };
+                const first = (data.mentions && data.mentions[0])
+                  || (data.paths && data.paths[0] && data.paths[0].subject)
+                  || null;
+                botMsg.kgSelected = first;
+              }
+              if (botMsg.graph && (botMsg.graph.paths || []).length && !botMsg.kgSelected) {
+                botMsg.kgSelected = (botMsg.graph.mentions && botMsg.graph.mentions[0])
+                  || botMsg.graph.paths[0].subject
+                  || null;
               }
             }
           } catch (err) {
@@ -3393,6 +3580,14 @@
           fmtPct,
           deltaClass,
           goldModeLabel,
+          graphPathsOf,
+          kgLayoutOf,
+          selectKgNode,
+          kgNodeClass,
+          kgEdgeHot,
+          kgEdgeClass,
+          kgRelsOf,
+          shortKgLabel,
           evalResult,
           applyPreset,
           autoResize,
