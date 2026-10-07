@@ -225,6 +225,9 @@ class GraphInfo(BaseModel):  # 图谱通道过程信息
     message: str = "skipped"
     total: int = 0
     results: List[dict] = Field(default_factory=list)
+    paths: List[dict] = Field(default_factory=list)
+    mentions: List[str] = Field(default_factory=list)
+    evidence_message: str = ""
 
 
 class AskResponse(BaseModel):  # /ask 的响应体

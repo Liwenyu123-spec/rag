@@ -1064,8 +1064,18 @@
       <div class="side-label">知识图谱</div>
       <div class="upload-card">
         <div class="upload-msg" :class="{ err: !graphStatus?.ready }">
-          {{ graphStatus?.ready ? ('图谱就绪 · ' + (graphStatus.llm_provider || 'deepseek')) : (graphStatus?.message || '请先执行 neo4j console') }}
+          {{ graphStatus?.ready
+            ? ('图谱就绪 · 节点 ' + (graphStatus.node_count ?? 0) + ' · 关系 ' + (graphStatus.rel_count ?? 0))
+            : (graphStatus?.message || '请先执行 neo4j console') }}
         </div>
+        <a
+          v-if="graphStatus?.browser_url"
+          class="upload-msg"
+          :href="graphStatus.browser_url"
+          target="_blank"
+          rel="noopener"
+          style="color:#9bb8ff;text-decoration:underline"
+        >在 Neo4j Browser 里看图 →</a>
         <select v-model="graphExtractor">
           <option value="simple">抽取：Simple 开放式</option>
           <option value="schema">抽取：Schema 约束（人物/公司/学校）</option>
@@ -1076,6 +1086,22 @@
         <button class="upload-btn" :disabled="graphBusy" @click="loadGraph" style="opacity:.92">
           加载已有 Neo4j 图谱
         </button>
+        <button class="upload-btn" :disabled="graphBusy || !graphStatus?.ready" @click="runGraphEval" style="opacity:.92">
+          {{ graphEvalLoading ? '正在测图谱…' : '测一下图谱好不好用' }}
+        </button>
+        <button class="upload-btn" :disabled="graphBusy || !graphStatus?.ready" @click="clearGraph" style="opacity:.85;background:#3f1d2e;border-color:#7f1d3a">
+          清空图谱（重置）
+        </button>
+        <div class="eval-plain" v-if="graphEvalResult" style="margin-top:8px">
+          <h4>图谱自测 · {{ graphEvalResult.casebook_name || '关系题' }}</h4>
+          <div class="kv">命中 {{ Math.round((graphEvalResult.hit_rate || 0) * 100) }}% · 共 {{ graphEvalResult.total }} 题</div>
+          <div v-if="graphEvalResult.diagnosis">{{ graphEvalResult.diagnosis }}</div>
+          <div class="q" v-for="(r, i) in (graphEvalResult.results || [])" :key="'ge'+i">
+            <span :class="r.hit ? 'ok' : 'bad'">{{ r.hit ? '命中' : '未命中' }}</span>
+            · {{ r.query }}
+            <div class="eval-preview" v-if="(r.paths || [])[0]">路径：{{ r.paths[0].path }}</div>
+          </div>
+        </div>
         <div style="height:1px;background:rgba(255,255,255,.1);margin:4px 0"></div>
         <div class="upload-msg">手工三元组（不走 LLM）</div>
         <input v-model="manualSubject" placeholder="头实体，如 乔布斯" />
@@ -1500,8 +1526,19 @@
             <div class="pre-box" v-if="msg.graph && msg.graph.enabled">
               <strong>知识图谱通道</strong>
               <div class="pre-line">{{ msg.graph.message }}（{{ msg.graph.total || 0 }} 条）</div>
-              <div class="pre-line" v-for="(g, gi) in (msg.graph.results || []).slice(0, 4)" :key="'g'+gi">
+              <div class="pre-line" v-if="(msg.graph.mentions || []).length">实体：{{ msg.graph.mentions.join('、') }}</div>
+              <div class="pre-line" v-for="(p, pi) in (msg.graph.paths || []).slice(0, 6)" :key="'gp'+pi">
+                · {{ p.path || ((p.subject || '') + ' —[' + (p.relation || '') + ']→ ' + (p.object || '')) }}
+              </div>
+              <div class="pre-line" v-for="(g, gi) in (msg.graph.results || []).slice(0, 3)" :key="'g'+gi">
                 · {{ (g.text || '').slice(0, 160) }}
+              </div>
+            </div>
+            <div class="pre-box" v-if="msg.graphEvidence && (msg.graphEvidence.paths || []).length">
+              <strong>图谱路径证据</strong>
+              <div class="pre-line" v-if="(msg.graphEvidence.mentions || []).length">实体：{{ msg.graphEvidence.mentions.join('、') }}</div>
+              <div class="pre-line" v-for="(p, pi) in msg.graphEvidence.paths.slice(0, 8)" :key="'ge'+pi">
+                · {{ p.path || ((p.subject || '') + ' —[' + (p.relation || '') + ']→ ' + (p.object || '')) }}
               </div>
             </div>
             <div class="pre-box" v-if="msg.selfRag && msg.selfRag.enabled">
@@ -1798,6 +1835,8 @@
         const graphExtractor = ref('simple');
         const graphBusy = ref(false);
         const graphMsg = ref('先 neo4j console，再用示例建图或手工录入');
+        const graphEvalLoading = ref(false);
+        const graphEvalResult = ref(null);
         const manualSubject = ref('');
         const manualRelation = ref('');
         const manualObject = ref('');
@@ -2613,6 +2652,44 @@
             graphMsg.value = err.message || String(err);
           } finally {
             graphBusy.value = false;
+          }
+        };
+
+        const clearGraph = async () => {
+          if (graphBusy.value) return;
+          if (!window.confirm('确定清空 Neo4j 里全部节点和关系？此操作不可撤销。')) return;
+          graphBusy.value = true;
+          graphError.value = false;
+          graphMsg.value = '正在清空图谱…';
+          try {
+            const data = await graphApi('/graph/clear', {});
+            graphMsg.value = `${data.message}（删掉节点 ${data.deleted_nodes || 0}、关系 ${data.deleted_rels || 0}）`;
+            graphEvalResult.value = null;
+            refreshGraphStatus();
+          } catch (err) {
+            graphError.value = true;
+            graphMsg.value = err.message || String(err);
+          } finally {
+            graphBusy.value = false;
+          }
+        };
+
+        const runGraphEval = async () => {
+          if (graphEvalLoading.value) return;
+          graphEvalLoading.value = true;
+          graphEvalResult.value = null;
+          graphError.value = false;
+          graphMsg.value = '正在用关系样题测图谱…';
+          try {
+            const data = await graphApi('/eval/graph', {});
+            graphEvalResult.value = data;
+            graphMsg.value = `图谱自测完成：命中 ${Math.round((data.hit_rate || 0) * 100)}%`;
+            refreshGraphStatus();
+          } catch (err) {
+            graphError.value = true;
+            graphMsg.value = err.message || String(err);
+          } finally {
+            graphEvalLoading.value = false;
           }
         };
 

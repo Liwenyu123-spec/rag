@@ -119,18 +119,59 @@ class GraphRagService:
 
         return HuggingFaceEmbedding(model_name=GRAPH_EMBED_MODEL)
 
+    def _driver(self):
+        from neo4j import GraphDatabase
+
+        return GraphDatabase.driver(NEO4J_URI, auth=(NEO4J_USERNAME, NEO4J_PASSWORD))
+
+    def _run_cypher(self, query: str, **params) -> list[dict]:
+        """执行只读/写 Cypher，返回字典行。"""
+        driver = self._driver()
+        try:
+            with driver.session() as session:
+                result = session.run(query, **params)
+                return [dict(record) for record in result]
+        finally:
+            driver.close()
+
+    def graph_counts(self) -> dict:
+        """节点 / 关系数量与示例三元组。"""
+        try:
+            rows = self._run_cypher(
+                "MATCH (n) WITH count(n) AS nodes "
+                "OPTIONAL MATCH ()-[r]->() WITH nodes, count(r) AS rels "
+                "RETURN nodes, rels"
+            )
+            nodes = int((rows[0] or {}).get("nodes") or 0) if rows else 0
+            rels = int((rows[0] or {}).get("rels") or 0) if rows else 0
+            samples = self._run_cypher(
+                "MATCH (a)-[r]->(b) "
+                "RETURN coalesce(a.name, a.id, elementId(a)) AS subject, "
+                "type(r) AS relation, "
+                "coalesce(b.name, b.id, elementId(b)) AS object "
+                "LIMIT 8"
+            )
+            return {"node_count": nodes, "rel_count": rels, "sample_triples": samples}
+        except Exception as exc:  # noqa: BLE001
+            return {"node_count": 0, "rel_count": 0, "sample_triples": [], "error": str(exc)}
+
+    @staticmethod
+    def browser_url() -> str:
+        """Neo4j Browser 常见地址（HTTP 7474）。"""
+        parsed = urlparse(NEO4J_URI)
+        host = parsed.hostname or "127.0.0.1"
+        return f"http://{host}:7474"
+
     def status(self) -> dict:
         """连通性与配置摘要（不回显密码）。"""
         ok = True
         message = "ok"
+        counts = {"node_count": 0, "rel_count": 0, "sample_triples": []}
         try:
-            from neo4j import GraphDatabase
-
-            driver = GraphDatabase.driver(
-                NEO4J_URI, auth=(NEO4J_USERNAME, NEO4J_PASSWORD)
-            )
+            driver = self._driver()
             driver.verify_connectivity()
             driver.close()
+            counts = self.graph_counts()
         except Exception as exc:  # noqa: BLE001
             ok = False
             message = f"{type(exc).__name__}: {exc}"
@@ -139,6 +180,10 @@ class GraphRagService:
             "message": message,
             "neo4j_uri": NEO4J_URI,
             "neo4j_username": NEO4J_USERNAME,
+            "browser_url": self.browser_url(),
+            "node_count": counts.get("node_count", 0),
+            "rel_count": counts.get("rel_count", 0),
+            "sample_triples": counts.get("sample_triples") or [],
             "llm_provider": GRAPH_LLM_PROVIDER,
             "llm_model": GRAPH_LLM_MODEL,
             "embed_provider": GRAPH_EMBED_PROVIDER,
@@ -146,6 +191,142 @@ class GraphRagService:
             "extractor": GRAPH_EXTRACTOR,
             "has_index": self._index is not None,
             "deepseek_configured": bool(DEEPSEEK_API_KEY),
+        }
+
+    def clear_graph(self) -> dict:
+        """清空 Neo4j 中全部节点与关系（学习用重置）。"""
+        before = self.graph_counts()
+        self._run_cypher("MATCH (n) DETACH DELETE n")
+        self._index = None
+        after = self.graph_counts()
+        return {
+            "message": "已清空 Neo4j 图谱",
+            "deleted_nodes": int(before.get("node_count") or 0),
+            "deleted_rels": int(before.get("rel_count") or 0),
+            "node_count": int(after.get("node_count") or 0),
+            "rel_count": int(after.get("rel_count") or 0),
+        }
+
+    def delete_by_file_hint(self, file_name: str) -> dict:
+        """按文件名尽力清理图谱侧痕迹（属性或文本含文件名）。"""
+        want = (file_name or "").strip()
+        if not want:
+            return {"deleted_nodes": 0, "message": "文件名为空"}
+        stem = want.rsplit(".", 1)[0]
+        try:
+            rows = self._run_cypher(
+                "MATCH (n) "
+                "WHERE any(k IN keys(n) WHERE toLower(toString(n[k])) CONTAINS toLower($fname)) "
+                "   OR toLower(coalesce(n.name, '')) CONTAINS toLower($stem) "
+                "WITH collect(n) AS ns "
+                "FOREACH (x IN ns | DETACH DELETE x) "
+                "RETURN size(ns) AS deleted",
+                fname=want,
+                stem=stem,
+            )
+            deleted = int((rows[0] or {}).get("deleted") or 0) if rows else 0
+            if deleted:
+                self._index = None
+            return {
+                "deleted_nodes": deleted,
+                "message": f"图谱侧按文件名清理 {deleted} 个节点",
+                "file_name": want,
+            }
+        except Exception as exc:  # noqa: BLE001
+            return {"deleted_nodes": 0, "message": f"图谱清理跳过: {exc}", "file_name": want}
+
+    def _mention_candidates(self, question: str) -> list[str]:
+        """从问题里抽出可能实体名（轻量，不强制 LLM）。"""
+        q = (question or "").strip()
+        if not q:
+            return []
+        known = [
+            "乔布斯", "沃兹尼亚克", "苹果公司", "苹果", "里德学院",
+            "加州大学伯克利分校", "伯克利", "库比蒂诺", "贝壳科技",
+        ]
+        hits = [name for name in known if name in q]
+        # 再抓「X创立/毕业于」等模式里的专名碎片
+        for m in re.finditer(r"([\u4e00-\u9fffA-Za-z0-9]{2,12})(?:创立|创建|毕业于|位于|和|与)", q):
+            name = m.group(1)
+            if name not in hits and name not in {"什么", "哪些", "谁", "哪里", "公司"}:
+                hits.append(name)
+        if hits:
+            return hits[:6]
+        # 兜底：问 LLM 抽 1~3 个实体（失败则空）
+        try:
+            raw = self.llm.complete(
+                "从问题中抽出最多3个实体名，用英文逗号分隔，不要解释。\n问题：" + q
+            ).text.strip()
+            parts = [p.strip() for p in re.split(r"[,，、]", raw) if p.strip()]
+            return parts[:3]
+        except Exception:  # noqa: BLE001
+            return []
+
+    def explain_paths(self, question: str, *, hops: int = 2, limit: int = 20) -> dict:
+        """围绕问题实体做 1~2 跳路径证据（Cypher）。"""
+        hops = max(1, min(int(hops or 2), 3))
+        mentions = self._mention_candidates(question)
+        paths: list[dict] = []
+        seen: set[tuple[str, str, str]] = set()
+        if not mentions:
+            # 无实体时给全局样例边，避免前端空白
+            for row in (self.graph_counts().get("sample_triples") or [])[:limit]:
+                key = (str(row.get("subject")), str(row.get("relation")), str(row.get("object")))
+                if key in seen:
+                    continue
+                seen.add(key)
+                paths.append({
+                    "subject": key[0],
+                    "relation": key[1],
+                    "object": key[2],
+                    "path": f"{key[0]} —[{key[1]}]→ {key[2]}",
+                    "hops": 1,
+                })
+            return {
+                "mentions": [],
+                "paths": paths,
+                "message": "未识别到实体，展示图谱样例边",
+            }
+
+        _ = hops  # 对外保留参数；Cypher 用固定 1..2 兼容更多 Neo4j 版本
+        for name in mentions:
+            try:
+                rows = self._run_cypher(
+                    "MATCH (a)-[rel]->(b) "
+                    "WHERE toLower(toString(coalesce(a.name, a.id, ''))) CONTAINS toLower($name) "
+                    "   OR toLower(toString(coalesce(b.name, b.id, ''))) CONTAINS toLower($name) "
+                    "RETURN coalesce(a.name, a.id) AS subject, type(rel) AS relation, "
+                    "coalesce(b.name, b.id) AS object "
+                    "LIMIT $lim",
+                    name=name,
+                    lim=limit,
+                )
+            except Exception:  # noqa: BLE001
+                rows = []
+            for row in rows:
+                subj = str(row.get("subject") or "")
+                rel = str(row.get("relation") or "")
+                obj = str(row.get("object") or "")
+                key = (subj, rel, obj)
+                if not subj or not obj or key in seen:
+                    continue
+                seen.add(key)
+                paths.append({
+                    "subject": subj,
+                    "relation": rel,
+                    "object": obj,
+                    "path": f"{subj} —[{rel}]→ {obj}",
+                    "hops": 1,
+                    "anchor": name,
+                })
+                if len(paths) >= limit:
+                    break
+            if len(paths) >= limit:
+                break
+        return {
+            "mentions": mentions,
+            "paths": paths,
+            "message": f"识别实体 {mentions}，找到 {len(paths)} 条关系边",
         }
 
     def _build_extractor(self, mode: str | None = None):
@@ -245,12 +426,17 @@ class GraphRagService:
             embed_model=self.embed_model,
         )
         response = engine.query(question)
+        evidence = self.explain_paths(question, hops=2, limit=16)
         return {
             "question": question,
             "answer": str(response),
             "k": k,
             "mode": "graph_rag",
             "llm_provider": GRAPH_LLM_PROVIDER,
+            "mentions": evidence.get("mentions") or [],
+            "paths": evidence.get("paths") or [],
+            "evidence_message": evidence.get("message") or "",
+            "browser_url": self.browser_url(),
         }
 
     def retrieve(self, question: str, *, k: int = 5) -> dict:
@@ -267,7 +453,15 @@ class GraphRagService:
             score = float(getattr(node, "score", 0.0) or 0.0)
             text = getattr(node, "text", None) or getattr(node.node, "text", "")
             items.append({"rank": i + 1, "text": text, "score": score})
-        return {"question": question, "results": items, "total": len(items)}
+        evidence = self.explain_paths(question, hops=2, limit=16)
+        return {
+            "question": question,
+            "results": items,
+            "total": len(items),
+            "mentions": evidence.get("mentions") or [],
+            "paths": evidence.get("paths") or [],
+            "evidence_message": evidence.get("message") or "",
+        }
 
     def retrieve_as_nodes(self, question: str, *, k: int = 5) -> tuple[list, dict]:
         """给向量通道融合用：图谱片段包装成 NodeWithScore。"""
@@ -282,6 +476,8 @@ class GraphRagService:
                 "message": f"图谱检索失败: {exc}",
                 "total": 0,
                 "results": [],
+                "paths": [],
+                "mentions": [],
             }
             return [], info
         packed = []
@@ -296,12 +492,23 @@ class GraphRagService:
             packed.append(
                 NodeWithScore(node=node, score=float(item.get("score") or 0.0))
             )
+        # 把路径边也塞进上下文，方便生成时引用
+        for p in (data.get("paths") or [])[:8]:
+            line = p.get("path") or f"{p.get('subject')} -[{p.get('relation')}]-> {p.get('object')}"
+            node = TextNode(
+                text=f"[图谱路径] {line}",
+                metadata={"channel": "graph", "source_kind": "graph_path"},
+            )
+            packed.append(NodeWithScore(node=node, score=0.9))
         info = {
             "enabled": True,
             "ok": True,
-            "message": f"图谱召回 {len(packed)} 条",
+            "message": f"图谱召回 {len(data.get('results') or [])} 条，路径 {len(data.get('paths') or [])} 条",
             "total": len(packed),
             "results": data.get("results") or [],
+            "paths": data.get("paths") or [],
+            "mentions": data.get("mentions") or [],
+            "evidence_message": data.get("evidence_message") or "",
         }
         return packed, info
 

@@ -1,0 +1,26 @@
+{
+  "name": "乔布斯/苹果 多跳关系",
+  "description": "配合侧栏「用示例构建图谱」。检查图谱能否答关系/多跳题。",
+  "cases": [
+    {
+      "query": "乔布斯创立了什么公司？",
+      "keywords": ["苹果", "创立", "CO_FOUNDED"],
+      "expected_entities": ["乔布斯", "苹果"]
+    },
+    {
+      "query": "沃兹尼亚克和哪所学校有关？",
+      "keywords": ["伯克利", "毕业", "STUDIED"],
+      "expected_entities": ["沃兹尼亚克", "伯克利"]
+    },
+    {
+      "query": "苹果公司总部位于哪里？",
+      "keywords": ["库比蒂诺", "LOCATED"],
+      "expected_entities": ["苹果", "库比蒂诺"]
+    },
+    {
+      "query": "谁和乔布斯一起创立了苹果？",
+      "keywords": ["沃兹", "创立", "CO_FOUNDED"],
+      "expected_entities": ["沃兹尼亚克", "乔布斯"]
+    }
+  ]
+}

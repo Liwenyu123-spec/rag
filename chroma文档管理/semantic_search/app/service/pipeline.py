@@ -21,6 +21,9 @@ def empty_graph() -> dict:
         "message": "skipped",
         "total": 0,
         "results": [],
+        "paths": [],
+        "mentions": [],
+        "evidence_message": "",
     }
 
 

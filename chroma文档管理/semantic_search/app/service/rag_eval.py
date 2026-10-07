@@ -57,6 +57,7 @@ _FALLBACK_CASES: list[dict] = [
 ]
 
 RETRIEVAL_CASES_PATH = Path(DATA_DIR) / "eval" / "retrieval_cases.json"
+GRAPH_CASES_PATH = Path(DATA_DIR) / "eval" / "graph_cases.json"
 
 
 def load_retrieval_casebook() -> dict:
@@ -517,4 +518,118 @@ def evaluate_retrieval_cases(  # 批量检索评估入口
         "message": "ok",
         "diagnosis": diagnose_retrieval(hit_rate, avg_mrr, avg_p, avg_r),
         "flags": flags or {},
+    }
+
+
+def load_graph_casebook() -> dict:
+    """读取图谱评测集。"""
+    meta = {
+        "name": "内置图谱样题",
+        "description": "",
+        "source": "builtin",
+        "path": str(GRAPH_CASES_PATH),
+        "cases": [
+            {
+                "query": "乔布斯创立了什么公司？",
+                "keywords": ["苹果", "创立"],
+                "expected_entities": ["乔布斯", "苹果"],
+            }
+        ],
+    }
+    if not GRAPH_CASES_PATH.is_file():
+        return meta
+    try:
+        raw = json.loads(GRAPH_CASES_PATH.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        meta["description"] = f"读取失败：{exc}"
+        return meta
+    cases = raw.get("cases") if isinstance(raw, dict) else None
+    if not isinstance(cases, list) or not cases:
+        return meta
+    cleaned = []
+    for item in cases:
+        if not isinstance(item, dict):
+            continue
+        q = str(item.get("query") or "").strip()
+        if not q:
+            continue
+        cleaned.append({
+            "query": q,
+            "keywords": [str(k).strip() for k in (item.get("keywords") or []) if str(k).strip()],
+            "expected_entities": [
+                str(e).strip() for e in (item.get("expected_entities") or []) if str(e).strip()
+            ],
+        })
+    if not cleaned:
+        return meta
+    return {
+        "name": str(raw.get("name") or GRAPH_CASES_PATH.stem),
+        "description": str(raw.get("description") or ""),
+        "source": "file",
+        "path": str(GRAPH_CASES_PATH),
+        "cases": cleaned,
+    }
+
+
+def evaluate_graph_cases(graph_service: Any, cases: list[dict] | None = None) -> dict:
+    """图谱评测：问题 → retrieve + 路径，看关键词/实体是否出现。"""
+    book = load_graph_casebook()
+    items = cases if cases is not None else list(book.get("cases") or [])
+    results: list[dict] = []
+    for item in items:
+        query = str(item.get("query") or "").strip()
+        if not query:
+            continue
+        keywords = [str(k).strip() for k in (item.get("keywords") or []) if str(k).strip()]
+        entities = [
+            str(e).strip() for e in (item.get("expected_entities") or []) if str(e).strip()
+        ]
+        try:
+            retrieved = graph_service.retrieve(query, k=5)
+            evidence = {
+                "paths": retrieved.get("paths") or [],
+                "mentions": retrieved.get("mentions") or [],
+            }
+            blob_parts = [
+                *(r.get("text") or "" for r in (retrieved.get("results") or [])),
+                *(p.get("path") or "" for p in (evidence.get("paths") or [])),
+                " ".join(evidence.get("mentions") or []),
+            ]
+            blob = "\n".join(blob_parts).lower()
+            kw_hit = any(k.lower() in blob for k in keywords) if keywords else False
+            ent_hit = all(e.lower() in blob for e in entities) if entities else kw_hit
+            hit = bool(kw_hit or ent_hit)
+            results.append({
+                "query": query,
+                "hit": hit,
+                "keyword_hit": kw_hit,
+                "entity_hit": ent_hit,
+                "paths": (evidence.get("paths") or [])[:4],
+                "preview": (retrieved.get("results") or [{}])[0].get("text", "")[:120]
+                if retrieved.get("results")
+                else "",
+            })
+        except Exception as exc:  # noqa: BLE001
+            results.append({
+                "query": query,
+                "hit": False,
+                "keyword_hit": False,
+                "entity_hit": False,
+                "paths": [],
+                "preview": "",
+                "error": str(exc),
+            })
+    n = len(results)
+    hit_rate = (sum(1 for r in results if r.get("hit")) / n) if n else 0.0
+    return {
+        "casebook_name": book.get("name") or "",
+        "total": n,
+        "hit_rate": round(hit_rate, 4),
+        "results": results,
+        "message": "ok" if n else "empty_cases",
+        "diagnosis": (
+            "图谱关系题命中偏低：先用示例建图，或检查 Schema/实体名是否对齐"
+            if hit_rate < 0.6
+            else "图谱侧对样题基本可用；可与向量 basic 对照看多跳题差距"
+        ),
     }

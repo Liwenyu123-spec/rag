@@ -68,8 +68,10 @@ from semantic_search.app.service.rag_service import RagAskService
 from semantic_search.app.service.presets import PRESETS
 from semantic_search.app.service.rag_eval import (
     compare_retrieval_runs,
+    evaluate_graph_cases,
     evaluate_retrieval_cases,
     get_default_retrieval_cases,
+    load_graph_casebook,
     load_retrieval_casebook,
 )
 from semantic_search.app.routers import basic as basic_router
@@ -259,8 +261,10 @@ async def api_info():  # 方便程序或调试查看有哪些入口
         "graph_build": "POST /graph/build",
         "graph_triple": "POST /graph/triple",
         "graph_load": "POST /graph/load",
+        "graph_clear": "POST /graph/clear",
         "graph_query": "POST /graph/query",
         "graph_retrieve": "POST /graph/retrieve",
+        "eval_graph": "POST /eval/graph",
         "mm_status": "GET /mm/status",
         "library": "GET /library",
         "mm_search": "POST /mm/search",
@@ -774,7 +778,7 @@ async def delete_library_file(
     file_name: str = Query(..., min_length=1),
     backend: str = Depends(vector_backend_dep),
 ):
-    """按文件名删除向量分块和图库条目（同名图片一并删）。"""
+    """按文件名删除向量分块和图库条目（同名图片一并删）；图谱侧尽力同步清理。"""
     engine = _bound_engine(app, backend)
     result = engine.delete_by_file_name(file_name)
     mm = getattr(app.state, "mm_rag", None)
@@ -783,8 +787,14 @@ async def delete_library_file(
             result.update(mm.delete_by_file_name(file_name, backend=backend))
         except Exception as exc:  # noqa: BLE001
             result["image_error"] = str(exc)
+    graph = _try_init_graph_rag(app)
+    if graph is not None:
+        try:
+            result["graph"] = graph.delete_by_file_hint(file_name)
+        except Exception as exc:  # noqa: BLE001
+            result["graph_error"] = str(exc)
     total = int(result.get("deleted_chunks") or 0) + int(result.get("deleted_images") or 0)
-    if total <= 0:
+    if total <= 0 and not (result.get("graph") or {}).get("deleted_nodes"):
         raise HTTPException(status_code=404, detail="知识库里没有这个文件")
     result["message"] = f"已删除 {file_name}"
     return result
@@ -860,6 +870,41 @@ async def graph_retrieve(request: GraphRetrieveRequest):
         return _require_graph_rag(app).retrieve(request.question, k=request.k)
     except Exception as exc:  # noqa: BLE001
         raise HTTPException(status_code=503, detail=f"图谱检索失败: {exc}") from exc
+
+
+@app.post("/graph/clear")
+async def graph_clear():
+    """清空 Neo4j 全部节点/关系（学习重置用）。"""
+    try:
+        return _require_graph_rag(app).clear_graph()
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=503, detail=f"清空图谱失败: {exc}") from exc
+
+
+@app.get("/eval/graph/cases")
+async def eval_graph_cases_list():
+    """查看图谱评测样题。"""
+    book = load_graph_casebook()
+    return {
+        "name": book.get("name"),
+        "description": book.get("description"),
+        "source": book.get("source"),
+        "path": book.get("path"),
+        "total": len(book.get("cases") or []),
+        "cases": book.get("cases") or [],
+    }
+
+
+@app.post("/eval/graph")
+async def eval_graph():
+    """图谱关系题小测：retrieve + 路径证据是否命中关键词/实体。"""
+    try:
+        service = _require_graph_rag(app)
+        return evaluate_graph_cases(service)
+    except HTTPException:
+        raise
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=503, detail=f"图谱评估失败: {exc}") from exc
 
 
 @app.get("/mm/status")
