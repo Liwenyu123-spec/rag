@@ -390,41 +390,99 @@ class MultimodalRagService:
             })
         return self._vl_complete(parts)
 
-    def _vl_describe(self, question: str, image_path: Path) -> str:
+    def _vl_describe(self, question: str, image_paths: list[Path]) -> str:
+        n = len(image_paths)
+        if n <= 1:
+            scope = "请只分析用户指定的这一张图片"
+        else:
+            scope = f"请只分析用户指定的这 {n} 张图片（可逐张说明再综合）"
         prompt = (
-            "请只分析用户刚刚上传的这一张图片，用简体中文详细说明："
+            f"{scope}，用简体中文详细说明："
             "1）图中有哪些主体、人物或物体；2）场景和环境；"
             "3）图上可见的文字；4）颜色、构图和显著细节。"
-            "看不清的不要编造。不要提知识库里其他图片。\n\n"
+            "看不清的不要编造。不要提知识库里其他未给出的图片。\n\n"
             f"用户问题：{question}"
         )
-        return self._vl_complete([
-            {"type": "text", "text": prompt},
-            {
+        parts: list[dict] = [{"type": "text", "text": prompt}]
+        for path in image_paths[:6]:
+            parts.append({
                 "type": "image_url",
-                "image_url": {"url": self._image_data_url(image_path)},
-            },
-        ])
+                "image_url": {"url": self._image_data_url(path)},
+            })
+        return self._vl_complete(parts)
+
+    def _collect_describe_paths(
+        self,
+        query_image_path: str | list[str] | None = None,
+        image_names: list[str] | None = None,
+    ) -> list[Path]:
+        paths: list[Path] = []
+        seen: set[str] = set()
+
+        def _add(path: Path) -> None:
+            if not path.is_file():
+                return
+            key = str(path.resolve())
+            if key in seen:
+                return
+            seen.add(key)
+            paths.append(path)
+
+        for name in image_names or []:
+            name = (name or "").strip()
+            if not name:
+                continue
+            try:
+                _add(self.resolve_image(name))
+            except FileNotFoundError:
+                continue
+        if isinstance(query_image_path, (list, tuple)):
+            for item in query_image_path:
+                if item:
+                    _add(Path(item))
+        elif query_image_path:
+            _add(Path(query_image_path))
+        return paths
 
     def describe(
         self,
         question: str,
-        query_image_path: str,
+        query_image_path: str | list[str] | None = None,
         *,
+        image_names: list[str] | None = None,
         k: int = SIMILARITY_TOP_K,
         backend: str | None = None,
     ) -> dict:
-        q = (question or "").strip() or "请详细分析这张图片里有什么"
-        path = Path(query_image_path)
+        paths = self._collect_describe_paths(query_image_path, image_names)
+        if not paths:
+            raise RuntimeError("没有可用的图片（请上传或从图库选择）")
+        default_q = (
+            "请详细分析这张图片里有什么"
+            if len(paths) == 1
+            else f"请详细分析这 {len(paths)} 张图片里有什么"
+        )
+        q = (question or "").strip() or default_q
         image_hits = []
         try:
-            image_hits = self.search_images_by_image(str(path), k=k, backend=backend)
+            image_hits = self.search_images_by_image(str(paths[0]), k=k, backend=backend)
         except Exception:
             image_hits = []
+        # 把用户指定的图也放进来源展示
+        selected_sources = []
+        for i, path in enumerate(paths, start=1):
+            selected_sources.append({
+                "rank": i,
+                "file_name": path.name,
+                "url": f"/mm/files/{path.name}",
+                "document": f"[指定图片] {path.name}",
+                "similarity": 1.0,
+                "kind": "image",
+                "selected": True,
+            })
         vl_used = False
-        if self._vl_ready() and path.is_file():
+        if self._vl_ready():
             try:
-                answer = self._vl_describe(q, path)
+                answer = self._vl_describe(q, paths)
                 vl_used = True
             except Exception as exc:  # noqa: BLE001
                 answer = self._text_fallback_answer(q, image_hits, [])
@@ -437,14 +495,21 @@ class MultimodalRagService:
                     "当前只会把图片写入图库，并用 CLIP 找相似图。\n\n"
                     + answer
                 )
+        sources = selected_sources + [
+            h for h in image_hits if h.get("file_name") not in {p.name for p in paths}
+        ]
         return {
             "question": q,
             "answer": answer,
-            "sources": image_hits,
-            "images": image_hits,
+            "sources": sources,
+            "images": sources,
             "vl_used": vl_used,
             "vl_model": VL_MODEL if vl_used else None,
-            "message": "已分析用户上传的图片" if vl_used else "未配置视觉模型，无法描述图像内容",
+            "message": (
+                f"已分析指定的 {len(paths)} 张图片"
+                if vl_used
+                else "未配置视觉模型，无法描述图像内容"
+            ),
         }
 
     def _text_fallback_answer(self, question: str, image_hits: list[dict], text_hits: list[dict]) -> str:

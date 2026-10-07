@@ -969,21 +969,59 @@ async def mm_search(
     }
 
 
+def _parse_image_names(raw: str | None) -> list[str]:
+    """表单里用逗号/换行分隔的图库文件名。"""
+    if not raw:
+        return []
+    parts = []
+    for chunk in str(raw).replace("\n", ",").split(","):
+        name = Path(chunk.strip()).name
+        if name:
+            parts.append(name)
+    # 保序去重
+    seen = set()
+    out = []
+    for name in parts:
+        if name in seen:
+            continue
+        seen.add(name)
+        out.append(name)
+    return out
+
+
 @app.post("/mm/describe")
 async def mm_describe(
     question: str = Form(""),
-    image: UploadFile = File(...),
+    image: UploadFile | None = File(None),
+    images: list[UploadFile] | None = File(None),
+    image_names: str = Form(""),
     k: int = Form(5),
     backend: str = Depends(vector_backend_dep),
 ):
-    """分析用户上传的这一张图（视觉模型只看这张，不混入其它库内图片）。"""
+    """分析用户上传或从图库点选的图片（可不填问题，默认详细分析）。"""
     mm = _require_mm_rag(app)
-    content = await image.read()
-    if not content:
-        raise HTTPException(status_code=400, detail="图片是空的")
-    query_image_path = str(mm.save_query_image(image.filename or "upload.jpg", content))
+    names = _parse_image_names(image_names)
+    upload_paths: list[str] = []
+    uploads: list[UploadFile] = []
+    if image is not None and image.filename:
+        uploads.append(image)
+    if images:
+        uploads.extend([f for f in images if f is not None and f.filename])
+    for up in uploads:
+        content = await up.read()
+        if not content:
+            continue
+        upload_paths.append(str(mm.save_query_image(up.filename or "upload.jpg", content)))
+    if not names and not upload_paths:
+        raise HTTPException(status_code=400, detail="请上传图片或从图库选择图片")
     try:
-        return mm.describe(question, query_image_path, k=k, backend=backend)
+        return mm.describe(
+            question,
+            upload_paths or None,
+            image_names=names or None,
+            k=k,
+            backend=backend,
+        )
     except RuntimeError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
 
@@ -993,17 +1031,24 @@ async def mm_ask(
     question: str = Form(""),
     k: int = Form(5),
     image: UploadFile | None = File(None),
+    image_names: str = Form(""),
     backend: str = Depends(vector_backend_dep),
 ):
     """多模态问答：CLIP 召回图片后，用 DeepSeek 看图作答。"""
     mm = _require_mm_rag(app)
+    names = _parse_image_names(image_names)
     query_image_path = None
     if image is not None and image.filename:
         content = await image.read()
         if content:
             query_image_path = str(mm.save_query_image(image.filename, content))
+    if not query_image_path and names:
+        try:
+            query_image_path = str(mm.resolve_image(names[0]))
+        except FileNotFoundError as exc:
+            raise HTTPException(status_code=404, detail=f"图库中没有：{names[0]}") from exc
     if not (question or "").strip() and not query_image_path:
-        raise HTTPException(status_code=400, detail="请输入问题或上传图片")
+        raise HTTPException(status_code=400, detail="请输入问题、上传图片或从图库选择")
     try:
         return mm.ask(question, query_image_path=query_image_path, k=k, backend=backend)
     except RuntimeError as exc:

@@ -383,6 +383,39 @@
       border: 1px solid var(--line); font-size: 13px;
     }
     .lib-preview { margin-top: 6px; color: #64748b; font-size: 12px; line-height: 1.5; }
+    .lib-img-section { margin-top: 14px; }
+    .lib-img-section h4 { margin: 0 0 8px; font-size: 13px; color: #475569; font-weight: 600; }
+    .lib-img-grid {
+      display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px;
+    }
+    .lib-img-card {
+      position: relative; border: 2px solid var(--line); border-radius: 12px;
+      overflow: hidden; cursor: pointer; background: #fff; padding: 0; text-align: left;
+    }
+    .lib-img-card:hover { border-color: #9bb8ff; }
+    .lib-img-card.on { border-color: #4d6bfe; box-shadow: 0 0 0 1px #4d6bfe; }
+    .lib-img-card img { width: 100%; aspect-ratio: 1; object-fit: cover; display: block; }
+    .lib-img-card .lib-img-name {
+      display: block; padding: 4px 6px; font-size: 10px; color: #64748b;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .lib-img-card .lib-check {
+      position: absolute; top: 6px; right: 6px; width: 18px; height: 18px;
+      border-radius: 50%; background: rgba(15,23,42,.55); color: #fff;
+      font-size: 11px; line-height: 18px; text-align: center;
+    }
+    .lib-img-card.on .lib-check { background: #4d6bfe; }
+    .lib-pick-bar {
+      display: flex; align-items: center; justify-content: space-between; gap: 8px;
+      margin-top: 10px; padding: 8px 0 0; border-top: 1px solid var(--line);
+      font-size: 12px; color: #64748b;
+    }
+    .lib-pick-bar button {
+      border: 0; border-radius: 8px; padding: 6px 10px; background: #4d6bfe;
+      color: #fff; font-size: 12px; cursor: pointer;
+    }
+    .lib-pick-bar button:disabled { opacity: .45; cursor: not-allowed; }
+    .lib-pick-bar button.ghost { background: #eef2ff; color: #4d6bfe; }
     .think-box {
       margin: 0 0 12px; border-radius: 14px; background: #f7f8fa;
     }
@@ -1728,27 +1761,45 @@
         </div>
         <div class="hist-empty" v-if="libraryLoading">正在读取知识库…</div>
         <div class="hist-empty" v-else-if="!filteredLibrary.length && !filteredImages.length">当前范围没有文档</div>
-        <div class="hist-list" v-else>
-          <div class="hist-item" v-for="item in pagedLibrary" :key="item.file_name">
-            <strong>{{ item.file_name }}</strong>
-            <span>{{ classLabel(item.doc_class) }} · {{ item.file_type }} · {{ item.chunks }} 段</span>
-            <div class="lib-preview" v-if="item.preview">{{ item.preview }}</div>
-            <div class="lib-actions">
-              <button type="button" @click="openSourcePreview(item)">预览</button>
-              <a :href="'/library/file?file_name=' + encodeURIComponent(item.file_name)" target="_blank">新窗口打开</a>
-              <button type="button" class="danger" @click="deleteLibraryFile(item.file_name)">删除</button>
+        <template v-else>
+          <div class="hist-list" v-if="pagedLibrary.length">
+            <div class="hist-item" v-for="item in pagedLibrary" :key="item.file_name">
+              <strong>{{ item.file_name }}</strong>
+              <span>{{ classLabel(item.doc_class) }} · {{ item.file_type }} · {{ item.chunks }} 段</span>
+              <div class="lib-preview" v-if="item.preview">{{ item.preview }}</div>
+              <div class="lib-actions">
+                <button type="button" @click="openSourcePreview(item)">预览</button>
+                <a :href="'/library/file?file_name=' + encodeURIComponent(item.file_name)" target="_blank">新窗口打开</a>
+                <button type="button" class="danger" @click="deleteLibraryFile(item.file_name)">删除</button>
+              </div>
             </div>
           </div>
-          <div class="hist-item" v-for="img in pagedImages" :key="'img-'+img.file_name">
-            <strong>{{ img.file_name }}</strong>
-            <span>图片</span>
-            <div class="lib-actions">
-              <button type="button" @click="openSourcePreview(img)">预览</button>
-              <a :href="'/library/file?file_name=' + encodeURIComponent(img.file_name)" target="_blank">新窗口打开</a>
-              <button type="button" class="danger" @click="deleteLibraryFile(img.file_name)">删除</button>
+          <div class="lib-img-section" v-if="filteredImages.length">
+            <h4>图库（{{ filteredImages.length }}）· 点击多选后加入聊天</h4>
+            <div class="lib-img-grid">
+              <button
+                type="button"
+                class="lib-img-card"
+                v-for="img in pagedImages"
+                :key="'img-'+img.file_name"
+                :class="{ on: selectedLibImages.includes(img.file_name) }"
+                @click="toggleLibImage(img.file_name)"
+                :title="img.file_name"
+              >
+                <img :src="'/mm/files/' + encodeURIComponent(img.file_name)" :alt="img.file_name" />
+                <span class="lib-check">{{ selectedLibImages.includes(img.file_name) ? '✓' : '' }}</span>
+                <span class="lib-img-name">{{ img.file_name }}</span>
+              </button>
+            </div>
+            <div class="lib-pick-bar">
+              <span>已选 {{ selectedLibImages.length }} 张</span>
+              <div style="display:flex;gap:6px">
+                <button type="button" class="ghost" :disabled="!selectedLibImages.length" @click="selectedLibImages=[]">清空</button>
+                <button type="button" :disabled="!selectedLibImages.length" @click="addSelectedLibImagesToComposer">加入聊天</button>
+              </div>
             </div>
           </div>
-        </div>
+        </template>
       </aside>
 
       <div class="hist-mask" v-if="sourcePreview.open" @click="sourcePreview.open=false"></div>
@@ -1800,12 +1851,13 @@
             <button type="button" class="chip" :class="{ on: optUseThink }" @click="optUseThink = !optUseThink">深度思考</button>
             <button type="button" class="chip" :class="{ on: optUseWeb }" @click="optUseWeb = !optUseWeb">联网</button>
             <button type="button" class="chip" :class="{ on: !!composerImages.length }" @click="openComposerImages">图片</button>
+            <button type="button" class="chip" :class="{ on: showLibrary }" @click="openLibrary">图库</button>
             <button
               type="button"
               class="chip on"
               v-if="composerImages.length"
               @click="analyzeComposerImage"
-            >分析这张图</button>
+            >{{ composerImages.length > 1 ? '分析所选图' : '分析这张图' }}</button>
             <input
               ref="composerImageInput"
               type="file"
@@ -1904,6 +1956,7 @@
         const libraryQuery = ref('');
         const libraryHint = ref('');
         const libraryLoading = ref(false);
+        const selectedLibImages = ref([]);
         const historyList = ref([]);
         const historyHint = ref('');
         const pickedFiles = ref([]);
@@ -1939,7 +1992,7 @@
             subtitle: '左侧勾选优化方向 → 检索 → 大模型生成答案',
             emptyTitle: '向知识库提问',
             emptyDesc: '可勾选检索前/中/后、CRAG、Self-RAG，再生成答案。',
-            placeholder: '可以直接点「图片」上传，或提问例如：这张图里有什么？',
+            placeholder: '从图库选图或点「图片」上传；可不填问题，发送即默认详细分析',
           },
           chat: {
             title: '多轮知识库问答',
@@ -2009,7 +2062,15 @@
         const modeSubtitle = computed(() => modeMeta[mode.value].subtitle);
         const emptyTitle = computed(() => modeMeta[mode.value].emptyTitle);
         const emptyDesc = computed(() => modeMeta[mode.value].emptyDesc);
-        const placeholder = computed(() => modeMeta[mode.value].placeholder);
+        const placeholder = computed(() => {
+          if (composerImages.value.length) {
+            const n = composerImages.value.length;
+            return n > 1
+              ? `已选 ${n} 张图，可输入分析要求；不填则默认详细分析`
+              : '可输入分析要求；不填则默认详细分析这张图';
+          }
+          return modeMeta[mode.value].placeholder;
+        });
         const canSend = computed(() => {
           if (composerImages.value.length) return true;
           if (mode.value === 'mmrag') {
@@ -2018,6 +2079,11 @@
             return !!inputText.value.trim();
           }
           return !!inputText.value.trim();
+        });
+        const defaultAnalyzeQuestion = computed(() => {
+          const n = composerImages.value.length;
+          if (n > 1) return `请详细分析这 ${n} 张图片里有什么`;
+          return '请详细分析这张图片里有什么';
         });
         const shortModel = computed(() => {
           const name = health.value?.model || '';
@@ -2486,7 +2552,9 @@
             libraryFiles.value = data.files || [];
             libraryImages.value = data.images || [];
             libPage.value = 1;
-            libraryHint.value = `当前 ${data.backend || vectorBackend.value} · 范围 ${data.scope || docScope.value} · ${data.file_count || 0} 个文件 / ${data.chunk_count || 0} 段`;
+            libraryHint.value = `当前 ${data.backend || vectorBackend.value} · 范围 ${data.scope || docScope.value} · ${data.file_count || 0} 个文件 / ${data.chunk_count || 0} 段 · 图库可多选后「加入聊天」`;
+            const names = new Set((libraryImages.value || []).map((x) => x.file_name));
+            selectedLibImages.value = selectedLibImages.value.filter((n) => names.has(n));
           } catch (err) {
             libraryHint.value = '读取失败：' + (err.message || String(err));
             libraryFiles.value = [];
@@ -2494,6 +2562,39 @@
           } finally {
             libraryLoading.value = false;
           }
+        };
+
+        const toggleLibImage = (name) => {
+          const i = selectedLibImages.value.indexOf(name);
+          if (i >= 0) selectedLibImages.value.splice(i, 1);
+          else selectedLibImages.value.push(name);
+        };
+
+        const addSelectedLibImagesToComposer = () => {
+          const names = [...selectedLibImages.value];
+          if (!names.length) return;
+          const existing = new Set(
+            composerImages.value
+              .filter((x) => x.fromLibrary)
+              .map((x) => x.file_name || x.name)
+          );
+          names.forEach((name) => {
+            if (existing.has(name)) return;
+            composerImages.value.push({
+              fromLibrary: true,
+              file_name: name,
+              name,
+              url: '/mm/files/' + encodeURIComponent(name),
+              file: null,
+            });
+            existing.add(name);
+          });
+          const last = composerImages.value[composerImages.value.length - 1];
+          mmQueryFile.value = last && last.file ? last.file : null;
+          mmQueryPreview.value = last ? last.url : '';
+          composerUploadHint.value = `已从图库加入 ${names.length} 张。可在下方输入分析要求，不填则默认详细分析`;
+          showLibrary.value = false;
+          selectedLibImages.value = [];
         };
 
         const sourceKind = (name) => {
@@ -2692,16 +2793,16 @@
 
         const removeComposerImage = (index) => {
           const item = composerImages.value[index];
-          if (item && item.url) URL.revokeObjectURL(item.url);
+          if (item && item.url && String(item.url).startsWith('blob:')) URL.revokeObjectURL(item.url);
           composerImages.value.splice(index, 1);
           const last = composerImages.value[composerImages.value.length - 1];
-          mmQueryFile.value = last ? last.file : null;
+          mmQueryFile.value = last && last.file ? last.file : null;
           mmQueryPreview.value = last ? last.url : '';
         };
 
         const clearComposerImages = () => {
           composerImages.value.forEach((item) => {
-            if (item.url) URL.revokeObjectURL(item.url);
+            if (item && item.url && String(item.url).startsWith('blob:')) URL.revokeObjectURL(item.url);
           });
           composerImages.value = [];
           mmQueryFile.value = null;
@@ -2737,7 +2838,7 @@
 
         const analyzeComposerImage = () => {
           if (!composerImages.value.length) return;
-          if (!inputText.value.trim()) inputText.value = '请详细分析这张图片里有什么';
+          if (!inputText.value.trim()) inputText.value = defaultAnalyzeQuestion.value;
           sendMessage();
         };
 
@@ -3186,13 +3287,22 @@
           if (mode.value !== 'mmrag' && !question && !hasImage) return;
           if (mode.value === 'mmrag' && !canSend.value) return;
 
-          const queryImage = (composerImages.value[0] && composerImages.value[0].file) || mmQueryFile.value;
+          const libNames = composerImages.value
+            .filter((x) => x.fromLibrary && (x.file_name || x.name))
+            .map((x) => x.file_name || x.name);
+          const uploadFiles = composerImages.value
+            .filter((x) => x.file)
+            .map((x) => x.file);
+          if (!uploadFiles.length && mmQueryFile.value) uploadFiles.push(mmQueryFile.value);
           const queryPreview = (composerImages.value[0] && composerImages.value[0].url) || mmQueryPreview.value || '';
-          const askAboutImage = !!queryImage && (mode.value === 'mmrag' || !!question || !inputText.value.trim());
+          const askAboutImage = !!composerImages.value.length
+            && mode.value !== 'search'
+            && mode.value !== 'graph';
+          const effectiveQuestion = question || (askAboutImage ? defaultAnalyzeQuestion.value : '');
 
           messages.value.push({
             role: 'user',
-            content: question || (queryImage ? '[图片]' : ''),
+            content: question || (askAboutImage ? '[图片分析]' : ''),
             imageUrl: queryPreview,
           });
           messages.value.push({
@@ -3209,11 +3319,12 @@
 
           try {
             let res;
-            if (askAboutImage && mode.value !== 'search' && mode.value !== 'graph') {
+            if (askAboutImage) {
               const form = new FormData();
               form.append('k', String(topK.value));
-              form.append('question', question || '请详细分析这张图片里有什么');
-              form.append('image', queryImage);
+              form.append('question', effectiveQuestion);
+              if (libNames.length) form.append('image_names', libNames.join(','));
+              uploadFiles.forEach((f) => form.append('images', f));
               res = await ragFetch('/mm/describe', { method: 'POST', body: form });
               clearComposerImages();
               composerUploadHint.value = '';
@@ -3222,7 +3333,8 @@
               form.append('k', String(topK.value));
               if (question) form.append(mmTask.value === 'qa' ? 'question' : 'query', question);
               else form.append(mmTask.value === 'qa' ? 'question' : 'query', '');
-              if (queryImage) form.append('image', queryImage);
+              if (uploadFiles[0]) form.append('image', uploadFiles[0]);
+              if (libNames.length) form.append('image_names', libNames.join(','));
               const path = mmTask.value === 'qa' ? '/mm/ask' : '/mm/search';
               res = await ragFetch(path, { method: 'POST', body: form });
             } else if (mode.value === 'search') {
@@ -3527,6 +3639,9 @@
           filteredLibrary,
           filteredImages,
           openLibrary,
+          selectedLibImages,
+          toggleLibImage,
+          addSelectedLibImagesToComposer,
           classLabel,
           scopeLabel,
           historyList,
