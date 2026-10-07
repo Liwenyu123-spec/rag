@@ -416,6 +416,13 @@
     }
     .lib-pick-bar button:disabled { opacity: .45; cursor: not-allowed; }
     .lib-pick-bar button.ghost { background: #eef2ff; color: #4d6bfe; }
+    .lib-tabs { display: flex; gap: 6px; margin: 0 0 10px; }
+    .lib-tabs button {
+      flex: 1; border: 1px solid var(--line); border-radius: 10px; padding: 7px 8px;
+      background: #fff; color: #475569; font-size: 12px; cursor: pointer;
+    }
+    .lib-tabs button.on { background: #eef2ff; border-color: #4d6bfe; color: #4d6bfe; font-weight: 600; }
+    .chip.pick-lib { border-color: #4d6bfe; color: #4d6bfe; }
     .think-box {
       margin: 0 0 12px; border-radius: 14px; background: #f7f8fa;
     }
@@ -1749,20 +1756,29 @@
       <div class="hist-mask" v-if="showLibrary" @click="showLibrary=false"></div>
       <aside class="hist-drawer lib-drawer" v-if="showLibrary">
         <div class="hist-head">
-          <h3>知识库文档（{{ libraryFiles.length }}）</h3>
+          <h3>知识库（文档 {{ libraryFiles.length }} / 图 {{ libraryImages.length }}）</h3>
           <button class="header-btn" @click="showLibrary=false">关闭</button>
+        </div>
+        <div class="lib-tabs">
+          <button type="button" :class="{ on: libraryTab === 'docs' }" @click="libraryTab='docs'">文档</button>
+          <button type="button" :class="{ on: libraryTab === 'images' }" @click="libraryTab='images'">图库选图</button>
         </div>
         <div class="upload-msg" v-if="libraryHint">{{ libraryHint }}</div>
         <input class="lib-search" v-model="libraryQuery" placeholder="按文件名筛选…" />
-        <div class="lib-pager" v-if="libraryPages > 1">
+        <div class="lib-pager" v-if="libraryTab === 'docs' && libraryPages > 1">
           <button type="button" :disabled="libPage <= 1" @click="libPage--">上一页</button>
           <span>文件 {{ libPage }} / {{ libraryPages }}</span>
           <button type="button" :disabled="libPage >= libraryPages" @click="libPage++">下一页</button>
         </div>
+        <div class="lib-pager" v-if="libraryTab === 'images' && imagePages > 1">
+          <button type="button" :disabled="imgPage <= 1" @click="imgPage--">上一页</button>
+          <span>图片 {{ imgPage }} / {{ imagePages }}</span>
+          <button type="button" :disabled="imgPage >= imagePages" @click="imgPage++">下一页</button>
+        </div>
         <div class="hist-empty" v-if="libraryLoading">正在读取知识库…</div>
-        <div class="hist-empty" v-else-if="!filteredLibrary.length && !filteredImages.length">当前范围没有文档</div>
-        <template v-else>
-          <div class="hist-list" v-if="pagedLibrary.length">
+        <template v-else-if="libraryTab === 'docs'">
+          <div class="hist-empty" v-if="!filteredLibrary.length">当前没有文档</div>
+          <div class="hist-list" v-else>
             <div class="hist-item" v-for="item in pagedLibrary" :key="item.file_name">
               <strong>{{ item.file_name }}</strong>
               <span>{{ classLabel(item.doc_class) }} · {{ item.file_type }} · {{ item.chunks }} 段</span>
@@ -1774,8 +1790,11 @@
               </div>
             </div>
           </div>
-          <div class="lib-img-section" v-if="filteredImages.length">
-            <h4>图库（{{ filteredImages.length }}）· 点击多选后加入聊天</h4>
+        </template>
+        <template v-else>
+          <div class="hist-empty" v-if="!filteredImages.length">图库为空。请先在左侧上传 jpg/png</div>
+          <div class="lib-img-section" v-else>
+            <h4>点击多选，再点「加入聊天分析」</h4>
             <div class="lib-img-grid">
               <button
                 type="button"
@@ -1795,7 +1814,7 @@
               <span>已选 {{ selectedLibImages.length }} 张</span>
               <div style="display:flex;gap:6px">
                 <button type="button" class="ghost" :disabled="!selectedLibImages.length" @click="selectedLibImages=[]">清空</button>
-                <button type="button" :disabled="!selectedLibImages.length" @click="addSelectedLibImagesToComposer">加入聊天</button>
+                <button type="button" :disabled="!selectedLibImages.length" @click="addSelectedLibImagesToComposer">加入聊天分析</button>
               </div>
             </div>
           </div>
@@ -1850,8 +1869,8 @@
             <div class="composer-bar">
             <button type="button" class="chip" :class="{ on: optUseThink }" @click="optUseThink = !optUseThink">深度思考</button>
             <button type="button" class="chip" :class="{ on: optUseWeb }" @click="optUseWeb = !optUseWeb">联网</button>
-            <button type="button" class="chip" :class="{ on: !!composerImages.length }" @click="openComposerImages">图片</button>
-            <button type="button" class="chip" :class="{ on: showLibrary }" @click="openLibrary">图库</button>
+            <button type="button" class="chip" :class="{ on: !!composerImages.length }" @click="openComposerImages" title="从本机上传">本地图片</button>
+            <button type="button" class="chip pick-lib" :class="{ on: showLibrary && libraryTab === 'images' }" @click="openImagePicker" title="从已入库图库多选">从图库选</button>
             <button
               type="button"
               class="chip on"
@@ -1944,7 +1963,9 @@
         const sessionId = ref('web-' + Math.random().toString(36).slice(2, 10));
         const showHistory = ref(false);
         const showLibrary = ref(false);
+        const libraryTab = ref('docs');
         const libPage = ref(1);
+        const imgPage = ref(1);
         const libPageSize = 12;
         const sourcePreview = ref({
           open: false, file_name: '', chunks: [], loading: false,
@@ -1992,7 +2013,7 @@
             subtitle: '左侧勾选优化方向 → 检索 → 大模型生成答案',
             emptyTitle: '向知识库提问',
             emptyDesc: '可勾选检索前/中/后、CRAG、Self-RAG，再生成答案。',
-            placeholder: '从图库选图或点「图片」上传；可不填问题，发送即默认详细分析',
+            placeholder: '基于知识库提问，例如：迟到怎么扣钱？',
           },
           chat: {
             title: '多轮知识库问答',
@@ -2025,9 +2046,9 @@
           mmrag: {
             title: '多模态 RAG',
             subtitle: 'Chinese-CLIP 检索；DeepSeek 看图分析',
-            emptyTitle: '先上传图片到知识库',
-            emptyDesc: '左侧导入 jpg/png。以文搜图输入描述；以图搜图/看图在输入栏选一张图。',
-            placeholder: '例如：一张红色的汽车 / 这张图里有什么？',
+            emptyTitle: '上传或从图库选图',
+            emptyDesc: '点输入栏「从图库选」勾选已入库图片；或「本地图片」上传。可不填问题，发送即默认分析。',
+            placeholder: '从图库选图后可不填问题直接发送；或以文搜图如：一张红色的汽车',
           },
         };
 
@@ -2519,25 +2540,25 @@
           if (!q) return imgs;
           return imgs.filter((img) => String(img.file_name || '').toLowerCase().includes(q));
         });
-        const libraryPages = computed(() => {
-          const n = Math.max(filteredLibrary.value.length, filteredImages.value.length);
-          return Math.max(1, Math.ceil(n / libPageSize));
-        });
+        const libraryPages = computed(() => Math.max(1, Math.ceil(filteredLibrary.value.length / libPageSize)));
+        const imagePages = computed(() => Math.max(1, Math.ceil(filteredImages.value.length / libPageSize)));
         const pagedLibrary = computed(() => {
           const start = (libPage.value - 1) * libPageSize;
           return filteredLibrary.value.slice(start, start + libPageSize);
         });
         const pagedImages = computed(() => {
-          const start = (libPage.value - 1) * libPageSize;
+          const start = (imgPage.value - 1) * libPageSize;
           return filteredImages.value.slice(start, start + libPageSize);
         });
-        watch(libraryQuery, () => { libPage.value = 1; });
+        watch(libraryQuery, () => { libPage.value = 1; imgPage.value = 1; });
         watch(libraryPages, (n) => {
           if (libPage.value > n) libPage.value = n;
         });
+        watch(imagePages, (n) => {
+          if (imgPage.value > n) imgPage.value = n;
+        });
 
-        const openLibrary = async () => {
-          showLibrary.value = true;
+        const loadLibraryData = async () => {
           libraryLoading.value = true;
           libraryHint.value = '';
           try {
@@ -2552,7 +2573,9 @@
             libraryFiles.value = data.files || [];
             libraryImages.value = data.images || [];
             libPage.value = 1;
-            libraryHint.value = `当前 ${data.backend || vectorBackend.value} · 范围 ${data.scope || docScope.value} · ${data.file_count || 0} 个文件 / ${data.chunk_count || 0} 段 · 图库可多选后「加入聊天」`;
+            imgPage.value = 1;
+            const imgN = (data.images || []).length;
+            libraryHint.value = `当前 ${data.backend || vectorBackend.value} · 文档 ${data.file_count || 0} · 图库 ${imgN} 张。切到「图库选图」可多选分析`;
             const names = new Set((libraryImages.value || []).map((x) => x.file_name));
             selectedLibImages.value = selectedLibImages.value.filter((n) => names.has(n));
           } catch (err) {
@@ -2562,6 +2585,18 @@
           } finally {
             libraryLoading.value = false;
           }
+        };
+
+        const openLibrary = async () => {
+          libraryTab.value = 'docs';
+          showLibrary.value = true;
+          await loadLibraryData();
+        };
+
+        const openImagePicker = async () => {
+          libraryTab.value = 'images';
+          showLibrary.value = true;
+          await loadLibraryData();
         };
 
         const toggleLibImage = (name) => {
@@ -2592,7 +2627,7 @@
           const last = composerImages.value[composerImages.value.length - 1];
           mmQueryFile.value = last && last.file ? last.file : null;
           mmQueryPreview.value = last ? last.url : '';
-          composerUploadHint.value = `已从图库加入 ${names.length} 张。可在下方输入分析要求，不填则默认详细分析`;
+          composerUploadHint.value = `已从图库加入 ${names.length} 张。可输入分析要求，不填直接发送即默认详细分析`;
           showLibrary.value = false;
           selectedLibImages.value = [];
         };
@@ -3629,10 +3664,14 @@
           messages,
           showHistory,
           showLibrary,
+          libraryTab,
           libPage,
+          imgPage,
           libraryPages,
+          imagePages,
           pagedLibrary,
           pagedImages,
+          openImagePicker,
           sourcePreview,
           openSourcePreview,
           deleteLibraryFile,
