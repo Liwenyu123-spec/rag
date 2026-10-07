@@ -803,6 +803,8 @@ async def delete_library_file(
 @app.get("/graph/status")
 async def graph_status():
     """GraphRAG / Neo4j 连通性与配置摘要。"""
+    from semantic_search.app.service.graph_rag import GraphRagService
+
     service = _try_init_graph_rag(app)
     if service is None:
         return {
@@ -811,6 +813,9 @@ async def graph_status():
             or "GraphRAG 未初始化（需 NEO4J_PASSWORD + DEEPSEEK_API_KEY + Neo4j）",
             "deepseek_configured": bool(DEEPSEEK_API_KEY),
             "neo4j_password_configured": bool(NEO4J_PASSWORD),
+            "browser_url": GraphRagService.browser_url(),
+            "node_count": 0,
+            "rel_count": 0,
         }
     return service.status()
 
