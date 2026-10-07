@@ -906,57 +906,59 @@
       .rag-workspace { grid-template-columns: 1fr; }
     }
 
-    /* —— 聊天壁纸（右下角独立入口，不占左侧栏） —— */
-    #app { position: relative; isolation: isolate; }
-    .wp-layer {
-      position: absolute; inset: 0; z-index: 0; pointer-events: none;
-      overflow: hidden; border-radius: inherit;
+    /* —— 聊天壁纸：挂在 body 全局层，避免被 #app 白底盖住 —— */
+    #global-wallpaper {
+      position: fixed; inset: 0; z-index: 0; pointer-events: none;
+      overflow: hidden; display: none;
     }
-    .wp-media {
+    body.app-has-wallpaper #global-wallpaper { display: block; }
+    #global-wallpaper .wp-media {
       position: absolute; inset: 0; width: 100%; height: 100%;
       object-fit: cover; display: block;
     }
-    .wp-dim {
-      position: absolute; inset: 0; background: #ffffff;
-      pointer-events: none;
+    #global-wallpaper .wp-dim {
+      position: absolute; inset: 0; background: #fff; pointer-events: none;
     }
-    .ds-shell { position: relative; z-index: 1; }
-    #app.has-wallpaper {
+    body.app-has-wallpaper {
+      background: #0b1220 !important;
+    }
+    body.app-has-wallpaper #app {
+      position: relative; z-index: 1;
       background: transparent !important;
       backdrop-filter: none !important;
       -webkit-backdrop-filter: none !important;
+      box-shadow: none !important;
     }
-    #app.has-wallpaper > .ds-shell {
-      grid-row: 1 / -1;
-      min-height: 0;
-      height: 100%;
+    body.app-has-wallpaper .ds-shell,
+    body.app-has-wallpaper .rag-workspace,
+    body.app-has-wallpaper .chat-shell,
+    body.app-has-wallpaper .messages,
+    body.app-has-wallpaper .empty-tip,
+    body.app-has-wallpaper .extra-workspace {
+      background: transparent !important;
+      background-image: none !important;
     }
-    #app.has-wallpaper .module-bar,
-    #app.has-wallpaper .header,
-    #app.has-wallpaper .input-area,
-    #app.has-wallpaper .extra-workspace {
-      background: rgba(255,255,255,.72) !important;
-      backdrop-filter: blur(8px);
+    body.app-has-wallpaper .module-bar {
+      background: rgba(255,255,255,.70) !important;
+      backdrop-filter: blur(10px);
     }
-    #app.has-wallpaper .rag-workspace { background: transparent !important; }
-    #app.has-wallpaper .sidebar {
-      background: linear-gradient(180deg, rgba(36,107,253,.10), transparent 45%), rgba(16,24,39,.72) !important;
-      backdrop-filter: blur(8px);
+    body.app-has-wallpaper .sidebar {
+      background: rgba(249,249,249,.78) !important;
+      backdrop-filter: blur(10px);
     }
-    #app.has-wallpaper .messages,
-    #app.has-wallpaper .chat-shell,
-    #app.has-wallpaper .empty-tip {
+    body.app-has-wallpaper .header {
       background: transparent !important;
     }
-    #app.has-wallpaper .input-area {
-      background: linear-gradient(180deg, transparent, rgba(255,255,255,.78) 28%) !important;
+    body.app-has-wallpaper .input-area {
+      background: linear-gradient(180deg, transparent, rgba(255,255,255,.55) 40%) !important;
     }
-    #app.has-wallpaper .composer {
-      background: rgba(255,255,255,.86) !important;
+    body.app-has-wallpaper .composer {
+      background: rgba(255,255,255,.88) !important;
     }
-    #app.has-wallpaper .suggestion {
+    body.app-has-wallpaper .suggestion {
       background: rgba(247,247,247,.82) !important;
     }
+    body.app-has-wallpaper .wp-fab-root { z-index: 80; }
     .wp-fab-root {
       position: fixed; right: 18px; bottom: 110px; z-index: 60;
       display: flex; flex-direction: column; align-items: flex-end; gap: 10px;
@@ -1009,25 +1011,7 @@
   </style>
 </head>
 <body>
-  <div id="app" v-cloak :class="{ 'has-wallpaper': !!wallpaperSrc }">
-  <div class="wp-layer" v-if="wallpaperSrc" aria-hidden="true">
-    <img
-      v-if="wallpaperKind === 'image'"
-      class="wp-media"
-      :src="wallpaperSrc"
-      alt=""
-    />
-    <video
-      v-else-if="wallpaperKind === 'video'"
-      class="wp-media"
-      :src="wallpaperSrc"
-      autoplay
-      muted
-      loop
-      playsinline
-    ></video>
-    <div class="wp-dim" :style="{ opacity: wallpaperDim }"></div>
-  </div>
+  <div id="app" v-cloak>
   <div class="ds-shell" :class="{ 'not-rag': appModule !== 'rag' }">
     <nav class="module-bar">
       <strong>四合一</strong>
@@ -2202,6 +2186,47 @@
         let wallpaperObjectUrl = null;
         const wallpaperVisibility = computed(() => Math.round((1 - wallpaperDim.value) * 100));
 
+        function ensureGlobalWallpaperEl() {
+          let root = document.getElementById('global-wallpaper');
+          if (!root) {
+            root = document.createElement('div');
+            root.id = 'global-wallpaper';
+            root.setAttribute('aria-hidden', 'true');
+            root.innerHTML = '<div class="wp-dim"></div>';
+            document.body.prepend(root);
+          }
+          return root;
+        }
+        function syncGlobalWallpaper() {
+          const root = ensureGlobalWallpaperEl();
+          const src = wallpaperSrc.value;
+          const kind = wallpaperKind.value;
+          const dim = wallpaperDim.value;
+          document.body.classList.toggle('app-has-wallpaper', !!src);
+          // 清掉旧媒体节点，保留遮罩
+          Array.from(root.querySelectorAll('.wp-media')).forEach((n) => n.remove());
+          const dimEl = root.querySelector('.wp-dim');
+          if (dimEl) dimEl.style.opacity = String(dim);
+          if (!src) return;
+          if (kind === 'video') {
+            const v = document.createElement('video');
+            v.className = 'wp-media';
+            v.src = src;
+            v.autoplay = true;
+            v.muted = true;
+            v.loop = true;
+            v.playsInline = true;
+            root.insertBefore(v, dimEl || null);
+            v.play().catch(() => {});
+          } else {
+            const img = document.createElement('img');
+            img.className = 'wp-media';
+            img.src = src;
+            img.alt = '';
+            root.insertBefore(img, dimEl || null);
+          }
+        }
+
         function wpOpenDb() {
           return new Promise((resolve, reject) => {
             const req = indexedDB.open(WP_DB, 1);
@@ -2266,16 +2291,25 @@
         }
         async function loadWallpaper() {
           const meta = wpLoadMeta();
-          if (!meta) return;
-          wallpaperDim.value = Math.min(0.9, Math.max(0.1, Number(meta.dim) || 0.45));
+          if (!meta) {
+            syncGlobalWallpaper();
+            return;
+          }
+          wallpaperDim.value = Math.min(0.9, Math.max(0.1, Number(meta.dim) || 0.35));
           try {
             const blob = await wpGet();
-            if (!blob) return;
+            if (!blob) {
+              syncGlobalWallpaper();
+              return;
+            }
             wpRevoke();
             wallpaperObjectUrl = URL.createObjectURL(blob);
             wallpaperSrc.value = wallpaperObjectUrl;
             wallpaperKind.value = meta.kind === 'video' ? 'video' : 'image';
-          } catch (_) { /* ignore */ }
+            syncGlobalWallpaper();
+          } catch (_) {
+            syncGlobalWallpaper();
+          }
         }
         function openWallpaperPicker() {
           wallpaperError.value = '';
@@ -2304,12 +2338,13 @@
           try {
             await wpPut(file);
             const kind = isVideo ? 'video' : 'image';
-            const dim = wallpaperDim.value || 0.45;
+            const dim = wallpaperDim.value || 0.35;
             wpSaveMeta({ kind, dim });
             wpRevoke();
             wallpaperObjectUrl = URL.createObjectURL(file);
             wallpaperSrc.value = wallpaperObjectUrl;
             wallpaperKind.value = kind;
+            syncGlobalWallpaper();
           } catch (err) {
             wallpaperError.value = (err && err.message) || '保存失败';
           } finally {
@@ -2320,12 +2355,15 @@
           const next = Math.min(0.9, Math.max(0.1, 1 - pct / 100));
           wallpaperDim.value = next;
           if (wallpaperKind.value) wpSaveMeta({ kind: wallpaperKind.value, dim: next });
+          const dimEl = document.querySelector('#global-wallpaper .wp-dim');
+          if (dimEl) dimEl.style.opacity = String(next);
         }
         async function clearWallpaper() {
           wpRevoke();
           wallpaperSrc.value = null;
           wallpaperKind.value = null;
           wpSaveMeta(null);
+          syncGlobalWallpaper();
           try { await wpClearDb(); } catch (_) { /* ignore */ }
         }
 
