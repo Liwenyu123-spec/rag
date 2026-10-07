@@ -494,11 +494,12 @@ class GraphRagService:
     def query(self, question: str, *, k: int = 5) -> dict:
         """自然语言 GraphRAG 问答。"""
         index = self._ensure_index()
+        # 索引已绑定 embed_model，这里再传会触发
+        # VectorContextRetriever() got multiple values for keyword argument 'embed_model'
         engine = index.as_query_engine(
             include_text=True,
             similarity_top_k=k,
             llm=self.llm,
-            embed_model=self.embed_model,
         )
         response = engine.query(question)
         evidence = self.explain_paths(question, hops=2, limit=16)
