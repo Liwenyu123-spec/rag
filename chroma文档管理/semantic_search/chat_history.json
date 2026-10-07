@@ -1,6 +1,52 @@
 {
   "sessions": [
     {
+      "id": "web-hhk0931e",
+      "title": "斗战神是什么游戏",
+      "mode": "ask",
+      "updated_at": 1791373150719,
+      "messages": [
+        {
+          "role": "user",
+          "content": "斗战神是什么游戏",
+          "imageUrl": "",
+          "sources": []
+        },
+        {
+          "role": "bot",
+          "content": "知识库文档未涉及《斗战神》相关信息；根据网页搜索片段，可归纳如下：\n\n《斗战神》是一款由腾讯旗下量子工作室开发、腾讯游戏运营的暗黑风 3D 大型多人在线角色扮演游戏（MMORPG），以《西游记》为背景框架，并以今何在的小说《悟空传》为蓝本/背景框架。该游戏于 2014 年 6 月 26 日开启“逆天公测”。（来源：《斗战神- 维基百科，自由的百科全书》https://zh.wikipedia.org/zh-hans/%E6%96%97%E6%88%98%E7%A5%9E；《斗战神》百度百科 https://baike.baidu.com/item/%E6%96%97%E6%88%98%E7%A5%9E/10119126）\n\n从官网和游戏资料看，它是以东方神话为题材的角色扮演类游戏，适用于年满 16 周岁及以上用户，建议未成年人在家长监护下使用；新浪游戏资料将其标为：类型“角色扮演”、风格“奇幻”、分类“网络游戏”、画面“3D画面”、开发商/运营商“腾讯游戏”、状态“公测”。（来源：《斗战神官方网站-腾讯游戏-开放式战斗2.0网游》https://dzs.qq.com/main.shtml；《斗战神_全球新网游_新浪游戏_新浪网》http://games.sina.com.cn/dzs）\n\n荣誉方面，它曾获 CGDA 2011“最佳游戏原画美术设计奖”“最佳游戏（人物/场景）美术设计奖”等 2 项大奖，并入围“最佳游戏音乐制作奖”；2014 年 10 月 14 日，原声音乐大碟《Asura OST》获得好莱坞音乐传媒大奖视频游戏类奖项提名。评价上，有观点认为其以《悟空传》为蓝本，较好融合了动作格斗与角色扮演、音效与打击感、暗黑风格与背景音乐等元素。（来源：《斗战神》百度百科 https://baike.baidu.com/item/%E6%96%97%E6%88%98%E7%A5%9E/10119126）",
+          "imageUrl": "",
+          "sources": [
+            {
+              "rank": 1,
+              "similarity": 0.0046,
+              "document": "18-多模态RAG-Chinese-CLIP.md"
+            },
+            {
+              "rank": 2,
+              "similarity": 0.0045,
+              "document": "14-RAG评估.md"
+            },
+            {
+              "rank": 3,
+              "similarity": 0.0034,
+              "document": "18-多模态RAG-Chinese-CLIP.md"
+            },
+            {
+              "rank": 4,
+              "similarity": 0.0032,
+              "document": "18-多模态RAG-Chinese-CLIP.md"
+            },
+            {
+              "rank": 5,
+              "similarity": 0.0023,
+              "document": "18-多模态RAG-Chinese-CLIP.md"
+            }
+          ]
+        }
+      ]
+    },
+    {
       "id": "web-lly4xfc4",
       "title": "[图片分析]",
       "mode": "ask",
