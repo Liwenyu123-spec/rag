@@ -215,7 +215,8 @@ export function useWallpaper() {
   }, [])
 
   const setDim = useCallback((dim: number) => {
-    const next = Math.min(0.85, Math.max(0.1, dim))
+    // 对应可见度约 10%–90%（dim = 1 - visibility）
+    const next = Math.min(0.9, Math.max(0.1, dim))
     setWallpaper((s) => {
       if (s.kind) saveMeta({ kind: s.kind, dim: next })
       else {

@@ -76,18 +76,22 @@ export function WallpaperModal({
           </p>
           <label className="mb-3 block">
             <span className="mb-1.5 flex items-center justify-between text-[12px] text-aux">
-              <span>遮罩浓度（越高字越清晰）</span>
-              <span>{Math.round(dim * 100)}%</span>
+              <span>壁纸透明度（越高壁纸越明显）</span>
+              <span className="tabular-nums">{Math.round((1 - dim) * 100)}%</span>
             </span>
             <input
               type="range"
-              min={0.15}
-              max={0.8}
-              step={0.05}
-              value={dim}
-              onChange={(e) => onDim(Number(e.target.value))}
+              min={20}
+              max={90}
+              step={5}
+              value={Math.round((1 - dim) * 100)}
+              onChange={(e) => onDim(1 - Number(e.target.value) / 100)}
               className="w-full accent-[#4d6bfe]"
             />
+            <span className="mt-1.5 flex justify-between text-[11px] text-aux">
+              <span>更淡 · 字更清晰</span>
+              <span>壁纸更清晰</span>
+            </span>
           </label>
           <button
             type="button"

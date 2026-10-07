@@ -21,6 +21,7 @@ import { MessageBubble } from './components/MessageBubble'
 import { OllamaSetupBanner } from './components/OllamaSetupBanner'
 import { MobileMenuButton, Sidebar } from './components/Sidebar'
 import { WallpaperModal } from './components/WallpaperModal'
+import { WallpaperOpacityControl } from './components/WallpaperOpacityControl'
 import { downloadText, sessionToMarkdown } from './lib/export'
 import type { ChatMessage } from './types'
 
@@ -193,6 +194,9 @@ export default function App() {
               </>
             )}
             <ModeSelect value={chat.active?.mode ?? 'zero_shot'} onChange={chat.setMode} />
+            {wallpaper.src && (
+              <WallpaperOpacityControl dim={wallpaper.dim} onDim={setDim} />
+            )}
             <button
               type="button"
               onClick={() => setWallpaperOpen(true)}
