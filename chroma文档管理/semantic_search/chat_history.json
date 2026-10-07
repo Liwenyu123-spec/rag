@@ -1,52 +1,6 @@
 {
   "sessions": [
     {
-      "id": "web-ynm22y3m",
-      "title": "谁建立了秦朝",
-      "mode": "ask",
-      "updated_at": 1791336719523,
-      "messages": [
-        {
-          "role": "user",
-          "content": "谁建立了秦朝",
-          "imageUrl": "",
-          "sources": []
-        },
-        {
-          "role": "bot",
-          "content": "根据提供的上下文，没有关于秦朝建立者的相关信息，因此无法回答。",
-          "imageUrl": "",
-          "sources": [
-            {
-              "rank": 1,
-              "similarity": 0.4599,
-              "document": "00-RAG入门课-全文.md"
-            },
-            {
-              "rank": 2,
-              "similarity": 0.4599,
-              "document": "00-RAG入门课-全文.md"
-            },
-            {
-              "rank": 3,
-              "similarity": 0.4599,
-              "document": "00-RAG入门课-全文.md"
-            },
-            {
-              "rank": 4,
-              "similarity": 0.4599,
-              "document": "00-RAG入门课-全文.md"
-            },
-            {
-              "rank": 5,
-              "similarity": 0.4599,
-              "document": "00-RAG入门课-全文.md"
-            }
-          ]
-        }
-      ]
-    },
-    {
       "id": "web-fvp9rs1f",
       "title": "深度学习有什么需要学的东西",
       "mode": "ask",
