@@ -1,6 +1,26 @@
 {
   "sessions": [
     {
+      "id": "web-d0vg9gy5",
+      "title": "谁建立了秦朝",
+      "mode": "graph",
+      "updated_at": 1791376214653,
+      "messages": [
+        {
+          "role": "user",
+          "content": "谁建立了秦朝",
+          "imageUrl": "",
+          "sources": []
+        },
+        {
+          "role": "bot",
+          "content": "秦始皇建立了秦朝。",
+          "imageUrl": "",
+          "sources": []
+        }
+      ]
+    },
+    {
       "id": "web-hcfu7dbi",
       "title": "这是个啥图片",
       "mode": "mmrag",
