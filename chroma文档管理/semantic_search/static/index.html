@@ -3133,6 +3133,13 @@
               botMsg.comparison = (data.comparison && data.comparison.enabled) ? data.comparison : null;
               botMsg.thinking = data.thinking || '';
               botMsg.thinkOpen = true;
+              if (mode.value === 'graph' && (data.paths || data.mentions)) {
+                botMsg.graphEvidence = {
+                  paths: data.paths || [],
+                  mentions: data.mentions || [],
+                  message: data.evidence_message || '',
+                };
+              }
             }
           } catch (err) {
             botMsg.content = '请求失败：' + (err.message || String(err));
@@ -3417,8 +3424,12 @@
           graphBusy,
           graphMsg,
           graphError,
+          graphEvalLoading,
+          graphEvalResult,
           buildGraphDemo,
           loadGraph,
+          clearGraph,
+          runGraphEval,
           addManualTriple,
           manualSubject,
           manualRelation,

@@ -214,18 +214,24 @@ class GraphRagService:
             return {"deleted_nodes": 0, "message": "文件名为空"}
         stem = want.rsplit(".", 1)[0]
         try:
-            rows = self._run_cypher(
+            counted = self._run_cypher(
                 "MATCH (n) "
                 "WHERE any(k IN keys(n) WHERE toLower(toString(n[k])) CONTAINS toLower($fname)) "
-                "   OR toLower(coalesce(n.name, '')) CONTAINS toLower($stem) "
-                "WITH collect(n) AS ns "
-                "FOREACH (x IN ns | DETACH DELETE x) "
-                "RETURN size(ns) AS deleted",
+                "   OR toLower(toString(coalesce(n.name, ''))) CONTAINS toLower($stem) "
+                "RETURN count(n) AS n",
                 fname=want,
                 stem=stem,
             )
-            deleted = int((rows[0] or {}).get("deleted") or 0) if rows else 0
+            deleted = int((counted[0] or {}).get("n") or 0) if counted else 0
             if deleted:
+                self._run_cypher(
+                    "MATCH (n) "
+                    "WHERE any(k IN keys(n) WHERE toLower(toString(n[k])) CONTAINS toLower($fname)) "
+                    "   OR toLower(toString(coalesce(n.name, ''))) CONTAINS toLower($stem) "
+                    "DETACH DELETE n",
+                    fname=want,
+                    stem=stem,
+                )
                 self._index = None
             return {
                 "deleted_nodes": deleted,
