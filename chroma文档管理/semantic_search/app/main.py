@@ -67,9 +67,10 @@ from semantic_search.app.modular_config import describe_module_graph, yaml_as_as
 from semantic_search.app.service.rag_service import RagAskService
 from semantic_search.app.service.presets import PRESETS
 from semantic_search.app.service.rag_eval import (
-    DEFAULT_RETRIEVAL_CASES,
     compare_retrieval_runs,
     evaluate_retrieval_cases,
+    get_default_retrieval_cases,
+    load_retrieval_casebook,
 )
 from semantic_search.app.routers import basic as basic_router
 from semantic_search.app.routers import content as content_router
@@ -354,6 +355,21 @@ async def ask(request: AskRequest, backend: str = Depends(vector_backend_dep)): 
     )  # AskResponse 结束
 
 
+@app.get("/eval/retrieval/cases")
+async def eval_retrieval_cases():
+    """查看当前检索评测集（data/eval/retrieval_cases.json）。"""
+    book = load_retrieval_casebook()
+    return {
+        "name": book.get("name"),
+        "doc_scope": book.get("doc_scope"),
+        "description": book.get("description"),
+        "source": book.get("source"),
+        "path": book.get("path"),
+        "total": len(book.get("cases") or []),
+        "cases": book.get("cases") or [],
+    }
+
+
 @app.post("/eval/retrieval", response_model=RetrievalEvalResponse)  # 检索质量评估接口
 async def eval_retrieval(request: RetrievalEvalRequest, backend: str = Depends(vector_backend_dep)):  # 请求体含 k / 开关 / cases
     """检索质量评估：Hit Rate / MRR / Precision@K / Recall@K。
@@ -363,11 +379,13 @@ async def eval_retrieval(request: RetrievalEvalRequest, backend: str = Depends(v
     """
     engine = _bound_engine(app, backend)
     service = RagAskService(engine)
+    book = load_retrieval_casebook()
     cases = (
         [c.model_dump() for c in request.cases]
         if request.cases
-        else list(DEFAULT_RETRIEVAL_CASES)
+        else get_default_retrieval_cases()
     )
+    doc_scope = (request.doc_scope or book.get("doc_scope") or "business").strip() or "business"
     k = max(1, min(request.k, max(engine.collection.count(), 1)))
     strategy = (request.strategy or "none").strip().lower()
     if strategy and strategy not in {"none", "clean", "rewrite", "hyde", "step_back"}:
@@ -383,6 +401,7 @@ async def eval_retrieval(request: RetrievalEvalRequest, backend: str = Depends(v
         "use_compress": False if request.use_compress is None else bool(request.use_compress),
         "use_reorder": False if request.use_reorder is None else bool(request.use_reorder),
         "use_crag": False if request.use_crag is None else bool(request.use_crag),
+        "doc_scope": doc_scope,
     }
     basic = PRESETS["basic"]
     baseline_flags = {
@@ -395,6 +414,7 @@ async def eval_retrieval(request: RetrievalEvalRequest, backend: str = Depends(v
         "use_compress": bool(basic.get("use_compress", False)),
         "use_reorder": bool(basic.get("use_reorder", False)),
         "use_crag": bool(basic.get("use_crag", False)),
+        "doc_scope": doc_scope,
     }
 
     def _make_retrieve(flags: dict):
@@ -404,6 +424,7 @@ async def eval_retrieval(request: RetrievalEvalRequest, backend: str = Depends(v
         return _retrieve
 
     def _bundle(label: str, payload: dict, flags: dict) -> RetrievalEvalBundle:
+        flag_body = {k: v for k, v in flags.items() if k != "doc_scope"}
         return RetrievalEvalBundle(
             label=label,
             hit_rate=payload["hit_rate"],
@@ -413,7 +434,7 @@ async def eval_retrieval(request: RetrievalEvalRequest, backend: str = Depends(v
             total=payload["total"],
             results=[RetrievalEvalItem(**r) for r in payload["results"]],
             diagnosis=payload.get("diagnosis"),
-            flags=RetrievalEvalFlags(**flags),
+            flags=RetrievalEvalFlags(**flag_body),
         )
 
     current_payload = evaluate_retrieval_cases(
@@ -439,6 +460,8 @@ async def eval_retrieval(request: RetrievalEvalRequest, backend: str = Depends(v
         message=current_payload.get("message") or "ok",
         diagnosis=current.diagnosis,
         compared=bool(request.compare),
+        casebook_name=str(book.get("name") or ""),
+        doc_scope=doc_scope,
         current=current,
         baseline=baseline,
         delta=delta,

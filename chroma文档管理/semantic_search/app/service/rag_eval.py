@@ -1,48 +1,119 @@
 """RAG 评估：对齐飞书「01-RAG评估」LlamaIndex 内置评估器。
 
 生成质量：Faithfulness / Relevancy / Correctness（LLM-as-judge）
-检索质量：Hit Rate / MRR / Precision@K / Recall@K（关键词、reference、expected_ids）
+检索质量：Hit Rate / MRR / Precision@K / Recall@K（expected_ids / expected_texts / keywords）
 诊断：答案差先看检索 → 定位检索锅还是生成锅。
-"""  # 模块说明：生成与检索两侧评估入口
+"""
 
-from __future__ import annotations  # 允许注解里使用尚未定义的前向类型
+from __future__ import annotations
 
-from typing import Any, Optional  # Any 接评估结果；Optional 表示可空开关
+import json
+from pathlib import Path
+from typing import Any, Optional
 
-from llama_index.core import Settings  # 取全局 LLM 做 LLM-as-judge
-from llama_index.core.base.response.schema import Response  # 评估器需要的 Response 结构
-from llama_index.core.schema import NodeWithScore, TextNode  # 来源节点与文本节点类型
+from llama_index.core import Settings
+from llama_index.core.base.response.schema import Response
+from llama_index.core.schema import NodeWithScore, TextNode
 
-from semantic_search.app.config import EVAL_VERBOSE  # 评估过程是否打印日志
+from semantic_search.app.config import DATA_DIR, EVAL_VERBOSE
 
-# 飞书示例：贝壳科技 company_info.txt 配套评测集
-DEFAULT_RETRIEVAL_CASES: list[dict] = [  # 默认检索评测用例（query + keywords + reference）
-    {  # 用例1：总部地点
-        "query": "贝壳科技总部在哪里？",  # 评测问题
-        "keywords": ["北京", "总部"],  # 命中判定关键词
-        "reference": "贝壳科技总部地点是北京。",  # Correctness 用标准答案
-    },  # 续行参数/元素
-    {  # 用例2：员工人数
-        "query": "贝壳科技有多少员工？",  # 评测问题
-        "keywords": ["2000", "员工"],  # 命中判定关键词
-        "reference": "贝壳科技员工人数为 2000 人。",  # Correctness 用标准答案
-    },  # 续行参数/元素
-    {  # 用例3：上下班时间
-        "query": "公司上班和下班时间分别是几点？",  # 评测问题
-        "keywords": ["9:00", "18:00", "上班", "下班"],  # 命中判定关键词
-        "reference": "上班时间早上9:00，下班时间晚上18:00。",  # Correctness 用标准答案
-    },  # 续行参数/元素
-    {  # 用例4：主营业务
-        "query": "公司主要做什么业务？",  # 评测问题
-        "keywords": ["AI", "大数据", "云计算", "业务"],  # 命中判定关键词
-        "reference": "主要业务是 AI软件开发、大数据服务、云计算平台。",  # Correctness 用标准答案
-    },  # 续行参数/元素
-    {  # 用例5：福利待遇
-        "query": "公司有哪些福利？",  # 评测问题
-        "keywords": ["五险一金", "年假", "福利"],  # 命中判定关键词
-        "reference": "福利包括五险一金、带薪年假、节日福利、定期团建。",  # Correctness 用标准答案
-    },  # 续行参数/元素
-]  # 列表结束
+_FALLBACK_CASES: list[dict] = [
+    {
+        "query": "贝壳科技总部在哪里？",
+        "keywords": ["北京", "总部"],
+        "expected_texts": ["总部地点：北京"],
+        "reference": "贝壳科技总部地点是北京。",
+    },
+    {
+        "query": "贝壳科技有多少员工？",
+        "keywords": ["2000", "员工"],
+        "expected_texts": ["员工人数：2000人"],
+        "reference": "贝壳科技员工人数为 2000 人。",
+    },
+    {
+        "query": "公司上班和下班时间分别是几点？",
+        "keywords": ["9:00", "18:00"],
+        "expected_texts": ["上班时间：早上9:00", "下班时间：晚上18:00"],
+        "reference": "上班时间早上9:00，下班时间晚上18:00。",
+    },
+    {
+        "query": "公司主要做什么业务？",
+        "keywords": ["AI", "大数据", "云计算"],
+        "expected_texts": ["公司主要业务：AI软件开发、大数据服务、云计算平台"],
+        "reference": "主要业务是 AI软件开发、大数据服务、云计算平台。",
+    },
+    {
+        "query": "公司有哪些福利？",
+        "keywords": ["五险一金", "年假", "团建"],
+        "expected_texts": ["公司福利：五险一金、带薪年假、节日福利、定期团建"],
+        "reference": "福利包括五险一金、带薪年假、节日福利、定期团建。",
+    },
+    {
+        "query": "子公司有多少员工？",
+        "keywords": ["300", "子公司"],
+        "expected_texts": ["子公司员工数量为 300 人"],
+        "reference": "子公司员工数量为 300 人。",
+    },
+]
+
+RETRIEVAL_CASES_PATH = Path(DATA_DIR) / "eval" / "retrieval_cases.json"
+
+
+def load_retrieval_casebook() -> dict:
+    """读取可配置评测集；JSON 坏了或缺失时回退内置题。"""
+    meta = {
+        "name": "内置贝壳科技样题",
+        "doc_scope": "business",
+        "description": "默认评测集",
+        "source": "builtin",
+        "path": str(RETRIEVAL_CASES_PATH),
+        "cases": list(_FALLBACK_CASES),
+    }
+    path = RETRIEVAL_CASES_PATH
+    if not path.is_file():
+        return meta
+    try:
+        raw = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        meta["description"] = f"读取 {path.name} 失败，已用内置题：{exc}"
+        return meta
+    cases = raw.get("cases") if isinstance(raw, dict) else None
+    if not isinstance(cases, list) or not cases:
+        meta["description"] = f"{path.name} 无有效 cases，已用内置题"
+        return meta
+    cleaned = []
+    for item in cases:
+        if not isinstance(item, dict):
+            continue
+        q = str(item.get("query") or "").strip()
+        if not q:
+            continue
+        cleaned.append({
+            "query": q,
+            "keywords": [str(k).strip() for k in (item.get("keywords") or []) if str(k).strip()],
+            "expected_texts": [str(t).strip() for t in (item.get("expected_texts") or []) if str(t).strip()],
+            "expected_ids": [str(i).strip() for i in (item.get("expected_ids") or []) if str(i).strip()],
+            "reference": str(item.get("reference") or "").strip() or None,
+        })
+    if not cleaned:
+        meta["description"] = f"{path.name} cases 为空，已用内置题"
+        return meta
+    return {
+        "name": str(raw.get("name") or path.stem),
+        "doc_scope": str(raw.get("doc_scope") or "business"),
+        "description": str(raw.get("description") or ""),
+        "source": "file",
+        "path": str(path),
+        "cases": cleaned,
+    }
+
+
+def get_default_retrieval_cases() -> list[dict]:
+    return list(load_retrieval_casebook()["cases"])
+
+
+# 兼容旧 import
+DEFAULT_RETRIEVAL_CASES = get_default_retrieval_cases()
 
 
 def _pass_score(result: Any) -> tuple[bool | None, float | None, str | None]:  # 统一抽取评估三元组
@@ -212,6 +283,31 @@ def _gold_from_case(item: dict) -> tuple[list[str], list[str], list[str]]:
     return keywords, texts, ids
 
 
+def _text_contains_gold(doc: str, gold: str) -> bool:
+    """宽松片段匹配：黄金句出现在召回里，或召回核心句出现在黄金句里。"""
+    a = " ".join((doc or "").lower().split())
+    b = " ".join((gold or "").lower().split())
+    if not a or not b:
+        return False
+    if b in a or a in b:
+        return True
+    # 去掉常见标点后再比一次，兼容分块切断
+    for ch in "：:，,。.;；、 ":
+        a = a.replace(ch, "")
+        b = b.replace(ch, "")
+    return bool(a and b and (b in a or a in b))
+
+
+def gold_mode_of(expected_ids: list[str], expected_texts: list[str], keywords: list[str]) -> str:
+    if expected_ids:
+        return "expected_ids"
+    if expected_texts:
+        return "expected_texts"
+    if keywords:
+        return "keywords"
+    return "none"
+
+
 def _doc_is_relevant(
     text: str,
     nid: str | None,
@@ -219,24 +315,25 @@ def _doc_is_relevant(
     expected_texts: list[str],
     expected_ids: list[str],
 ) -> bool:
-    """单篇是否相关：有 expected_ids 时只看节点 ID，否则看关键词 / 标准片段。"""
+    """单篇是否相关：ID > 黄金片段 > 关键词（避免宽关键词误命中）。"""
     if expected_ids:
         return bool(nid and nid in expected_ids)
+    if expected_texts:
+        return any(_text_contains_gold(text, t) for t in expected_texts)
     low = (text or "").lower()
-    if any(k.lower() in low for k in keywords):
-        return True
-    if any(t.lower() in low for t in expected_texts):
-        return True
-    return False
+    return any(k.lower() in low for k in keywords)
 
 
 def _label_recall(texts: list[str], keywords: list[str], expected_texts: list[str]) -> float | None:
-    """标签级 Recall：关键词 + 标准片段有多少出现在 Top-K 正文里。"""
-    labels = [x for x in (keywords + expected_texts) if x]
+    """标签级 Recall：优先按黄金片段，否则按关键词。"""
+    labels = expected_texts or keywords
     if not labels:
         return None
-    blob = "\n".join(texts).lower()
-    hit = sum(1 for lab in labels if lab.lower() in blob)
+    if expected_texts:
+        hit = sum(1 for lab in labels if any(_text_contains_gold(t, lab) for t in texts))
+    else:
+        blob = "\n".join(texts).lower()
+        hit = sum(1 for lab in labels if lab.lower() in blob)
     return hit / len(labels)
 
 
@@ -287,6 +384,7 @@ def score_retrieved(
         "recall": round(recall, 4),
         "first_hit_rank": first_rank,
         "relevant_in_k": rel_n,
+        "gold_mode": gold_mode_of(expected_ids, expected_texts, keywords),
     }
 
 
@@ -390,6 +488,7 @@ def evaluate_retrieval_cases(  # 批量检索评估入口
                 "recall": scored["recall"],
                 "first_hit_rank": scored["first_hit_rank"],
                 "relevant_in_k": scored["relevant_in_k"],
+                "gold_mode": scored.get("gold_mode") or "none",
                 "retrieved_preview": previews[:5],
             }
         )

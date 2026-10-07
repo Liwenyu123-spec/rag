@@ -253,6 +253,10 @@ class RetrievalEvalCase(BaseModel):  # 单条检索评测样例
 class RetrievalEvalRequest(BaseModel):  # POST /eval/retrieval 请求体
     k: int = Field(5, ge=1, le=100)  # 检索 Top-K
     compare: bool = Field(True, description="是否同时跑基础 RAG 做 A/B")
+    doc_scope: str | None = Field(
+        None,
+        description="检索范围；为空则用评测集默认 / business",
+    )
     use_pre: bool | None = Field(None, description="当前配置：检索前优化")
     strategy: str | None = Field(None, description="当前配置：none / clean / rewrite / hyde / step_back")
     use_hybrid: bool | None = Field(True, description="是否混合检索")  # 混合检索开关
@@ -264,7 +268,7 @@ class RetrievalEvalRequest(BaseModel):  # POST /eval/retrieval 请求体
     use_crag: bool | None = Field(False, description="是否走 CRAG（评估会变慢）")
     cases: List[RetrievalEvalCase] | None = Field(  # 自定义评测集
         None,  # 为空则用默认集
-        description="自定义评测集；为空则用 company_info 默认集",  # OpenAPI 字段说明
+        description="自定义评测集；为空则读 data/eval/retrieval_cases.json",  # OpenAPI 字段说明
     )  # cases 字段结束
 
 
@@ -276,6 +280,7 @@ class RetrievalEvalItem(BaseModel):  # 单条检索评测结果
     recall: float = 0.0  # 本条 Recall@K
     first_hit_rank: int | None = None  # 第一个相关文档排名
     relevant_in_k: int = 0  # Top-K 中相关篇数
+    gold_mode: str = "keywords"  # expected_ids / expected_texts / keywords
     retrieved_preview: List[str] = Field(default_factory=list)  # 检索结果预览片段
     error: str | None = None  # 本条评测出错信息
 
@@ -322,6 +327,8 @@ class RetrievalEvalResponse(BaseModel):  # /eval/retrieval 响应体
     diagnosis: str | None = None  # 简短诊断（检索瓶颈提示）
     note: str = "当前配置 vs 基础 RAG；Hit / MRR / Precision@K / Recall@K"
     compared: bool = False
+    casebook_name: str = ""
+    doc_scope: str = "business"
     current: RetrievalEvalBundle | None = None
     baseline: RetrievalEvalBundle | None = None
     delta: RetrievalEvalDelta | None = None

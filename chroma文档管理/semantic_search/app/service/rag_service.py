@@ -121,6 +121,7 @@ class RagAskService:
         use_compress: bool,
         use_reorder: bool,
         use_crag: bool,
+        doc_scope: Optional[str] = None,
     ) -> list[NodeWithScore]:
         """检索评估仍复用同一套检索算子，不走生成模块。"""
         question = (question or "").strip()
@@ -130,6 +131,7 @@ class RagAskService:
         if total == 0:
             return []
         k = max(1, min(k, total))
+        scope = normalize_scope(doc_scope or DEFAULT_SCOPE)
         effective = (strategy or "none").strip().lower()
         if not use_pre:
             effective = "none"
@@ -143,10 +145,10 @@ class RagAskService:
             hybrid_enabled=use_hybrid,
             num_queries=max(1, int(num_queries or 1)),
             fusion_mode=fusion_mode,
-            doc_scope=DEFAULT_SCOPE,
+            doc_scope=scope,
         )
         for q in queries:
-            ranked_lists.append(filter_nodes_by_scope(list(retriever.retrieve(q)), DEFAULT_SCOPE))
+            ranked_lists.append(filter_nodes_by_scope(list(retriever.retrieve(q)), scope))
         fuse_k = max(k, min(total, k * 2))
         fused = (
             merge_nodes_rrf(ranked_lists, k=fuse_k)
@@ -174,6 +176,7 @@ class RagAskService:
                     use_reorder=use_reorder,
                     num_queries=max(1, int(num_queries or 1)),
                     fusion_mode=fusion_mode,
+                    doc_scope=scope,
                 ),
                 llm=Settings.llm,
                 enabled=True,

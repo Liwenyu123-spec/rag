@@ -1,0 +1,43 @@
+{
+  "name": "贝壳科技 company_info",
+  "doc_scope": "business",
+  "description": "针对 data/company_info.txt。优先用 expected_texts 判命中，关键词仅作兜底。可改本文件后重启服务生效。",
+  "cases": [
+    {
+      "query": "贝壳科技总部在哪里？",
+      "keywords": ["北京", "总部"],
+      "expected_texts": ["总部地点：北京", "总部地点是北京"],
+      "reference": "贝壳科技总部地点是北京。"
+    },
+    {
+      "query": "贝壳科技有多少员工？",
+      "keywords": ["2000", "员工"],
+      "expected_texts": ["员工人数：2000人", "员工人数为 2000"],
+      "reference": "贝壳科技员工人数为 2000 人。"
+    },
+    {
+      "query": "公司上班和下班时间分别是几点？",
+      "keywords": ["9:00", "18:00"],
+      "expected_texts": ["上班时间：早上9:00", "下班时间：晚上18:00"],
+      "reference": "上班时间早上9:00，下班时间晚上18:00。"
+    },
+    {
+      "query": "公司主要做什么业务？",
+      "keywords": ["AI", "大数据", "云计算"],
+      "expected_texts": ["公司主要业务：AI软件开发、大数据服务、云计算平台"],
+      "reference": "主要业务是 AI软件开发、大数据服务、云计算平台。"
+    },
+    {
+      "query": "公司有哪些福利？",
+      "keywords": ["五险一金", "年假", "团建"],
+      "expected_texts": ["公司福利：五险一金、带薪年假、节日福利、定期团建"],
+      "reference": "福利包括五险一金、带薪年假、节日福利、定期团建。"
+    },
+    {
+      "query": "子公司有多少员工？",
+      "keywords": ["300", "子公司"],
+      "expected_texts": ["子公司员工数量为 300 人"],
+      "reference": "子公司员工数量为 300 人。"
+    }
+  ]
+}
