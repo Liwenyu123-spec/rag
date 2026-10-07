@@ -4,7 +4,7 @@
       "id": "web-lly4xfc4",
       "title": "[图片分析]",
       "mode": "ask",
-      "updated_at": 1791360187976,
+      "updated_at": 1791360269411,
       "messages": [
         {
           "role": "user",
@@ -79,6 +79,29 @@
               "rank": 5,
               "similarity": 0.8178,
               "document": "奶蛙0047.webp"
+            }
+          ]
+        },
+        {
+          "role": "user",
+          "content": "迟到怎么扣钱",
+          "imageUrl": "",
+          "sources": []
+        },
+        {
+          "role": "bot",
+          "content": "根据考勤制度，迟到扣款规则如下：\n\n- 迟到 10 分钟以内：每次扣除 20 元。  \n  另外，一个月内可以有两次 10 分钟内的迟到，但下班时间需要延后 10 分钟。\n- 迟到超过 10 分钟但不超过 30 分钟：每次扣除 50 元。\n- 迟到超过 30 分钟但不超过 60 分钟：每次扣除 100 元。\n- 迟到超过 120 分钟：按旷工半天处理。\n\n另外，考勤周期内如果出现迟到，则不能获得全勤奖 200 元/月。\n\n上下文未说明“迟到超过 60 分钟但不超过 120 分钟”的具体扣款标准。",
+          "imageUrl": "",
+          "sources": [
+            {
+              "rank": 1,
+              "similarity": 0.5055,
+              "document": "kq.txt"
+            },
+            {
+              "rank": 2,
+              "similarity": 0.5055,
+              "document": "kq.txt"
             }
           ]
         }
