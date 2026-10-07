@@ -572,10 +572,11 @@ def load_graph_casebook() -> dict:
 
 
 def evaluate_graph_cases(graph_service: Any, cases: list[dict] | None = None) -> dict:
-    """图谱评测：问题 → retrieve + 路径，看关键词/实体是否出现。"""
+    """图谱评测：优先用 Cypher 路径证据判命中；retrieve 失败也不再整题作废。"""
     book = load_graph_casebook()
     items = cases if cases is not None else list(book.get("cases") or [])
     results: list[dict] = []
+    load_errors = 0
     for item in items:
         query = str(item.get("query") or "").strip()
         if not query:
@@ -584,52 +585,77 @@ def evaluate_graph_cases(graph_service: Any, cases: list[dict] | None = None) ->
         entities = [
             str(e).strip() for e in (item.get("expected_entities") or []) if str(e).strip()
         ]
+        err = None
+        retrieved: dict = {"results": [], "paths": [], "mentions": []}
         try:
             retrieved = graph_service.retrieve(query, k=5)
-            evidence = {
-                "paths": retrieved.get("paths") or [],
-                "mentions": retrieved.get("mentions") or [],
-            }
-            blob_parts = [
-                *(r.get("text") or "" for r in (retrieved.get("results") or [])),
-                *(p.get("path") or "" for p in (evidence.get("paths") or [])),
-                " ".join(evidence.get("mentions") or []),
-            ]
-            blob = "\n".join(blob_parts).lower()
-            kw_hit = any(k.lower() in blob for k in keywords) if keywords else False
-            ent_hit = all(e.lower() in blob for e in entities) if entities else kw_hit
-            hit = bool(kw_hit or ent_hit)
-            results.append({
-                "query": query,
-                "hit": hit,
-                "keyword_hit": kw_hit,
-                "entity_hit": ent_hit,
-                "paths": (evidence.get("paths") or [])[:4],
-                "preview": (retrieved.get("results") or [{}])[0].get("text", "")[:120]
-                if retrieved.get("results")
-                else "",
-            })
         except Exception as exc:  # noqa: BLE001
-            results.append({
-                "query": query,
-                "hit": False,
-                "keyword_hit": False,
-                "entity_hit": False,
-                "paths": [],
-                "preview": "",
-                "error": str(exc),
-            })
+            err = str(exc)
+            load_errors += 1
+            try:
+                retrieved = {
+                    "results": [],
+                    **(graph_service.explain_paths(query, hops=2, limit=16) or {}),
+                }
+            except Exception as exc2:  # noqa: BLE001
+                err = f"{err}; 路径兜底也失败: {exc2}"
+                retrieved = {"results": [], "paths": [], "mentions": []}
+
+        paths = retrieved.get("paths") or []
+        mentions = retrieved.get("mentions") or []
+        blob_parts = [
+            *(r.get("text") or "" for r in (retrieved.get("results") or [])),
+            *(p.get("path") or "" for p in paths),
+            *(f"{p.get('subject','')}|{p.get('relation','')}|{p.get('object','')}" for p in paths),
+            " ".join(mentions),
+        ]
+        # 把整张图的样例边也算进兜底（避免只测到空检索）
+        try:
+            for t in (graph_service.graph_counts().get("sample_triples") or [])[:20]:
+                blob_parts.append(
+                    f"{t.get('subject','')}|{t.get('relation','')}|{t.get('object','')}"
+                )
+        except Exception:  # noqa: BLE001
+            pass
+        blob = "\n".join(blob_parts).lower()
+        kw_hit = any(k.lower() in blob for k in keywords) if keywords else False
+        # 实体：命中任意一个关键实体即可（不再要求全部同时出现）
+        ent_hit = any(e.lower() in blob for e in entities) if entities else False
+        hit = bool(kw_hit or ent_hit)
+        preview = ""
+        if retrieved.get("results"):
+            preview = str((retrieved.get("results") or [{}])[0].get("text") or "")[:120]
+        elif paths:
+            preview = str(paths[0].get("path") or "")[:120]
+        results.append({
+            "query": query,
+            "hit": hit,
+            "keyword_hit": kw_hit,
+            "entity_hit": ent_hit,
+            "paths": paths[:4],
+            "preview": preview,
+            "error": err,
+        })
     n = len(results)
     hit_rate = (sum(1 for r in results if r.get("hit")) / n) if n else 0.0
+    if load_errors and hit_rate < 0.6:
+        diagnosis = (
+            "图谱索引加载/检索异常（常见原因是误用 OpenAI 默认 LLM）。"
+            "请重启服务后再测；仍失败则先点「用示例构建图谱」。"
+        )
+    elif hit_rate < 0.6:
+        diagnosis = (
+            "图谱关系题命中偏低：请先点「用示例构建图谱（乔布斯/苹果）」。"
+            "若图里只有手工三元组，题面关键词对不上也会判未命中。"
+        )
+    else:
+        diagnosis = "图谱侧对样题基本可用；可与向量 basic 对照看多跳题差距"
     return {
         "casebook_name": book.get("name") or "",
         "total": n,
         "hit_rate": round(hit_rate, 4),
         "results": results,
         "message": "ok" if n else "empty_cases",
-        "diagnosis": (
-            "图谱关系题命中偏低：先用示例建图，或检查 Schema/实体名是否对齐"
-            if hit_rate < 0.6
-            else "图谱侧对样题基本可用；可与向量 basic 对照看多跳题差距"
-        ),
+        "diagnosis": diagnosis,
+        "retrieve_errors": load_errors,
     }

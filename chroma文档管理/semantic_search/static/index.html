@@ -1133,6 +1133,8 @@
             <span :class="r.hit ? 'ok' : 'bad'">{{ r.hit ? '命中' : '未命中' }}</span>
             · {{ r.query }}
             <div class="eval-preview" v-if="(r.paths || [])[0]">路径：{{ r.paths[0].path }}</div>
+            <div class="eval-preview" v-else-if="r.preview">召回：{{ r.preview }}</div>
+            <div class="eval-preview" v-if="r.error" style="color:#fda4af">原因：{{ String(r.error).slice(0, 120) }}</div>
           </div>
         </div>
         <div style="height:1px;background:rgba(255,255,255,.1);margin:4px 0"></div>

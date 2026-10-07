@@ -369,6 +369,7 @@ class GraphRagService:
         self._index = PropertyGraphIndex.from_documents(
             docs,
             kg_extractors=[kg_extractor],
+            llm=self.llm,
             embed_model=self.embed_model,
             property_graph_store=self.graph_store,
             embed_kg_nodes=True,
@@ -411,6 +412,7 @@ class GraphRagService:
         """从已有 Neo4j 图谱加载索引（不再重新抽文本）。"""
         self._index = PropertyGraphIndex.from_existing(
             property_graph_store=self.graph_store,
+            llm=self.llm,
             embed_model=self.embed_model,
             embed_kg_nodes=True,
         )
