@@ -1,6 +1,26 @@
 {
   "sessions": [
     {
+      "id": "web-ghz69q2s",
+      "title": "谁建立了秦朝",
+      "mode": "graph",
+      "updated_at": 1791336802864,
+      "messages": [
+        {
+          "role": "user",
+          "content": "谁建立了秦朝",
+          "imageUrl": "",
+          "sources": []
+        },
+        {
+          "role": "bot",
+          "content": "GraphRAG 问答失败: llama_index.core.indices.property_graph.sub_retrievers.vector.VectorContextRetriever() got multiple values for keyword argument 'embed_model'",
+          "imageUrl": "",
+          "sources": []
+        }
+      ]
+    },
+    {
       "id": "web-fvp9rs1f",
       "title": "深度学习有什么需要学的东西",
       "mode": "ask",
