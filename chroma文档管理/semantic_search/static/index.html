@@ -199,6 +199,19 @@
     .eval-plain .ok { color: #86efac; }
     .eval-plain .bad { color: #fda4af; }
     .eval-hint { color: #8b93a7; font-size: 11px; line-height: 1.5; }
+    .eval-metrics {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 6px;
+    }
+    .eval-metric {
+      padding: 7px 8px; border-radius: 8px;
+      background: rgba(0,0,0,.22); border: 1px solid rgba(255,255,255,.08);
+    }
+    .eval-metric span { display: block; color: #8b93a7; font-size: 10px; }
+    .eval-metric strong { color: #fff; font-size: 13px; font-variant-numeric: tabular-nums; }
+    .eval-metric em { font-style: normal; font-size: 10px; color: #9bb8ff; }
+    .eval-metric em.up { color: #86efac; }
+    .eval-metric em.down { color: #fda4af; }
+    .eval-preview { color: #8b93a7; font-size: 11px; margin-top: 4px; }
     .opt-list { display: grid; gap: 8px; }
     .opt-item {
       display: flex; align-items: flex-start; gap: 10px;
@@ -1242,22 +1255,50 @@
           @click="runRetrievalEval"
         >{{ evalLoading ? '正在测检索…' : '测一下检索好不好用' }}</button>
         <div class="eval-hint">
-          这不是聊天提问。会用内置的 5 道「贝壳科技」样题，看你勾选的优化能不能搜到资料，结果只显示在下面，不会当成你的问题。
+          这不是聊天提问。用 <code style="color:#9bb8ff">data/eval/retrieval_cases.json</code> 里的样题测检索；优先按黄金片段判命中。结果只显示在下面。
         </div>
         <div class="eval-plain" v-if="evalResult">
-          <h4>检索自测结果（内置样题，不是你问的）</h4>
-          <div>一共 {{ evalResult.total }} 题。</div>
-          <div class="kv">
-            当前勾选：{{ evalHitText(evalResult) }}
+          <h4>检索自测 · {{ evalResult.casebook_name || '样题集' }}</h4>
+          <div class="kv">范围 {{ scopeLabel(evalResult.doc_scope || docScope) }} · 共 {{ evalResult.total }} 题 · {{ evalHitText(evalResult) }}</div>
+          <div class="eval-metrics">
+            <div class="eval-metric">
+              <span>Hit Rate</span>
+              <strong>{{ fmtPct(evalResult.hit_rate) }}</strong>
+              <em v-if="evalResult.delta" :class="deltaClass(evalResult.delta.hit_rate)">Δ {{ fmtDelta(evalResult.delta.hit_rate) }}</em>
+            </div>
+            <div class="eval-metric">
+              <span>MRR</span>
+              <strong>{{ fmtNum(evalResult.mrr) }}</strong>
+              <em v-if="evalResult.delta" :class="deltaClass(evalResult.delta.mrr)">Δ {{ fmtDelta(evalResult.delta.mrr) }}</em>
+            </div>
+            <div class="eval-metric">
+              <span>Precision@K</span>
+              <strong>{{ fmtNum(evalResult.precision_at_k) }}</strong>
+              <em v-if="evalResult.delta" :class="deltaClass(evalResult.delta.precision_at_k)">Δ {{ fmtDelta(evalResult.delta.precision_at_k) }}</em>
+            </div>
+            <div class="eval-metric">
+              <span>Recall@K</span>
+              <strong>{{ fmtNum(evalResult.recall_at_k) }}</strong>
+              <em v-if="evalResult.delta" :class="deltaClass(evalResult.delta.recall_at_k)">Δ {{ fmtDelta(evalResult.delta.recall_at_k) }}</em>
+            </div>
           </div>
           <div class="kv" v-if="evalResult.baseline">
-            未开优化的基础版：{{ evalHitText(evalResult.baseline) }}
+            基础版对照：{{ evalHitText(evalResult.baseline) }}
+            · Hit {{ fmtPct(evalResult.baseline.hit_rate) }}
+            · MRR {{ fmtNum(evalResult.baseline.mrr) }}
           </div>
           <div v-if="evalCompareText">{{ evalCompareText }}</div>
           <div v-if="evalResult.diagnosis">说明：{{ evalPlainDiagnosis(evalResult.diagnosis) }}</div>
           <div class="q" v-for="(r, i) in (evalResult.results || [])" :key="'eq'+i">
-            <span :class="r.hit ? 'ok' : 'bad'">{{ r.hit ? '找到了' : '没找到' }}</span>
+            <span :class="r.hit ? 'ok' : 'bad'">{{ r.hit ? '命中' : '未命中' }}</span>
             · {{ r.query }}
+            <div class="eval-preview">
+              排名 {{ r.first_hit_rank || '—' }}
+              · MRR {{ fmtNum(r.mrr) }}
+              · P {{ fmtNum(r.precision) }} / R {{ fmtNum(r.recall) }}
+              · {{ goldModeLabel(r.gold_mode) }}
+            </div>
+            <div class="eval-preview" v-if="(r.retrieved_preview || [])[0]">召回：{{ r.retrieved_preview[0] }}</div>
           </div>
         </div>
         <div class="upload-msg err" v-if="evalRetrievalMsg && !evalResult">{{ evalRetrievalMsg }}</div>
@@ -1901,29 +1942,53 @@
           if (v == null || Number.isNaN(Number(v))) return '-';
           const n = Number(v);
           const sign = n > 0 ? '+' : '';
-          return sign + n.toFixed(4);
+          return sign + n.toFixed(3);
         };
+        const fmtNum = (v) => {
+          if (v == null || Number.isNaN(Number(v))) return '-';
+          return Number(v).toFixed(3);
+        };
+        const fmtPct = (v) => {
+          if (v == null || Number.isNaN(Number(v))) return '-';
+          return Math.round(Number(v) * 100) + '%';
+        };
+        const deltaClass = (v) => {
+          const n = Number(v || 0);
+          if (n > 0.001) return 'up';
+          if (n < -0.001) return 'down';
+          return '';
+        };
+        const goldModeLabel = (mode) => ({
+          expected_ids: '按节点ID',
+          expected_texts: '按黄金片段',
+          keywords: '按关键词',
+          none: '无标注',
+        }[mode] || mode || '按关键词');
         const evalHitText = (bundle) => {
           if (!bundle) return '';
           const rows = bundle.results || [];
           const total = bundle.total || rows.length || 0;
           const hits = rows.filter((r) => r.hit).length;
-          if (total) return `${hits}/${total} 题搜到了相关资料`;
-          return `命中 ${Math.round((Number(bundle.hit_rate) || 0) * 100)}%`;
+          if (total) return `${hits}/${total} 题命中`;
+          return `命中 ${fmtPct(bundle.hit_rate)}`;
         };
         const evalPlainDiagnosis = (text) => {
           const raw = String(text || '');
-          if (/Recall@K 偏低|没捞全/.test(raw)) return '相关内容没搜全，可以把 Top-K 调大，或打开混合检索。';
-          if (/检索侧整体可用/.test(raw)) return '检索大体能用；如果回答仍差，多半是生成环节的问题。';
+          if (/Hit Rate 偏低/.test(raw)) return '很多题没命中：先查分块、Embedding、混合检索、重排或检索前改写。';
+          if (/Recall@K 偏低|没捞全/.test(raw)) return '能命中但没搜全：可把 Top-K 调大，或开混合检索 / Multi-Query。';
+          if (/Precision@K 偏低/.test(raw)) return 'Top-K 噪声偏多：可开重排、压缩或 CRAG。';
+          if (/相关文档偏后|MRR/.test(raw)) return '相关文档排得偏后：优先开重排或 RRF 融合。';
+          if (/检索侧整体可用/.test(raw)) return '检索大体能用；如果回答仍差，再看生成 Faithfulness / Relevancy。';
           return raw;
         };
         const evalCompareText = computed(() => {
           const d = evalResult.value && evalResult.value.delta;
           if (!d) return '';
           const hit = Number(d.hit_rate || 0);
-          if (hit > 0.02) return '比未开优化的基础版更能搜到题。';
-          if (hit < -0.02) return '比基础版少搜到一些题：当前勾选不一定更好。';
-          return '和基础版找到的题目数量差不多。';
+          const mrr = Number(d.mrr || 0);
+          if (hit > 0.02 || mrr > 0.02) return '相对基础版：当前勾选更有帮助（Hit 或 MRR 提升）。';
+          if (hit < -0.02 || mrr < -0.02) return '相对基础版：当前勾选未必更好，可关掉部分优化再测。';
+          return '相对基础版：整体差不多，可看单题排名是否提前。';
         });
 
         const PRESET_MAP = {
@@ -2697,6 +2762,7 @@
               body: JSON.stringify({
                 k: topK.value,
                 compare: true,
+                doc_scope: docScope.value,
                 use_pre: optUsePre.value,
                 strategy: askStrategy.value,
                 use_hybrid: optUseHybrid.value,
@@ -3238,6 +3304,11 @@
           evalHitText,
           evalPlainDiagnosis,
           evalCompareText,
+          fmtDelta,
+          fmtNum,
+          fmtPct,
+          deltaClass,
+          goldModeLabel,
           evalResult,
           applyPreset,
           autoResize,

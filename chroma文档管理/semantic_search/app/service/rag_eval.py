@@ -460,6 +460,7 @@ def evaluate_retrieval_cases(  # 批量检索评估入口
                     "recall": 0.0,
                     "first_hit_rank": None,
                     "relevant_in_k": 0,
+                    "gold_mode": gold_mode_of(expected_ids, expected_texts, keywords),
                     "retrieved_preview": [],
                     "error": str(exc),
                 }
