@@ -905,10 +905,113 @@
     @media (max-width: 760px) {
       .rag-workspace { grid-template-columns: 1fr; }
     }
+
+    /* —— 聊天壁纸（右下角独立入口，不占左侧栏） —— */
+    #app { position: relative; isolation: isolate; }
+    .wp-layer {
+      position: fixed; inset: 0; z-index: 0; pointer-events: none;
+      background-position: center; background-size: cover; background-repeat: no-repeat;
+      overflow: hidden;
+    }
+    .wp-video {
+      position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover;
+    }
+    .wp-dim {
+      position: absolute; inset: 0; background: #fff;
+    }
+    .ds-shell { position: relative; z-index: 1; }
+    #app.has-wallpaper {
+      background: transparent !important;
+    }
+    #app.has-wallpaper .module-bar,
+    #app.has-wallpaper .header,
+    #app.has-wallpaper .input-area,
+    #app.has-wallpaper .extra-workspace {
+      background: rgba(255,255,255,.78) !important;
+      backdrop-filter: blur(10px);
+    }
+    #app.has-wallpaper .rag-workspace { background: transparent !important; }
+    #app.has-wallpaper .sidebar {
+      background: rgba(249,249,249,.82) !important;
+      backdrop-filter: blur(10px);
+    }
+    #app.has-wallpaper .messages,
+    #app.has-wallpaper .chat-shell {
+      background: transparent !important;
+    }
+    #app.has-wallpaper .composer {
+      background: rgba(251,252,254,.88) !important;
+    }
+    .wp-fab-root {
+      position: fixed; right: 18px; bottom: 110px; z-index: 60;
+      display: flex; flex-direction: column; align-items: flex-end; gap: 10px;
+    }
+    .wp-fab-btn {
+      display: inline-flex; align-items: center; gap: 8px;
+      height: 44px; padding: 0 16px; border-radius: 999px; border: 1px solid #d7deea;
+      background: #fff; color: #1a1a1a; font-size: 13px; font-weight: 650;
+      cursor: pointer; box-shadow: 0 10px 28px rgba(35,49,78,.18);
+    }
+    .wp-fab-btn.on {
+      border-color: transparent; color: #fff; background: #4d6bfe;
+    }
+    .wp-fab-btn .pct {
+      padding: 2px 7px; border-radius: 999px; font-size: 11px;
+      background: rgba(255,255,255,.22);
+    }
+    .wp-panel {
+      width: 270px; padding: 14px; border-radius: 16px;
+      border: 1px solid #e6eaf0; background: rgba(255,255,255,.96);
+      box-shadow: 0 18px 40px rgba(35,49,78,.2);
+    }
+    .wp-panel h4 {
+      margin: 0 0 8px; font-size: 14px; display: flex; justify-content: space-between; align-items: center;
+    }
+    .wp-panel p { margin: 0 0 12px; color: #738095; font-size: 12px; line-height: 1.55; }
+    .wp-panel .wp-actions { display: grid; gap: 8px; }
+    .wp-panel button.wp-act {
+      height: 38px; border: 0; border-radius: 11px; cursor: pointer;
+      color: #fff; background: #4d6bfe; font-size: 13px; font-weight: 600;
+    }
+    .wp-panel button.wp-act.ghost {
+      color: #334155; background: #f3f6fb; border: 1px solid #e2e8f0;
+    }
+    .wp-panel button.wp-act:disabled { opacity: .45; cursor: not-allowed; }
+    .wp-panel label.wp-opacity {
+      display: block; margin-top: 4px; color: #738095; font-size: 12px;
+    }
+    .wp-panel label.wp-opacity .row {
+      display: flex; justify-content: space-between; margin-bottom: 6px;
+    }
+    .wp-panel label.wp-opacity input[type="range"] { width: 100%; accent-color: #4d6bfe; }
+    .wp-panel .wp-hint {
+      display: flex; justify-content: space-between; margin-top: 4px; font-size: 11px; color: #98a3b2;
+    }
+    .wp-panel .wp-err { margin-top: 8px; color: #b42318; font-size: 12px; }
+    .wp-panel .wp-x {
+      border: 0; background: transparent; color: #8b8b8b; cursor: pointer; font-size: 18px; line-height: 1;
+    }
   </style>
 </head>
 <body>
-  <div id="app" v-cloak>
+  <div id="app" v-cloak :class="{ 'has-wallpaper': !!wallpaperSrc }">
+  <div
+    class="wp-layer"
+    v-if="wallpaperSrc"
+    :style="wallpaperKind === 'image' ? { backgroundImage: 'url(' + wallpaperSrc + ')' } : null"
+    aria-hidden="true"
+  >
+    <video
+      v-if="wallpaperKind === 'video'"
+      class="wp-video"
+      :src="wallpaperSrc"
+      autoplay
+      muted
+      loop
+      playsinline
+    ></video>
+    <div class="wp-dim" :style="{ opacity: wallpaperDim }"></div>
+  </div>
   <div class="ds-shell" :class="{ 'not-rag': appModule !== 'rag' }">
     <nav class="module-bar">
       <strong>四合一</strong>
@@ -1903,6 +2006,65 @@
     </main>
     </div>
   </div>
+
+  <div class="wp-fab-root">
+    <div class="wp-panel" v-if="wallpaperPanelOpen">
+      <h4>
+        <span>聊天壁纸</span>
+        <button type="button" class="wp-x" @click="wallpaperPanelOpen = false" aria-label="关闭">×</button>
+      </h4>
+      <p>
+        {{ wallpaperSrc
+          ? ('当前：' + (wallpaperKind === 'video' ? '视频' : '图片') + '壁纸 · 可调透明度')
+          : '从本地上传图片或视频作为背景（不占用左侧功能区）' }}
+      </p>
+      <input
+        ref="wallpaperFileInput"
+        type="file"
+        accept="image/*,video/mp4,video/webm,video/ogg,.mp4,.webm,.ogg"
+        style="display:none"
+        @change="onPickWallpaper"
+      />
+      <div class="wp-actions">
+        <button type="button" class="wp-act" :disabled="wallpaperBusy" @click="openWallpaperPicker">
+          {{ wallpaperBusy ? '保存中…' : (wallpaperSrc ? '更换图片 / 视频' : '上传图片 / 视频') }}
+        </button>
+        <label class="wp-opacity" :style="wallpaperSrc ? null : { opacity: .4, pointerEvents: 'none' }">
+          <div class="row">
+            <span>壁纸透明度</span>
+            <span>{{ wallpaperVisibility }}%</span>
+          </div>
+          <input
+            type="range"
+            min="20"
+            max="90"
+            step="5"
+            :value="wallpaperVisibility"
+            :disabled="!wallpaperSrc"
+            @input="setWallpaperVisibility(Number($event.target.value))"
+          />
+          <div class="wp-hint"><span>更淡</span><span>更清晰</span></div>
+        </label>
+        <button
+          v-if="wallpaperSrc"
+          type="button"
+          class="wp-act ghost"
+          @click="clearWallpaper"
+        >清除壁纸</button>
+      </div>
+      <div class="wp-err" v-if="wallpaperError">{{ wallpaperError }}</div>
+    </div>
+    <button
+      type="button"
+      class="wp-fab-btn"
+      :class="{ on: !!wallpaperSrc || wallpaperPanelOpen }"
+      @click="wallpaperPanelOpen = !wallpaperPanelOpen"
+      title="聊天壁纸与透明度"
+    >
+      🖼 壁纸
+      <span class="pct" v-if="wallpaperSrc">{{ wallpaperVisibility }}%</span>
+    </button>
+  </div>
   </div>
 
   <script>
@@ -2006,6 +2168,150 @@
         const composerImages = ref([]);
         const composerUploadHint = ref('');
         const composerImageInput = ref(null);
+
+        // —— 聊天壁纸（IndexedDB + 右下角入口）——
+        const WP_META = 'rag-search-wallpaper-meta';
+        const WP_DB = 'rag-search-wallpaper-db';
+        const WP_STORE = 'media';
+        const WP_ID = 'current';
+        const WP_MAX_IMG = 2.5 * 1024 * 1024;
+        const WP_MAX_VID = 40 * 1024 * 1024;
+        const wallpaperSrc = ref(null);
+        const wallpaperKind = ref(null);
+        const wallpaperDim = ref(0.45);
+        const wallpaperPanelOpen = ref(false);
+        const wallpaperBusy = ref(false);
+        const wallpaperError = ref('');
+        const wallpaperFileInput = ref(null);
+        let wallpaperObjectUrl = null;
+        const wallpaperVisibility = computed(() => Math.round((1 - wallpaperDim.value) * 100));
+
+        function wpOpenDb() {
+          return new Promise((resolve, reject) => {
+            const req = indexedDB.open(WP_DB, 1);
+            req.onupgradeneeded = () => {
+              const db = req.result;
+              if (!db.objectStoreNames.contains(WP_STORE)) db.createObjectStore(WP_STORE);
+            };
+            req.onsuccess = () => resolve(req.result);
+            req.onerror = () => reject(req.error || new Error('IndexedDB 打开失败'));
+          });
+        }
+        async function wpPut(blob) {
+          const db = await wpOpenDb();
+          await new Promise((resolve, reject) => {
+            const tx = db.transaction(WP_STORE, 'readwrite');
+            tx.objectStore(WP_STORE).put(blob, WP_ID);
+            tx.oncomplete = () => resolve();
+            tx.onerror = () => reject(tx.error || new Error('保存失败'));
+          });
+          db.close();
+        }
+        async function wpGet() {
+          const db = await wpOpenDb();
+          const blob = await new Promise((resolve, reject) => {
+            const tx = db.transaction(WP_STORE, 'readonly');
+            const req = tx.objectStore(WP_STORE).get(WP_ID);
+            req.onsuccess = () => resolve(req.result || null);
+            req.onerror = () => reject(req.error || new Error('读取失败'));
+          });
+          db.close();
+          return blob;
+        }
+        async function wpClearDb() {
+          const db = await wpOpenDb();
+          await new Promise((resolve, reject) => {
+            const tx = db.transaction(WP_STORE, 'readwrite');
+            tx.objectStore(WP_STORE).delete(WP_ID);
+            tx.oncomplete = () => resolve();
+            tx.onerror = () => reject(tx.error || new Error('清除失败'));
+          });
+          db.close();
+        }
+        function wpSaveMeta(meta) {
+          try {
+            if (meta) localStorage.setItem(WP_META, JSON.stringify(meta));
+            else localStorage.removeItem(WP_META);
+          } catch (_) { /* ignore */ }
+        }
+        function wpLoadMeta() {
+          try {
+            const raw = localStorage.getItem(WP_META);
+            return raw ? JSON.parse(raw) : null;
+          } catch (_) {
+            return null;
+          }
+        }
+        function wpRevoke() {
+          if (wallpaperObjectUrl) {
+            URL.revokeObjectURL(wallpaperObjectUrl);
+            wallpaperObjectUrl = null;
+          }
+        }
+        async function loadWallpaper() {
+          const meta = wpLoadMeta();
+          if (!meta) return;
+          wallpaperDim.value = Math.min(0.9, Math.max(0.1, Number(meta.dim) || 0.45));
+          try {
+            const blob = await wpGet();
+            if (!blob) return;
+            wpRevoke();
+            wallpaperObjectUrl = URL.createObjectURL(blob);
+            wallpaperSrc.value = wallpaperObjectUrl;
+            wallpaperKind.value = meta.kind === 'video' ? 'video' : 'image';
+          } catch (_) { /* ignore */ }
+        }
+        function openWallpaperPicker() {
+          wallpaperError.value = '';
+          wallpaperFileInput.value?.click();
+        }
+        async function onPickWallpaper(e) {
+          const file = e.target.files && e.target.files[0];
+          e.target.value = '';
+          if (!file) return;
+          const isImage = file.type.startsWith('image/');
+          const isVideo = file.type.startsWith('video/');
+          if (!isImage && !isVideo) {
+            wallpaperError.value = '请选择图片或视频文件';
+            return;
+          }
+          if (isImage && file.size > WP_MAX_IMG) {
+            wallpaperError.value = '图片请小于约 2.5MB';
+            return;
+          }
+          if (isVideo && file.size > WP_MAX_VID) {
+            wallpaperError.value = '视频请小于约 40MB（建议短循环 mp4/webm）';
+            return;
+          }
+          wallpaperBusy.value = true;
+          wallpaperError.value = '';
+          try {
+            await wpPut(file);
+            const kind = isVideo ? 'video' : 'image';
+            const dim = wallpaperDim.value || 0.45;
+            wpSaveMeta({ kind, dim });
+            wpRevoke();
+            wallpaperObjectUrl = URL.createObjectURL(file);
+            wallpaperSrc.value = wallpaperObjectUrl;
+            wallpaperKind.value = kind;
+          } catch (err) {
+            wallpaperError.value = (err && err.message) || '保存失败';
+          } finally {
+            wallpaperBusy.value = false;
+          }
+        }
+        function setWallpaperVisibility(pct) {
+          const next = Math.min(0.9, Math.max(0.1, 1 - pct / 100));
+          wallpaperDim.value = next;
+          if (wallpaperKind.value) wpSaveMeta({ kind: wallpaperKind.value, dim: next });
+        }
+        async function clearWallpaper() {
+          wpRevoke();
+          wallpaperSrc.value = null;
+          wallpaperKind.value = null;
+          wpSaveMeta(null);
+          try { await wpClearDb(); } catch (_) { /* ignore */ }
+        }
 
         const modeMeta = {
           ask: {
@@ -3630,10 +3936,23 @@
         onMounted(() => {
           refreshHealth();
           refreshHistory();
+          loadWallpaper();
           setInterval(refreshHealth, 15000);
         });
 
         return {
+          wallpaperSrc,
+          wallpaperKind,
+          wallpaperDim,
+          wallpaperPanelOpen,
+          wallpaperBusy,
+          wallpaperError,
+          wallpaperFileInput,
+          wallpaperVisibility,
+          openWallpaperPicker,
+          onPickWallpaper,
+          setWallpaperVisibility,
+          clearWallpaper,
           appModule,
           extraBusy,
           renderMd,
