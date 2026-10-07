@@ -2174,8 +2174,6 @@
         const WP_DB = 'rag-search-wallpaper-db';
         const WP_STORE = 'media';
         const WP_ID = 'current';
-        const WP_MAX_IMG = 2.5 * 1024 * 1024;
-        const WP_MAX_VID = 40 * 1024 * 1024;
         const wallpaperSrc = ref(null);
         const wallpaperKind = ref(null);
         const wallpaperDim = ref(0.35);
@@ -2323,14 +2321,6 @@
           const isVideo = file.type.startsWith('video/');
           if (!isImage && !isVideo) {
             wallpaperError.value = '请选择图片或视频文件';
-            return;
-          }
-          if (isImage && file.size > WP_MAX_IMG) {
-            wallpaperError.value = '图片请小于约 2.5MB';
-            return;
-          }
-          if (isVideo && file.size > WP_MAX_VID) {
-            wallpaperError.value = '视频请小于约 40MB（建议短循环 mp4/webm）';
             return;
           }
           wallpaperBusy.value = true;
