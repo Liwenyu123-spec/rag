@@ -1,4 +1,4 @@
-import { ArrowDown, ImagePlus } from 'lucide-react'
+import { ArrowDown } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useBackendStatus } from './hooks/useBackendStatus'
 import { useBridgeHeartbeat } from './hooks/useBridgeHeartbeat'
@@ -21,7 +21,7 @@ import { MessageBubble } from './components/MessageBubble'
 import { OllamaSetupBanner } from './components/OllamaSetupBanner'
 import { MobileMenuButton, Sidebar } from './components/Sidebar'
 import { WallpaperModal } from './components/WallpaperModal'
-import { WallpaperOpacityControl } from './components/WallpaperOpacityControl'
+import { WallpaperFab } from './components/WallpaperOpacityControl'
 import { downloadText, sessionToMarkdown } from './lib/export'
 import type { ChatMessage } from './types'
 
@@ -194,26 +194,6 @@ export default function App() {
               </>
             )}
             <ModeSelect value={chat.active?.mode ?? 'zero_shot'} onChange={chat.setMode} />
-            {wallpaper.src && (
-              <WallpaperOpacityControl dim={wallpaper.dim} onDim={setDim} />
-            )}
-            <button
-              type="button"
-              onClick={() => setWallpaperOpen(true)}
-              className={`btn-motion btn-ghost relative inline-flex items-center gap-1.5 rounded-[12px] border px-2.5 py-1.5 text-[13px] text-body${
-                wallpaper.src ? ' border-[#4d6bfe]/60 text-[#93a8ff]' : ''
-              }`}
-              title="上传本地图片或视频作为聊天壁纸"
-            >
-              <ImagePlus size={15} />
-              <span className="hidden sm:inline">壁纸</span>
-              {wallpaper.src && (
-                <span
-                  className="absolute -right-0.5 -top-0.5 h-2 w-2 rounded-full bg-[#4d6bfe]"
-                  aria-hidden="true"
-                />
-              )}
-            </button>
           </div>
         </header>
 
@@ -340,6 +320,14 @@ export default function App() {
           setTemplateOpen(false)
           setInput(prompt)
         }}
+      />
+      <WallpaperFab
+        hasWallpaper={Boolean(wallpaper.src)}
+        kind={wallpaper.kind}
+        dim={wallpaper.dim}
+        onOpenModal={() => setWallpaperOpen(true)}
+        onDim={setDim}
+        onClear={clearWallpaper}
       />
       <WallpaperModal
         open={wallpaperOpen}
