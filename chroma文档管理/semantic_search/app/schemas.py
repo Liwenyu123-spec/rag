@@ -341,11 +341,15 @@ class RetrievalEvalResponse(BaseModel):  # /eval/retrieval 响应体
 class GraphBuildRequest(BaseModel):
     texts: List[str] | None = Field(
         None,
-        description="待抽取文本；为空则用讲义苹果/乔布斯示例",
+        description="待抽取文本；为空则写入内置乔布斯/苹果示例三元组（不走 LLM）",
     )
     extractor: str = Field(
         "simple",
         description="simple=SimpleLLMPathExtractor；schema=SchemaLLMPathExtractor",
+    )
+    use_llm: bool = Field(
+        False,
+        description="为 True 时即使用示例文本也走 LLM 抽取；默认 False（示例建图走确定性种子）",
     )
 
 

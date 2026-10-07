@@ -52,6 +52,16 @@ SAMPLE_GRAPH_TEXTS = [
     "沃兹尼亚克毕业于加州大学伯克利分校。乔布斯曾就读于里德学院。",
 ]
 
+# 与 data/eval/graph_cases.json 对齐；侧栏「用示例构建」走这里，不依赖 LLM/asyncio
+SAMPLE_GRAPH_TRIPLES: List[Tuple[str, str, str, str, str]] = [
+    # subject, relation, object, subject_label, object_label
+    ("乔布斯", "CO_FOUNDED", "苹果公司", "PERSON", "COMPANY"),
+    ("沃兹尼亚克", "CO_FOUNDED", "苹果公司", "PERSON", "COMPANY"),
+    ("苹果公司", "LOCATED_AT", "库比蒂诺", "COMPANY", "LOCATION"),
+    ("沃兹尼亚克", "STUDIED_AT", "加州大学伯克利分校", "PERSON", "SCHOOL"),
+    ("乔布斯", "STUDIED_AT", "里德学院", "PERSON", "SCHOOL"),
+]
+
 
 def neo4j_bolt_reachable(uri: str | None = None, timeout: float = 0.2) -> bool:
     """只探测 Bolt 端口是否在听，不走 Neo4j 驱动重试。"""
@@ -355,26 +365,83 @@ class GraphRagService:
             "simple",
         )
 
+    def seed_demo_graph(self) -> dict:
+        """写入乔布斯/苹果示例三元组（确定性，不走 LLM，避免 FastAPI 事件循环冲突）。"""
+        written = []
+        for subj, rel, obj, sl, ol in SAMPLE_GRAPH_TRIPLES:
+            row = self.add_manual_triple(
+                subj, rel, obj, subject_label=sl, object_label=ol
+            )
+            written.append({
+                "subject": row["subject"],
+                "relation": row["relation"],
+                "object": row["object"],
+            })
+        counts = self.graph_counts()
+        try:
+            self.load_existing()
+        except Exception:  # noqa: BLE001
+            pass
+        return {
+            "message": "已写入乔布斯/苹果示例三元组（不走 LLM）",
+            "documents": len(SAMPLE_GRAPH_TEXTS),
+            "triples": len(written),
+            "written": written,
+            "extractor": "demo_seed",
+            "node_count": counts.get("node_count", 0),
+            "rel_count": counts.get("rel_count", 0),
+            "llm_provider": GRAPH_LLM_PROVIDER,
+            "embed_provider": GRAPH_EMBED_PROVIDER,
+            "neo4j_uri": NEO4J_URI,
+        }
+
     def build_from_texts(
         self,
         texts: List[str] | None = None,
         *,
         extractor: str | None = None,
+        use_llm: bool = False,
     ) -> dict:
-        """从文本列表抽取三元组并写入 Neo4j。"""
-        docs = [Document(text=t.strip()) for t in (texts or SAMPLE_GRAPH_TEXTS) if (t or "").strip()]
+        """从文本抽取三元组写入 Neo4j。
+
+        texts 为空且未强制 LLM 时：写入内置示例三元组（侧栏「用示例构建」）。
+        传入 texts 或 use_llm=True：走 LlamaIndex 抽取（在子线程 + nest_asyncio 中执行）。
+        """
+        if texts is None and not use_llm:
+            return self.seed_demo_graph()
+
+        docs = [
+            Document(text=t.strip())
+            for t in (texts if texts is not None else SAMPLE_GRAPH_TEXTS)
+            if (t or "").strip()
+        ]
         if not docs:
             raise ValueError("texts 为空，无法构建图谱")
         kg_extractor, mode = self._build_extractor(extractor)
-        self._index = PropertyGraphIndex.from_documents(
-            docs,
-            kg_extractors=[kg_extractor],
-            llm=self.llm,
-            embed_model=self.embed_model,
-            property_graph_store=self.graph_store,
-            embed_kg_nodes=True,
-            show_progress=True,
-        )
+
+        def _run() -> PropertyGraphIndex:
+            try:
+                import nest_asyncio
+
+                nest_asyncio.apply()
+            except Exception:  # noqa: BLE001
+                pass
+            return PropertyGraphIndex.from_documents(
+                docs,
+                kg_extractors=[kg_extractor],
+                llm=self.llm,
+                embed_model=self.embed_model,
+                property_graph_store=self.graph_store,
+                embed_kg_nodes=True,
+                show_progress=True,
+                use_async=True,
+            )
+
+        # FastAPI 已有事件循环时，LlamaIndex 内部 asyncio.run 会失败；放到线程里跑
+        from concurrent.futures import ThreadPoolExecutor
+
+        with ThreadPoolExecutor(max_workers=1) as pool:
+            self._index = pool.submit(_run).result()
         return {
             "message": "图谱构建完成，数据已写入 Neo4j",
             "documents": len(docs),

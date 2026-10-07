@@ -2885,10 +2885,16 @@
           if (graphBusy.value) return;
           graphBusy.value = true;
           graphError.value = false;
-          graphMsg.value = '正在用 DeepSeek 抽三元组写入 Neo4j…';
+          graphMsg.value = '正在写入乔布斯/苹果示例三元组…';
           try {
-            const data = await graphApi('/graph/build', { extractor: graphExtractor.value, texts: null });
-            graphMsg.value = data.message + '（' + (data.documents || 0) + ' 段文本，抽取器 ' + (data.extractor || '') + '）';
+            const data = await graphApi('/graph/build', {
+              extractor: graphExtractor.value,
+              texts: null,
+              use_llm: false,
+            });
+            const n = data.triples || data.documents || 0;
+            graphMsg.value = (data.message || '完成') + '（' + n + ' 条，节点 '
+              + (data.node_count ?? '-') + ' / 关系 ' + (data.rel_count ?? '-') + '）。可再点「图谱自测」';
             refreshGraphStatus();
           } catch (err) {
             graphError.value = true;

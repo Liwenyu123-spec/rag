@@ -839,10 +839,12 @@ async def graph_add_triple(request: GraphManualTripleRequest):
 
 @app.post("/graph/build")
 async def graph_build(request: GraphBuildRequest):
-    """从文本抽取三元组写入 Neo4j（Simple / Schema 抽取器）。"""
+    """构建图谱：texts 为空时写入示例三元组；有文本或 use_llm 时走 LLM 抽取。"""
     try:
         return _require_graph_rag(app).build_from_texts(
-            request.texts, extractor=request.extractor
+            request.texts,
+            extractor=request.extractor,
+            use_llm=bool(request.use_llm),
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
