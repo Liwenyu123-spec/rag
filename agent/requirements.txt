@@ -1,0 +1,30 @@
+# Agent 空项目依赖
+
+# 基础
+openai>=1.0
+python-dotenv>=1.0
+pydantic>=2.0
+httpx>=0.27
+requests>=2.31
+nest-asyncio>=1.6
+
+# 编排：LangChain / LangGraph
+langchain>=1.0
+langgraph>=1.0
+langchain-core>=1.0
+langchain-openai>=1.0
+langchain-community>=0.3
+langchain-deepseek>=1.0
+
+# LlamaIndex Agent / Workflow
+llama-index-core>=0.12
+llama-index-llms-deepseek>=0.1
+
+# 工具调用
+ddgs>=9.0
+duckduckgo-search>=8.0
+tavily-python>=0.5
+mcp>=1.0
+
+# 文档解析
+unstructured>=0.16
