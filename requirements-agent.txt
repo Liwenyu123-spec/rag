@@ -1,0 +1,23 @@
+# Agent 阶段常用依赖（在 RAG 环境基础上补充）
+# 安装: pip install -r requirements-agent.txt
+
+# 编排：LangChain / LangGraph（多 Agent、工具循环、状态机）
+langchain>=1.0
+langgraph>=1.0
+langchain-core>=1.0
+langchain-openai>=1.0
+langchain-community>=0.3
+langchain-deepseek>=1.0
+
+# LlamaIndex Agent / Workflow（与现有 RAG 检索合用）
+llama-index-core>=0.12
+llama-index-llms-deepseek>=0.1
+
+# 工具调用练习
+ddgs>=9.0
+duckduckgo-search>=8.0
+tavily-python>=0.5
+mcp>=1.0
+
+# 文档解析（RAG requirements 中也有，环境里曾缺失）
+unstructured>=0.16
